@@ -28,7 +28,10 @@ migration sits on. Task 2 remains untouched and hardware-blocked.
   modules.
 - **Rust relay** — 19 tests over real TCP and UDP sockets: ordering agreement,
   gapless sequencing under load, mid-match catch-up, readmitting a device that
-  dropped off Wi-Fi, locked and full rooms, junk frames.
+  dropped off Wi-Fi, locked and full rooms, junk frames. All 19 pass locally,
+  every time. One of them, `a_peer_notices_the_host_going_away`, does **not**
+  pass reliably on a GitHub runner — see open thread 2, and do not read this
+  bullet as saying the Rust suite is green in CI.
 - **WebSocket relay + browser transport** — tested against a live relay: two
   clients fold identically, a late joiner catches up, a refusal surfaces
   instead of hanging, and a deliberate two-socket race still leaves both
@@ -106,28 +109,52 @@ migration sits on. Task 2 remains untouched and hardware-blocked.
   code: a certificate means a public host, which cuts against the promise that
   the game never touches the internet. ADR 0012 and 0013 are the prior art and
   this deserves its own ADR. Plan Tasks 8 and 9 cover the work.
-2. **Run host-local Android capture.** The Codespace cannot see the device.
+2. **`a_peer_notices_the_host_going_away` is flaky in CI, and it is not a flake
+  to shrug at.** `crates/lan-sync/tests/session.rs:117` fails intermittently on
+  GitHub runners — two of five recent runs (`34760372632` on `d81b662`,
+  `34762543150` on `f2feca8`) — always identically, always after the full 5s
+  `TIMEOUT`, and never locally. It predates the Nub migration and the branch
+  changes no Rust, so it was not introduced here.
+
+  One concrete lead, not yet confirmed as *the* cause. The test's settle step is
+
+  ```rust
+  pump_until(&peer, &mut sink, 0);
+  ```
+
+  and `pump_until` loops `while … sink.commits().len() < want`. With `want` of
+  `0` that condition is false immediately, so the call polls **zero** times and
+  returns instantly — it does nothing at all. The same no-op appears at line 32.
+  So `host.close()` can run before the peer has polled even once, and a peer
+  that never observed a connection may have no disconnection to report.
+
+  Whether that is the whole story matters: if the peer can genuinely miss a host
+  disappearing, that is a real defect that reaches real devices, not a test bug,
+  and it belongs in the Rust audit (Task 7) rather than being timed out of
+  existence. Reproduce it under load before changing either the test or the
+  session pump.
+3. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
-3. **Complete the available Phase 1 device checks.** With one Android device,
+4. **Complete the available Phase 1 device checks.** With one Android device,
   test native behavior separately and use the laptop relay for the PWA. Do
   not claim Android-native-host to PWA interoperability yet.
-4. **Perform the wholesale Nx refactor.** The Nub and Node 24 half is done
+5. **Perform the wholesale Nx refactor.** The Nub and Node 24 half is done
   (plan Task 3, ADR 0017); what remains is the project split, plan Task 4
   onward. Follow the approved implementation plan and preserve Cargo/Tauri as
   native authorities.
-5. **Audit Effect TS and Rust.** Measure correctness, ownership, concurrency,
+6. **Audit Effect TS and Rust.** Measure correctness, ownership, concurrency,
   allocation, and release performance before changing implementations.
-6. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
+7. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
   difficult to diagnose. The TypeScript half of this thread is done: no banner
   renders a raw stack trace any more. Four call sites took `String(cause)` on a
   rejected `Effect.runPromise`, which renders Effect's FiberFailure dump — a
   minified bundle offset in a production build, and a player saw exactly that.
   They now take the `TransportError`'s own `reason` through `Effect.either`.
-7. **The RPG layer.** Designed and approved, not built. See
+8. **The RPG layer.** Designed and approved, not built. See
   `docs/superpowers/specs/2026-09-13-rpg-layer-design.md`. Extend the fuzz
   driver before writing any class.
-8. **iOS and pinch-zoom validation.** Both require hardware or interaction
+9. **iOS and pinch-zoom validation.** Both require hardware or interaction
   tooling unavailable in this Codespace.
 
 ## Things that would otherwise have to be rediscovered
