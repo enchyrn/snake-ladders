@@ -3,6 +3,11 @@
 **Status:** approved in conversation, not implemented. No code exists yet.
 **Date:** 2026-09-13
 
+**Paths remapped at 1d36bde.** This spec was written against the flat `src/`
+layout, which is why its date predates the paths it now cites. Its file
+paths and line citations were remapped to the Nx `packages/` and `apps/`
+workspace at commit 1d36bde; no design decision changed.
+
 Local-first saves, a real way in and out of a match, and the device-local
 profiles that pass-and-play needs in order to seat more than one person.
 
@@ -50,9 +55,13 @@ Out of scope, and named here so the boundary is explicit:
 
 ## Boundaries
 
-A new `src/session/`. **Nothing in it touches `src/engine/**`** — it calls
-`Date.now()`, `localStorage` and `crypto.randomUUID()`, all three of which the
-determinism contract bans from the engine.
+A new `packages/app-shell/src/session/` — inside `app-shell` rather than a
+seventh Nx project, because `app-shell` already owns session composition and
+its only consumers, `routes/` and `store/`, are its own siblings; engine
+types reach it through the dependency direction app-shell already has.
+**Nothing in it touches `packages/engine/src/**`** — it calls `Date.now()`,
+`localStorage` and `crypto.randomUUID()`, all three of which the determinism
+contract bans from the engine.
 
 What follows from that is the main structural claim of this design: **the
 engine does not change at all.**
@@ -60,11 +69,11 @@ engine does not change at all.**
 - Saves need no new action, because the ordered action log *is* the save.
 - Pass-and-play multi-seat needs none, because `Join` already carries an
   arbitrary `playerId` and `match.ts:185` already admits six players.
-- Host resume touches `crates/lan-sync` and `scripts/lan-relay.mjs`, not the
+- Host resume touches `crates/lan-sync` and `apps/relay/lan-relay.mjs`, not the
   reducer.
 
-So `src/engine/__tests__/determinism.test.ts` and every rule test stay exactly
-as meaningful as they are today, and this work cannot regress them.
+So `packages/engine/src/__tests__/determinism.test.ts` and every rule test stay
+exactly as meaningful as they are today, and this work cannot regress them.
 
 ## The save format
 
@@ -83,10 +92,11 @@ interface SavedMatch {
 
 **The save file and the wire frame are the same bytes.** The log holds
 `encodeAction` output and restores through `decodeAction` — the exact pair
-`src/store/match-client.ts` already uses on the network path. A corrupt or
-foreign save then fails the same decode a mismatched build fails, and the
-client already has a story for that (`undecodable action at #n`). There is no
-second serialiser to keep in step with the schema.
+`packages/app-shell/src/store/match-client.ts` already uses on the network
+path. A corrupt or foreign save then fails the same decode a mismatched
+build fails, and the client already has a story for that
+(`undecodable action at #n`). There is no second serialiser to keep in step
+with the schema.
 
 Sequence numbers are not stored. The log is ordered and dense, so seq *is* the
 index — which is already how the relay derives it (`lan-relay.mjs:112`).
@@ -113,15 +123,15 @@ silently: a match would restore, look right, and diverge on the next roll.
   so the start menu renders the list without parsing five full logs.
 - Cap five, evicting the oldest by `savedAt` — **excluding the match currently
   being played**, which is never a candidate however old its first write is.
-- Writes are wrapped in try/catch exactly as `src/net/identity.ts:41` already
-  does. A quota or private-browsing failure surfaces **once** as a notice
-  ("this match won't be saved"), not once per action.
+- Writes are wrapped in try/catch exactly as `packages/net/src/identity.ts:41`
+  already does. A quota or private-browsing failure surfaces **once** as a
+  notice ("this match won't be saved"), not once per action.
 - An unrecognised `version` lists the row as unreadable rather than crashing
   the menu.
 
 ## Profiles and seat ownership
 
-`src/net/identity.ts` grows from a single identity to a roster under
+`packages/net/src/identity.ts` grows from a single identity to a roster under
 `sl:profiles`:
 
 ```ts
@@ -152,17 +162,17 @@ serialises straight into `SavedMatch.seats`.
 
 Call sites, all thin:
 
-- **`src/store/atoms.ts`** — `meAtom` becomes `seatsAtom`. `canRollAtom` is no
-  longer sufficient alone, because the Roll button must know *which* seat it is
-  rolling for. Add `actingSeatAtom`: the first owned seat that currently owes a
-  roll. It drives both the button's label ("Roll for Sam") and the `playerId`
-  it sends.
-- **`src/routes/match.tsx`** — `mePlayer` feeding `CardRail` becomes the acting
-  local player; `pickTile` sends that seat's id.
-- **`src/ui/HUD.tsx`** — `is-me` becomes "any seat I drive", with a distinct
-  marker on the acting one.
-- **`src/routes/lobby.tsx`** — sends one `Join` per selected local profile in
-  roster order, instead of exactly one.
+- **`packages/app-shell/src/store/atoms.ts`** — `meAtom` becomes `seatsAtom`.
+  `canRollAtom` is no longer sufficient alone, because the Roll button must
+  know *which* seat it is rolling for. Add `actingSeatAtom`: the first owned
+  seat that currently owes a roll. It drives both the button's label ("Roll for
+  Sam") and the `playerId` it sends.
+- **`packages/app-shell/src/routes/match.tsx`** — `mePlayer` feeding `CardRail`
+  becomes the acting local player; `pickTile` sends that seat's id.
+- **`packages/ui/src/HUD.tsx`** — `is-me` becomes "any seat I drive", with a
+  distinct marker on the acting one.
+- **`packages/app-shell/src/routes/lobby.tsx`** — sends one `Join` per selected
+  local profile in roster order, instead of exactly one.
 
 Two things this buys:
 
@@ -193,8 +203,8 @@ reopening this design.
 
 The carrier-agnostic part is the *encoding*, not an interface: one
 `encodeTransfer` / `decodeTransfer` pair, schema-validated the way
-`src/engine/actions.ts` validates the wire. Carriers only move the resulting
-string.
+`packages/engine/src/actions.ts` validates the wire. Carriers only move the
+resulting string.
 
 - **Carrier 1, built now:** the holding device renders the string as a QR,
   with the raw string shown beneath it to copy; the receiving device scans or
@@ -237,7 +247,7 @@ a peer save would put a Continue row on the shelf that cannot continue.
 
 `connected` is **engine** state, flipped only by `Join` (`match.ts:182`) and
 `Leave` (`match.ts:196`). The transport's roster is a separate channel:
-`sequencer.leave()` (`lan-relay.mjs:117`) flips its own flag and broadcasts a
+`sequencer.leave()` (`lan-relay.mjs:118`) flips its own flag and broadcasts a
 `roster` frame, and never submits an engine `Leave`. That separation is
 correct — the contract forbids the transport feeding the engine.
 
@@ -265,13 +275,13 @@ non-determinism in **who acts** was never the contract; non-determinism in
 repaired as a side effect.
 
 `Join` stays refused mid-match (`match.ts:177`), which is right: a returning
-player is already `connected: true` and needs nothing. `host.rs:248` readmits
+player is already `connected: true` and needs nothing. `host.rs:262` readmits
 them because their seat and their actions are already in the log.
 
 ### Exit
 
 The match screen gains a `‹ Leave` control in a `.bar` header, matching
-`src/routes/lobby.tsx`. Behaviour by role:
+`packages/app-shell/src/routes/lobby.tsx`. Behaviour by role:
 
 - **local** — the save is already current; navigate home with no confirmation.
   Nothing is lost, so do not ask.
@@ -315,29 +325,34 @@ Step 4 above is a small change on each side. These are the "two
 implementations of one sequencer" `CLAUDE.md` warns about, so they move
 together and are tested together.
 
-- **`src/net/local.ts`** — `host()` currently resets `seq = 0`; it takes a
-  starting seq instead.
+- **`packages/net/src/local.ts`** — `host()` currently resets `seq = 0`; it
+  takes a starting seq instead.
 - **`crates/lan-sync/src/host.rs`** — seed `log` and set
-  `next_seq = log.len()`. The `welcome` catch-up path (`host.rs:286`) then
+  `next_seq = log.len()`. The `welcome` catch-up path (`host.rs:300`) then
   serves it to joiners unchanged.
-- **`scripts/lan-relay.mjs`** — `new Sequencer({ room, capacity, log })`. Seq
-  already derives from `#log.length` (`:112`), so it resumes for free.
+- **`apps/relay/lan-relay.mjs`** — `new Sequencer({ room, capacity, log })`.
+  Seq already derives from `#log.length` (`:112`), so it resumes for free.
 
 ## Files
 
-- `src/session/` — save format, shelf, autosave wiring, profile roster,
-  transfer encode/decode. The only non-deterministic corner this design adds.
-- `src/net/identity.ts` — one identity becomes a profile roster, migrating the
-  existing id.
-- `src/store/atoms.ts` — `seatsAtom`, `actingSeatAtom`; `meAtom` retired.
-- `src/store/match-client.ts` — `restore(log)`, and the autosave call in
-  `drain()`.
-- `src/net/local.ts` — a starting seq.
-- `src/routes/home.tsx` — the Continue section.
-- `src/routes/lobby.tsx` — profile picker, one `Join` per local profile.
-- `src/routes/match.tsx` — the Leave control, acting-seat wiring.
-- `src/ui/HUD.tsx` — owned versus acting seats.
-- `crates/lan-sync/src/host.rs`, `scripts/lan-relay.mjs` — sequencer seeding.
+- `packages/app-shell/src/session/` — save format, shelf, autosave wiring,
+  profile roster, transfer encode/decode. The only non-deterministic corner
+  this design adds.
+- `packages/net/src/identity.ts` — one identity becomes a profile roster,
+  migrating the existing id.
+- `packages/app-shell/src/store/atoms.ts` — `seatsAtom`, `actingSeatAtom`;
+  `meAtom` retired.
+- `packages/app-shell/src/store/match-client.ts` — `restore(log)`, and the
+  autosave call in `drain()`.
+- `packages/net/src/local.ts` — a starting seq.
+- `packages/app-shell/src/routes/home.tsx` — the Continue section.
+- `packages/app-shell/src/routes/lobby.tsx` — profile picker, one `Join` per
+  local profile.
+- `packages/app-shell/src/routes/match.tsx` — the Leave control, acting-seat
+  wiring.
+- `packages/ui/src/HUD.tsx` — owned versus acting seats.
+- `crates/lan-sync/src/host.rs`, `apps/relay/lan-relay.mjs` — sequencer
+  seeding.
 
 ## Testing
 
@@ -353,9 +368,9 @@ proof already exists in the repository.
 - **Absent-player `Leave`.** A round with a non-reconnecting player reaches
   resolution instead of hanging. This is the regression test for the defect
   above.
-- `src/session/__tests__/` — shelf cap and eviction, unknown `version`
-  rejected, a throwing `localStorage` degrading to a single notice, profile
-  migration preserving the existing `playerId`.
+- `packages/app-shell/src/session/__tests__/` — shelf cap and eviction, unknown
+  `version` rejected, a throwing `localStorage` degrading to a single notice,
+  profile migration preserving the existing `playerId`.
 - **Transfer** — encode/decode round trip, bad version refused, same-id import
   offering replace.
 - **Multi-seat** — `actingSeatAtom` with `simultaneous` on and off.

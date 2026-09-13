@@ -3,6 +3,11 @@
 **Status:** approved in conversation, not implemented. No code exists yet.
 **Date:** 2026-09-13
 
+**Paths remapped at 1d36bde.** This spec was written against the flat `src/`
+layout, which is why its date predates the paths it now cites. Its file
+paths and line citations were remapped to the Nx `packages/` and `apps/`
+workspace at commit 1d36bde; no design decision changed.
+
 The integration pass. It started as "make the existing elements fit together"
 and the audit found why they do not: **the venom economy funds reactions the
 game never gives anyone a chance to make.**
@@ -46,7 +51,7 @@ and `MineDefused` never survive into the settled log — even though
 ### 3. A snake absorbed by `anchor` is completely silent
 
 `applyTile` narrates mine absorption as `MineTripped { absorbed: true }`, but
-`applyLink` just returns `0` with no event at all (`resolve.ts:110`). The player
+`applyLink` just returns `0` with no event at all (`resolve.ts:107`). The player
 spends venom, the snake does nothing, and nothing says why.
 
 ### 4. The engine is first-past-the-post; the UI is a podium
@@ -311,18 +316,22 @@ accurate, with three notes for whoever builds it:
 
 ## Files
 
-- `src/engine/primitives.ts` — `DecisionKind`, reactive/proactive card split.
-- `src/engine/types.ts` — `PendingDecision`, `Response`, `pending`, `responses`,
-  `cardEvents`, `"deciding"` phase; `Player.anchored` removed.
-- `src/engine/actions.ts` — `Respond`.
-- `src/engine/resolve.ts` — `attemptRound`, the decision points, `LinkAbsorbed`,
-  `finished` without the winners clause.
-- `src/engine/match.ts` — `Respond` handling and the index guard; `playCard`
-  writing to `cardEvents`; reactive cards leaving the pre-roll path.
-- `src/engine/events.ts` — `LinkAbsorbed`.
-- `src/ui/BoardCanvas.tsx`, `src/render/scene.ts` — the play cursor and preview.
-- `src/routes/match.tsx` — the decision prompt, the timer, the podium.
-- `src/store/atoms.ts`, `src/store/match-client.ts` — pending decision selectors,
+- `packages/engine/src/primitives.ts` — `DecisionKind`, reactive/proactive card
+  split.
+- `packages/engine/src/types.ts` — `PendingDecision`, `Response`, `pending`,
+  `responses`, `cardEvents`, `"deciding"` phase; `Player.anchored` removed.
+- `packages/engine/src/actions.ts` — `Respond`.
+- `packages/engine/src/resolve.ts` — `attemptRound`, the decision points,
+  `LinkAbsorbed`, `finished` without the winners clause.
+- `packages/engine/src/match.ts` — `Respond` handling and the index guard;
+  `playCard` writing to `cardEvents`; reactive cards leaving the pre-roll path.
+- `packages/engine/src/events.ts` — `LinkAbsorbed`.
+- `packages/ui/src/BoardCanvas.tsx`, `packages/render/src/scene.ts` — the play
+  cursor and preview.
+- `packages/app-shell/src/routes/match.tsx` — the decision prompt, the timer,
+  the podium.
+- `packages/app-shell/src/store/atoms.ts`,
+  `packages/app-shell/src/store/match-client.ts` — pending decision selectors,
   the local and backstop timers.
 
 ## Testing

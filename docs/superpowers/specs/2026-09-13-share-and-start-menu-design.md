@@ -3,6 +3,11 @@
 **Status:** approved in conversation, not implemented. No code exists yet.
 **Date:** 2026-09-13
 
+**Paths remapped at 1d36bde.** This spec was written against the flat `src/`
+layout, which is why its date predates the paths it now cites. Its file
+paths and line citations were remapped to the Nx `packages/` and `apps/`
+workspace at commit 1d36bde; no design decision changed.
+
 How a match is started, how a room is handed to someone else, and how each
 device tells the truth about what it can actually do.
 
@@ -36,12 +41,12 @@ verified on hardware this container does not have.
 
 ## A capability model, because the caveats are already wrong
 
-`src/app/session.tsx` exposes `canHost: native` and **`canJoin: true`**. The
-second is false on the deployed site: an HTTPS page may not open a `ws://`
-socket, and the browser refuses before the connection leaves the tab
-(`docs/handoff.md`, open thread 1).
+`packages/app-shell/src/app/session.tsx` exposes `canHost: native` and
+**`canJoin: true`**. The second is false on the deployed site: an HTTPS page
+may not open a `ws://` socket, and the browser refuses before the connection
+leaves the tab (`docs/handoff.md`, open thread 1).
 
-So `src/routes/home.tsx` currently tells players:
+So `packages/app-shell/src/routes/home.tsx` currently tells players:
 
 > "You can still join a match from here: run the relay on a computer and paste
 > the address it prints."
@@ -124,13 +129,13 @@ Sharing stays in the lobby, where the room already exists. The hierarchy:
 3. **"Join by address"** — a collapsed disclosure revealing `IP:port@CODE`.
 
 That third item buys **symmetry with a pattern already in the codebase**.
-`src/routes/join.tsx` hides manual entry behind exactly this —
-`<details><summary>Join by address</summary>` — for exactly this reason ("use
-this when the network blocks discovery broadcasts, or on an iPhone that has not
-been granted the local-network permission"). The host side currently has no
-matching disclosure and puts its fallback in standing text instead. Making both
-ends the same shape gives one mental model: **the easy path is the surface, the
-manual path is one tap down, on both ends.**
+`packages/app-shell/src/routes/join.tsx` hides manual entry behind exactly
+this — `<details><summary>Join by address</summary>` — for exactly this reason
+("use this when the network blocks discovery broadcasts, or on an iPhone that
+has not been granted the local-network permission"). The host side currently
+has no matching disclosure and puts its fallback in standing text instead.
+Making both ends the same shape gives one mental model: **the easy path is the
+surface, the manual path is one tap down, on both ends.**
 
 ### Who this link will actually work for
 
@@ -208,11 +213,11 @@ only through the Android CI build and the host-local capture in open thread 3.
 
 ## The host knows its own address
 
-`HostedRoom` is `{ room, port, seed }` (`src/net/transport.ts:20`) — **no
-address**. `Host::bind` binds `0.0.0.0:port` and keeps only `local_port`
-(`crates/lan-sync/src/host.rs:49`, `:79`); it never enumerates interfaces.
+`HostedRoom` is `{ room, port, seed }` (`packages/net/src/transport.ts:20`) —
+**no address**. `Host::bind` binds `0.0.0.0:port` and keeps only `local_port`
+(`crates/lan-sync/src/host.rs:50`, `:88`); it never enumerates interfaces.
 
-Meanwhile `scripts/lan-relay.mjs:138` already does exactly this — *"Every
+Meanwhile `apps/relay/lan-relay.mjs:138` already does exactly this — *"Every
 non-loopback IPv4 address, so the host can be told what to type in"* — and
 prints `address:port@room` ready to paste.
 
@@ -250,18 +255,23 @@ cannot host. A relay-hosted room's address comes from the relay's own printout.
 
 ## Files
 
-- `src/app/capabilities.ts` — new: the `Capabilities` record and its
-  explanations.
-- `src/app/session.tsx` — expose capabilities; retire `canHost` / `canJoin`.
-- `src/net/transport.ts` — `HostedRoom.addresses`.
-- `src/net/lan.ts`, `src/net/local.ts`, `src/net/websocket.ts` — carry or stub
-  `addresses`.
+- `packages/app-shell/src/app/capabilities.ts` — new: the `Capabilities` record
+  and its explanations.
+- `packages/app-shell/src/app/session.tsx` — expose capabilities; retire
+  `canHost` / `canJoin`.
+- `packages/net/src/transport.ts` — `HostedRoom.addresses`.
+- `packages/net/src/lan.ts`, `packages/net/src/local.ts`,
+  `packages/net/src/websocket.ts` — carry or stub `addresses`.
 - `crates/lan-sync/src/host.rs` — enumerate non-loopback IPv4.
 - `src-tauri/src/lib.rs` — surface addresses; register the custom scheme.
-- `src/routes/home.tsx` — the menu, the adaptive primary, the profile row.
-- `src/routes/lobby.tsx` — the share hierarchy and the collapsed address.
-- `src/routes/join.tsx` — arrival route, confirmation, typed refusals.
-- `src/ui/PwaPrompt.tsx` — a reserved lane instead of overlapping content.
+- `packages/app-shell/src/routes/home.tsx` — the menu, the adaptive primary,
+  the profile row.
+- `packages/app-shell/src/routes/lobby.tsx` — the share hierarchy and the
+  collapsed address.
+- `packages/app-shell/src/routes/join.tsx` — arrival route, confirmation, typed
+  refusals.
+- `packages/ui/src/PwaPrompt.tsx` — a reserved lane instead of overlapping
+  content.
 - `docs/playing-together.md` — the share flow, and the address sentence.
 
 ## Testing

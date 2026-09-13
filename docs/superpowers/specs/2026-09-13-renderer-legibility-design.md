@@ -3,6 +3,11 @@
 **Status:** approved in conversation, not implemented. No code exists yet.
 **Date:** 2026-09-13
 
+**Paths remapped at 1d36bde.** This spec was written against the flat `src/`
+layout, which is why its date predates the paths it now cites. Its file
+paths and line citations were remapped to the Nx `packages/` and `apps/`
+workspace at commit 1d36bde; no design decision changed.
+
 Make the board readable, then make it move. The materials and lighting are
 already good; what fails is that you cannot read the game off the screen.
 
@@ -52,9 +57,9 @@ prettier". **It is illegible, and legibility is a gameplay problem.**
 
 ## Scope
 
-In scope: `src/render/` and `src/ui/`. The camera fit and its invariant,
-follow-the-action motion, link layering and identity, token variety, three
-diagnosed bugs, and the chrome budget.
+In scope: `packages/render/src/` and `packages/ui/src/`. The camera fit and its
+invariant, follow-the-action motion, link layering and identity, token variety,
+three diagnosed bugs, and the chrome budget.
 
 Out of scope:
 
@@ -80,7 +85,7 @@ ugly frame, not a diverged match.
 
 That second point also makes this **the safest work in the repository to
 delegate to another model**, which is not true of anything under
-`src/engine/`.
+`packages/engine/src/`.
 
 ## The camera as one system
 
@@ -113,7 +118,7 @@ expanded by one tile of margin. `fitCamera` guarantees that box is wholly in
 frame. Board outside it may leave.
 
 The dice tray is in that list for a reason: it sits at
-`(0, 0, size / 2 + 1.6)` (`scene.ts:231`), in front of the board's near edge,
+`(0, 0, size / 2 + 1.6)` (`scene.ts:232`), in front of the board's near edge,
 so a tighter framing would otherwise crop the dice while zooming in to read the
 board.
 
@@ -152,7 +157,7 @@ within the current framing does not move the camera: gratuitous camera motion
 on a phone is nausea, not juice.
 
 **If the player has orbited manually, follow-the-action switches off
-entirely.** `viewIsDefault` and `noteViewChange` (`scene.ts:97`, `:602`)
+entirely.** `viewIsDefault` and `noteViewChange` (`scene.ts:90`, `:594`)
 already track this. Taking the camera back from someone who just took it is the
 most annoying thing this feature could do, and `⟲ Reset view` is already the
 way to hand control back.
@@ -330,19 +335,24 @@ Target: the board goes from roughly a third of the viewport to around 60%.
 
 ## Files
 
-- `src/render/camera.ts` — new: `fitCamera`, the protected box, the crop budget.
-- `src/render/scene.ts` — consume `fitCamera`, follow-the-action, the layering
-  bands, link tinting, `sync(state, { snapTokens })`, `framing()` debug hook.
-- `src/render/geometry.ts` — N token profiles; badge and contact-decal geometry.
-- `src/render/link-badges.ts` — new: the single badge canvas texture.
-- `src/render/dice.ts` — tumble and settle.
-- `src/ui/BoardCanvas.tsx` — snap ordering, link raycast ahead of tile pick.
-- `src/ui/HUD.tsx` — strip into progress, indicators beside the card rail,
-  tap-to-explain.
-- `src/ui/EventLog.tsx` — last line, expandable.
-- `src/routes/match.tsx` — chrome layout, roll gating.
-- `src/store/atoms.ts` — in-flight set, `canRollAtom`.
-- `src/store/match-client.ts` — set and clear the in-flight marker.
+- `packages/render/src/camera.ts` — new: `fitCamera`, the protected box, the
+  crop budget.
+- `packages/render/src/scene.ts` — consume `fitCamera`, follow-the-action, the
+  layering bands, link tinting, `sync(state, { snapTokens })`, `framing()`
+  debug hook.
+- `packages/render/src/geometry.ts` — N token profiles; badge and contact-decal
+  geometry.
+- `packages/render/src/link-badges.ts` — new: the single badge canvas texture.
+- `packages/render/src/dice.ts` — tumble and settle.
+- `packages/ui/src/BoardCanvas.tsx` — snap ordering, link raycast ahead of tile
+  pick.
+- `packages/ui/src/HUD.tsx` — strip into progress, indicators beside the card
+  rail, tap-to-explain.
+- `packages/ui/src/EventLog.tsx` — last line, expandable.
+- `packages/app-shell/src/routes/match.tsx` — chrome layout, roll gating.
+- `packages/app-shell/src/store/atoms.ts` — in-flight set, `canRollAtom`.
+- `packages/app-shell/src/store/match-client.ts` — set and clear the in-flight
+  marker.
 - `scripts/drive-app.mjs` — read `framing()`, capture mid-replay.
 
 ## Testing
