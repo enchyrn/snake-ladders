@@ -100,7 +100,7 @@ export default defineConfig({
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     // Vite 8 bundles with rolldown and ships oxc; esbuild is only an optional
     // peer here and is not in the lockfile, so asking for it by name breaks a
-    // clean `npm ci` install. oxc is the native minifier for this pipeline.
+    // clean `nub ci` install. oxc is the native minifier for this pipeline.
     minify: !process.env.TAURI_ENV_DEBUG ? "oxc" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },

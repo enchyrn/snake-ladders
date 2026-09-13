@@ -16,9 +16,12 @@ room.
 ## Try it
 
 ```bash
-npm install
-npm run dev -- --host    # open the LAN address it prints on any phone
+nub install
+nub run dev -- --host    # open the LAN address it prints on any phone
 ```
+
+Nub is the package manager ([ADR 0017](docs/adr/0017-nub-is-the-package-manager-node-24-is-the-floor.md));
+`bash scripts/provision.sh` installs it along with the rest of the toolchain.
 
 Pick **Pass and play on this device** and untick the rule modules in the lobby
 for classic Snakes & Ladders, or leave them on for the full thing.

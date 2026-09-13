@@ -67,7 +67,7 @@ Options: `--port`, `--room`, `--capacity`.
 **Any phone, no install** — serve the built app from a computer:
 
 ```bash
-npm run dev -- --host
+nub run dev -- --host
 ```
 
 and open the LAN address it prints.
@@ -79,7 +79,7 @@ https://enchyrn.github.io/snake-ladders/
 ```
 
 and use Add to Home Screen. A home-screen install needs an HTTPS origin, which
-is the whole reason this deployment exists; `npm run dev -- --host` serves over
+is the whole reason this deployment exists; `nub run dev -- --host` serves over
 plain HTTP and cannot be installed. Once installed it runs fully offline —
 board, 3D view, rules and all — because the service worker precaches the entire
 app shell rather than a subset.
@@ -94,7 +94,7 @@ browser refuses to open the plain `ws://` connection that both the relay
 reaches the network, so it fails the same way whether or not a relay is
 running. Closing that needs a relay reachable over `wss://`; until then, use
 the installed app on every device, or serve the game over plain HTTP from a
-computer on the same network with `npm run dev -- --host`, where `ws://` is
+computer on the same network with `nub run dev -- --host`, where `ws://` is
 allowed. Pass-and-play works on the deployed site regardless: it never opens a
 socket.
 

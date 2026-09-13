@@ -8,12 +8,12 @@
  * was never visible, and a disabled button was styled as the primary action.
  * Reading the stylesheet would not have found any of them.
  *
- *   npm run build
+ *   nub run build
  *   node scripts/drive-app.mjs
  *   node scripts/drive-app.mjs --base-path /code/artifact/abc --out /tmp/shots
  *
- *   PUBLIC_BASE_PATH=/snake-ladders npm run build   # what Pages deploys
- *   npm run verify:ui:pages
+ *   PUBLIC_BASE_PATH=/snake-ladders nub run build   # what Pages deploys
+ *   nub run verify:ui:pages
  *   node scripts/drive-app.mjs --https --base-path /snake-ladders
  *
  * `--https` serves over TLS with a certificate minted for the run, because a
@@ -29,7 +29,7 @@
  * The prefix has to match the base the bundle was built with — built at "/"
  * and served under one, every asset 404s, which is the point.
  *
- * First run on a new machine needs the browser: npx playwright install chromium
+ * First run on a new machine needs the browser: nubx playwright install chromium
  */
 import { chromium } from "playwright"
 import { createServer } from "node:http"

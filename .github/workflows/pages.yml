@@ -31,14 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # The Node version is no longer stated here: .node-version is the pin
+      # and setup-nub reads it, so the deployed bundle cannot be built on a
+      # different runtime from the one the tests ran on (ADR 0017).
+      - uses: nubjs/setup-nub@v0
         with:
-          # The migration's runtime floor. CI's web job still pins 22 until
-          # the Nx/Nub work replaces both bootstraps.
-          node-version: 24
-          cache: npm
+          nub-version: 0.9.1
 
-      - run: npm ci
+      - run: nub ci
 
       - name: Build for the Pages subpath
         # A project site is served from https://<owner>.github.io/<repo>/,
@@ -49,7 +49,7 @@ jobs:
         # <owner>.github.io — is served from the root and would need "/".)
         env:
           PUBLIC_BASE_PATH: ${{ github.event.repository.name }}
-        run: npm run build
+        run: nub run build
 
       - uses: actions/upload-pages-artifact@v3
         with:

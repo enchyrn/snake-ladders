@@ -2,8 +2,8 @@
 //
 // Delegate a read-only task to OpenCode running a free OpenCode Zen model.
 //
-//   npm run delegate -- "where is the dice stream threaded through resolve?"
-//   npm run delegate -- --agent review --file src/engine/resolve.ts "review this"
+//   nub run delegate -- "where is the dice stream threaded through resolve?"
+//   nub run delegate -- --agent review --file src/engine/resolve.ts "review this"
 //
 // This exists because `opencode run` fails in three quite different ways that
 // all look alike from a script: the binary is missing, Zen is unreachable, or
@@ -25,7 +25,7 @@ const DEFAULT_AGENT = "explore"
 const argv = process.argv.slice(2)
 
 if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
-  console.log(`Usage: npm run delegate -- [--agent <name>] [--model <id>] [--file <path>] "<prompt>"
+  console.log(`Usage: nub run delegate -- [--agent <name>] [--model <id>] [--file <path>] "<prompt>"
 
 Agents (read-only, defined in opencode.json):
   explore   where something lives, how it is wired          [default]

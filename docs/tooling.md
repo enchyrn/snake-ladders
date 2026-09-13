@@ -1,18 +1,54 @@
 # Developer Tooling
 
-This project uses **npm** as the guaranteed, supported package manager and build tool. Everything works with plain `npm` and nothing in CI requires anything else.
+This project uses **nub** as the package manager, script runner and Node
+provisioner. npm is not a supported interface: there is no `package-lock.json`,
+so `npm ci` fails, and the lockfile is `nub.lock`. Node 24 is the runtime
+floor. [ADR 0017](adr/0017-nub-is-the-package-manager-node-24-is-the-floor.md)
+records why, and what it cost.
+
+```bash
+nub install              # from package.json + nub.lock, reusing node_modules
+nub ci                   # clean, lockfile-strict — what CI runs
+nub run <script>         # a package.json script
+nubx <bin>               # a node_modules/.bin binary; replaces npx
+```
+
+The version is pinned exactly, at `0.9.1`, in `mise.toml`, in `package.json`'s
+`devEngines`, and in the CI workflows. Nub is pre-1.0; the pin is the whole
+mitigation, so upgrading is a deliberate commit that re-runs the clean
+bootstrap.
+
+## The one thing that bites
+
+Nub links `node_modules` in an **isolated layout with no hoisting**, where npm
+flattens everything to the root. A package this project imports but never
+declared in `package.json` was only ever reachable through that flattening, and
+under nub it fails to resolve.
+
+That is not hypothetical: the first production build under nub died on
+
+```text
+Error: [vite]: Rolldown failed to resolve import "workbox-window"
+from "/@vite-plugin-pwa/virtual:pwa-register".
+```
+
+`workbox-window` ships in the client bundle and belonged in `dependencies` all
+along — npm's hoisting had been satisfying it out of `vite-plugin-pwa`'s own
+tree. **The fix for this class of failure is to declare the dependency**, not to
+add `node-linker=hoisted` to `.npmrc`, which would restore the flat layout and
+hide the next one.
 
 ## Provisioning
 
 One script sets up every environment:
 
 ```bash
-bash scripts/provision.sh      # or: npm run provision
+bash scripts/provision.sh      # or: nub run provision
 ```
 
-It installs mise, the pinned toolchain, OpenCode and the project dependencies,
-and prints what resolved. It is idempotent — a second run costs a second — and
-it is wired in everywhere, so you rarely run it by hand:
+It installs mise, the pinned toolchain, nub, OpenCode and the project
+dependencies, and prints what resolved. It is idempotent — a second run costs a
+second — and it is wired in everywhere, so you rarely run it by hand:
 
 | Environment | Runs it via |
 |---|---|
@@ -21,8 +57,21 @@ it is wired in everywhere, so you rarely run it by hand:
 | A laptop | by hand, once |
 
 It degrades instead of failing. Where the network blocks a tool, it says so and
-carries on; only `npm install` is fatal, because the test suite needs it. See
-ADR 0015 for why the fallbacks exist.
+carries on; only nub itself and `nub install` are fatal, because the test suite
+needs them. See ADR 0015 for why the fallbacks exist.
+
+Nub is the exception to that tolerance, because it is the package manager and
+there is no npm path left behind it. It is resolved in four steps — mise's own
+install, then a `nub` already on `PATH`, then `npm install -g @nubjs/nub@<pin>`,
+then `https://nubjs.com/install.sh` — and the script exits non-zero if all four
+fail. npm appears there as a *bootstrap* for the tool, which is a different
+thing from using npm to manage the project's dependencies.
+
+Where mise owns the install, provisioning runs nub through the path
+`mise which nub` prints rather than `mise exec -- nub`. `mise exec` installs
+every pinned tool before it runs anything, so one unreachable tool — java,
+reliably, in a cloud container — would otherwise abort an install that has
+nothing to do with it.
 
 ### Network policy
 
@@ -55,8 +104,14 @@ None of this blocks anything, because a cloud session already ships `node`,
 runner, not fetching. Everything CI runs — `tsc`, `vitest`, `vite build`,
 `cargo fmt`, `cargo clippy`, `cargo test` — passes in a session where
 `mise install` reports three tools failed. CI itself never uses mise: it pins
-Node, Rust and JDK 17 with `setup-node`, `dtolnay/rust-toolchain` and
-`setup-java`.
+nub and Node with `nubjs/setup-nub`, and Rust and JDK 17 with
+`dtolnay/rust-toolchain` and `setup-java`.
+
+`nubjs/setup-nub@v0` is a drop-in for `actions/setup-node@v4`. It installs the
+pinned nub, provisions the Node version from `.node-version` — so CI cannot
+build on a different runtime from the one the tests ran on — and caches nub's
+store against `nub.lock`. That is why no workflow names a Node version any
+more.
 
 `mise.toml` pins JDK **21** to match what these environments actually put on
 `PATH`. mise still fetches its own copy where it can, so the pin does not save
@@ -117,8 +172,8 @@ this diff break the determinism contract", and a poor way to edit an engine
 whose correctness rests on byte-identical state across devices (ADR 0016).
 
 ```bash
-npm run delegate -- "where is the dice stream threaded through resolve?"
-npm run delegate -- --agent review --file src/engine/resolve.ts "review this"
+nub run delegate -- "where is the dice stream threaded through resolve?"
+nub run delegate -- --agent review --file src/engine/resolve.ts "review this"
 ```
 
 Two agents are defined in `opencode.json`:
@@ -168,49 +223,48 @@ run commands, and make network requests without asking. Use it deliberately —
 only when you trust the prompt and have reviewed the agent's previous output.
 Never run `--auto` on untrusted input.
 
-**Important:** Mise is optional. Every command works with plain `npm` and `cargo`, and it is not required or used in CI. Use it if you like, or skip it entirely—both approaches are fully supported.
+**Important:** Mise is optional — it pins versions and wraps the common tasks,
+and CI does not use it. Nub is not optional: it is the package manager, and
+`nub` and `cargo` are the supported path.
 
-## Optional: Nub for Faster Node Operations
+## Installing Nub by hand
 
-**nub** (https://github.com/nubjs/nub) is an optional, pre-1.0 Rust-written Node toolkit that can accelerate `npm install` and `npm run` commands. It is **not required** and **not in CI**.
-
-To try nub:
-
-```bash
-# Install globally
-npm i -g @nubjs/nub
-
-# Or use the install script
-curl -fsSL https://nub.sh | sh
-```
-
-Then use `nub` in place of `npm` and `nubx` instead of `npx`:
+`scripts/provision.sh` installs it, so you usually have it already. The
+documented alternatives, in the order provisioning tries them:
 
 ```bash
-nub install
-nub run dev
-nubx tsc --noEmit
+mise use -g nub@0.9.1                 # what provisioning prefers
+npm i -g @nubjs/nub@0.9.1             # npm as a bootstrap for the tool only
+curl -fsSL https://nubjs.com/install.sh | bash
+brew install nub
 ```
 
-**If nub causes issues:** Simply fall back to npm. Nub is pre-1.0 and not a prerequisite for contributing. It is opt-in speed, and npm is always the safe path.
+Nub provisions Node itself, from `.node-version`:
+
+```bash
+nub node which        # which Node a script will run on, and why
+nub node install      # fetch the project's pinned Node
+```
 
 ## Command Reference
 
 This table maps mise tasks to their underlying commands if you're not using mise:
 
-| Task       | Mise Command       | Raw Commands                          |
-|------------|--------------------|---------------------------------------|
-| Test       | `mise run test`    | `npm test && cargo test -p lan-sync`  |
-| Type Check | `mise run typecheck` | `npx tsc --noEmit`                  |
-| Lint       | `mise run lint`    | `cargo clippy -p lan-sync --all-targets` |
-| Format     | `mise run fmt`     | `cargo fmt --all`                     |
-| Build      | `mise run build`   | `npm run build`                       |
-| Provision  | `mise run provision` | `bash scripts/provision.sh`         |
-| Delegate   | `mise run delegate` | `npm run delegate -- "<prompt>"`     |
+| Task       | Mise Command       | Raw Commands                              |
+|------------|--------------------|-------------------------------------------|
+| Install    | —                  | `nub install` (or `nub ci`, as CI does)   |
+| Test       | `mise run test`    | `nub run test && cargo test -p lan-sync`  |
+| Type Check | `mise run typecheck` | `nubx tsc --noEmit`                     |
+| Lint       | `mise run lint`    | `cargo clippy -p lan-sync --all-targets`  |
+| Format     | `mise run fmt`     | `cargo fmt --all`                         |
+| Build      | `mise run build`   | `nub run build`                           |
+| Provision  | `mise run provision` | `bash scripts/provision.sh`             |
+| Delegate   | `mise run delegate` | `nub run delegate -- "<prompt>"`         |
 
 ## Summary
 
-- **npm** is the guaranteed path—use it for everything and nothing breaks.
+- **nub** is the package manager and script runner. `nub.lock` is the lockfile,
+  `npm ci` no longer works, and a missing-module error means a dependency needs
+  declaring (ADR 0017).
 - **mise** is optional—nice for unified task running and toolchain pinning, but not required.
-- **nub** is an opt-in accelerator for Node operations. It's pre-1.0, so use npm if it acts up.
 - **OpenCode** is a read-only second agent on free Zen models. Useful for questions and review, not for writing code.

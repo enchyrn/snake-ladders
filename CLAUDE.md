@@ -5,24 +5,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm install
-npm run dev              # Vite dev server on :1420
-npm run dev -- --host    # also serve on the LAN, so phones can open it
-npm test                 # vitest, all suites
-npm run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
-npm run build            # typecheck + production bundle
+nub install
+nub run dev              # Vite dev server on :1420
+nub run dev -- --host    # also serve on the LAN, so phones can open it
+nub run test             # vitest, all suites
+nub run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
+nub run build            # typecheck + production bundle
 
 cargo test -p lan-sync   # Rust networking crate (real TCP/UDP sockets)
 cargo clippy -p lan-sync --all-targets -- -D warnings
 cargo fmt --all
 
-npm run relay            # WebSocket relay; prints the join string to paste
-npm run verify:ui        # build first, then drive the app in a real browser
-npm run verify:ui:pages  # the same, but served from the /snake-ladders/ subpath
+nub run relay            # WebSocket relay; prints the join string to paste
+nub run verify:ui        # build first, then drive the app in a real browser
+nub run verify:ui:pages  # the same, but served from the /snake-ladders/ subpath
 node scripts/drive-app.mjs --https   # over TLS, where a service worker registers
 
-PUBLIC_BASE_PATH=/snake-ladders npm run build   # what the Pages workflow builds
+PUBLIC_BASE_PATH=/snake-ladders nub run build   # what the Pages workflow builds
 ```
+
+**nub, not npm** (ADR 0017). `nub.lock` is the lockfile, there is no
+`package-lock.json`, and `npm ci` therefore fails. `nubx` replaces `npx`.
+`nub install` reuses an existing `node_modules`; `nub ci` is the clean,
+lockfile-strict install CI runs. Node 24 is the floor, pinned in
+`.node-version` and `mise.toml`.
+
+nub links `node_modules` in an isolated layout with no hoisting, so a package
+imported but never declared in `package.json` fails to resolve instead of
+silently working. When a build dies on a missing module, the fix is to declare
+the dependency, not to change the linker.
 
 `verify:ui` screenshots the app at phone size and fails on console errors,
 page errors or horizontal overflow. `--base-path /nested/path` reproduces
@@ -36,7 +47,7 @@ secure origin is not cosmetic: a service worker will not register without one,
 and a page will not refuse an insecure `ws://` without one — so neither the
 offline shell installing nor the LAN-join refusal can be reproduced on plain
 http, however carefully the page is driven. The serving rules are unit-tested
-in `src/__tests__/drive-app.test.ts` via the exported `serveDist`. It needs `npx playwright install chromium`
+in `src/__tests__/drive-app.test.ts` via the exported `serveDist`. It needs `nubx playwright install chromium`
 once. Run it after any UI change: the clipped board, the not-found router and
 the mis-styled disabled button were all found this way and none of them were
 visible in the source.
@@ -44,23 +55,23 @@ visible in the source.
 One file, or one test by name:
 
 ```bash
-npx vitest run src/engine/__tests__/rules.test.ts
-npx vitest run -t "collapses a ladder into a snake"
+nubx vitest run src/engine/__tests__/rules.test.ts
+nubx vitest run -t "collapses a ladder into a snake"
 cargo test -p lan-sync --test session
 cargo test -p lan-sync a_late_joiner_catches_up
 ```
 
-`mise.toml` wraps the common ones (`mise run test`), but npm and cargo are the
+`mise.toml` wraps the common ones (`mise run test`), but nub and cargo are the
 supported path and CI uses them directly.
 
 `scripts/provision.sh` sets up a fresh environment — mise, the pinned
-toolchain, OpenCode, npm dependencies. A Codespace runs it from
+toolchain, nub, OpenCode, the project dependencies. A Codespace runs it from
 `.devcontainer/devcontainer.json` and a Claude Code web session from the
 `SessionStart` hook in `.claude/settings.json`, so all three environments
 provision identically (ADR 0015). It tolerates tools it cannot fetch and fails
-only on `npm install`.
+only on nub itself and `nub install`.
 
-`npm run delegate -- "<prompt>"` hands a **read-only** task to OpenCode on a
+`nub run delegate -- "<prompt>"` hands a **read-only** task to OpenCode on a
 free Zen model. The `explore` and `review` agents have write, edit, patch and
 bash switched off deliberately: a free model is a reasonable reviewer of the
 determinism contract and a poor author of code that has to honour it

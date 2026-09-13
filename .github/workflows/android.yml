@@ -36,12 +36,15 @@ jobs:
           sdkmanager --install "ndk;${NDK_VERSION}"
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-node@v4
+      # Drop-in for actions/setup-node: the pinned nub, the Node from
+      # .node-version, and nub's store cached on nub.lock (ADR 0017). It also
+      # fronts that Node's bin dir on PATH, which is where tauri's
+      # beforeBuildCommand finds the toolchain it shells out to.
+      - uses: nubjs/setup-nub@v0
         with:
-          node-version: 22
-          cache: npm
+          nub-version: 0.9.1
 
-      - run: npm ci
+      - run: nub ci
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -55,7 +58,7 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Generate Android project
-        run: npx tauri android init --ci
+        run: nubx tauri android init --ci
 
       - name: Patch generated manifest for LAN networking
         # tauri android init regenerates gen/android from scratch every time,
@@ -64,7 +67,7 @@ jobs:
         # every init, not just once. See scripts/patch-android-manifest.mjs.
         run: node scripts/patch-android-manifest.mjs
 
-      - run: npx tauri android build --debug --apk
+      - run: nubx tauri android build --debug --apk
 
       - name: List built APKs
         # Diagnoses a failed upload-artifact glob from the log instead of
