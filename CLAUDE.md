@@ -16,8 +16,16 @@ cargo test -p lan-sync   # Rust networking crate (real TCP/UDP sockets)
 cargo clippy -p lan-sync --all-targets -- -D warnings
 cargo fmt --all
 
-node scripts/lan-relay.mjs   # WebSocket relay; prints the join string to paste
+npm run relay            # WebSocket relay; prints the join string to paste
+npm run verify:ui        # build first, then drive the app in a real browser
 ```
+
+`verify:ui` screenshots the app at phone size and fails on console errors,
+page errors or horizontal overflow. `--base-path /nested/path` reproduces
+being served from a subdirectory. It needs `npx playwright install chromium`
+once. Run it after any UI change: the clipped board, the not-found router and
+the mis-styled disabled button were all found this way and none of them were
+visible in the source.
 
 One file, or one test by name:
 
@@ -154,3 +162,12 @@ every drag to orbit would flag a tile.
 
 `docs/rules.md` is the authoritative rules reference and is kept in step with
 the engine. `docs/playing-together.md` covers getting devices connected.
+
+## Picking up the work
+
+`docs/handoff.md` is the current state: what is verified, what is not, and the
+open threads in priority order. Read it before starting anything — it records
+what has already been investigated and rejected, which is the expensive part to
+rediscover.
+
+Designed but unbuilt work lives in `docs/superpowers/specs/`.

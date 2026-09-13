@@ -13,7 +13,9 @@
     "tauri": "tauri",
     "android": "tauri android dev",
     "ios": "tauri ios dev",
-    "icons": "node scripts/make-pwa-icons.mjs"
+    "icons": "node scripts/make-pwa-icons.mjs",
+    "verify:ui": "node scripts/drive-app.mjs",
+    "relay": "node scripts/lan-relay.mjs"
   },
   "dependencies": {
     "@effect-atom/atom": "^0.7.0",
@@ -39,6 +41,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.1.1",
     "nx": "^23.2.1",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vite-plugin-pwa": "^1.3.0",

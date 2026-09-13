@@ -16,3 +16,5 @@ An ADR is a short document that records one significant architectural decision: 
 | [0010](0010-vendor-superpowers-skills.md) | Superpowers skills vendored rather than installed as a plugin | Accepted |
 | [0011](0011-ci-builds-the-android-apk-ios-stays-manual.md) | CI builds the Android APK; iOS stays manual | Accepted |
 | [0012](0012-a-websocket-relay-lets-browsers-host-a-lan-match.md) | A WebSocket relay lets browsers play a LAN match | Accepted |
+| [0013](0013-webrtc-with-qr-signalling-is-viable-but-deferred.md) | WebRTC with QR signalling is viable but deferred | Proposed |
+| [0014](0014-nx-monorepo-not-adopted-yet.md) | NX monorepo, requested but not adopted | Proposed |
