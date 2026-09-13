@@ -8,9 +8,9 @@
   --board-dark: #12202a;
   --board-light: #172b36;
   --board-edge: #0b1419;
-  --revealed: #1f3a47;
-  --revealed-edge: #2b5063;
-  --ladder: #e8d6a0;
+  --revealed: #2a4756;
+  --revealed-edge: #3a5f70;
+  --ladder: #d9b97a;
   --snake: #2f8f5b;
   --snake-head: #48c07c;
   --mine: #d9455f;
@@ -345,6 +345,93 @@ button.start {
   /* The board handles its own drag-to-look and tap-to-pick; the page must
    * not also try to scroll or zoom underneath a finger on it. */
   touch-action: none;
+}
+
+/* Overlays that belong to the board itself: the reset-view button and the
+ * minefield key. They sit inside .board-wrap, so they never cover the roster
+ * or the control bar, and they let pointer events through to the canvas
+ * everywhere but on their own controls. */
+.board-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.view-reset {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 4.4rem);
+  right: var(--gutter-right);
+  pointer-events: auto;
+  min-height: 36px;
+  padding: 0.3em 0.75em;
+  font-size: 0.85rem;
+  background: rgba(8, 11, 16, 0.75);
+  backdrop-filter: blur(6px);
+  border-color: var(--revealed-edge);
+}
+
+.legend {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter-right);
+  bottom: 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: rgba(8, 11, 16, 0.7);
+  backdrop-filter: blur(6px);
+  border-radius: 10px;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  white-space: nowrap;
+}
+
+.legend-hint {
+  color: var(--text);
+}
+
+.legend-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.legend-swatch.is-hidden {
+  background: var(--board-light);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.12),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.legend-swatch.is-revealed {
+  background: var(--revealed);
+  box-shadow: inset 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.legend-swatch.is-flag {
+  background: var(--board-light);
+  color: var(--flag);
+}
+
+.legend-swatch.is-mine {
+  background: var(--revealed);
+  color: var(--mine);
 }
 
 .screen.match .players {

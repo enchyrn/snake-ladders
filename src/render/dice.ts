@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js"
 import { palette } from "./palette"
 
 const FACE_ORDER = [1, 6, 2, 5, 3, 4] as const // +X, -X, +Y, -Y, +Z, -Z
@@ -20,8 +21,13 @@ const faceTexture = (value: number): THREE.CanvasTexture => {
   const ctx = canvas.getContext("2d")!
   ctx.fillStyle = "#f4efe4"
   ctx.fillRect(0, 0, s, s)
-  ctx.fillStyle = value === 1 ? palette.mine : "#1a1f24"
   for (const [px, py] of PIPS[value] ?? []) {
+    // A recessed pip: a soft dark rim under the dot so it reads as drilled.
+    ctx.fillStyle = "rgba(0, 0, 0, 0.18)"
+    ctx.beginPath()
+    ctx.arc(px * s, py * s + s * 0.012, s * 0.1, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = value === 1 ? palette.mine : "#1a1f24"
     ctx.beginPath()
     ctx.arc(px * s, py * s, s * 0.085, 0, Math.PI * 2)
     ctx.fill()
@@ -55,11 +61,13 @@ export class Dice {
       (value) =>
         new THREE.MeshStandardMaterial({
           map: faceTexture(value),
-          roughness: 0.55,
+          roughness: 0.4,
           metalness: 0.02,
         }),
     )
-    const geometry = new THREE.BoxGeometry(0.62, 0.62, 0.62)
+    // Rounded corners catch the key light on the edges; a sharp cube reads
+    // as a texture-mapped primitive.
+    const geometry = new RoundedBoxGeometry(0.62, 0.62, 0.62, 3, 0.07)
     for (let i = 0; i < 2; i++) {
       const cube = new THREE.Mesh(geometry, this.materials)
       cube.castShadow = true

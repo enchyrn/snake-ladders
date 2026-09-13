@@ -1,5 +1,5 @@
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@/engine/types"
-import { seatColour } from "@/render/palette"
+import { countColour, seatColour } from "@/render/palette"
 import { lastTile } from "@/engine/board"
 
 const CARDS: ReadonlyArray<CardKind> = ["anchor", "reverse", "double", "swap", "defuse"]
@@ -93,3 +93,31 @@ export const Progress = ({ state }: { readonly state: MatchState }) => {
     </div>
   )
 }
+
+/**
+ * A one-line key to the minefield. Hidden tiles, revealed counts, flags and
+ * spent mines are all drawn on the board itself; this names them, and tells a
+ * first-time player the one thing the board cannot: tapping flags a tile.
+ */
+export const MineLegend = () => (
+  <ul className="legend" aria-label="Minefield key">
+    <li>
+      <span className="legend-swatch is-hidden" />
+      hidden
+    </li>
+    <li>
+      <span className="legend-swatch is-revealed" style={{ color: countColour(2) }}>
+        2
+      </span>
+      mines nearby
+    </li>
+    <li>
+      <span className="legend-swatch is-flag">⚑</span>
+      flag <span className="legend-hint">(tap a hidden tile)</span>
+    </li>
+    <li>
+      <span className="legend-swatch is-mine">✸</span>
+      spent mine
+    </li>
+  </ul>
+)

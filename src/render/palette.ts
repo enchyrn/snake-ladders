@@ -4,10 +4,15 @@ export const palette = {
   boardDark: "#12202a",
   boardLight: "#172b36",
   boardEdge: "#0b1419",
-  revealed: "#1f3a47",
-  revealedEdge: "#2b5063",
-  ladder: "#e8d6a0",
-  ladderDark: "#b9a36f",
+  /** The frame around the board face: a dark, slightly warm wood. */
+  boardFrame: "#1a1512",
+  /** Revealed tiles are lighter and warmer than the hidden ones so a swept
+   *  region reads as open ground at a glance, not as a slightly different
+   *  shade of the same slate. */
+  revealed: "#2a4756",
+  revealedEdge: "#3a5f70",
+  ladder: "#d9b97a",
+  ladderDark: "#8f6d3d",
   snake: "#2f8f5b",
   snakeDark: "#1d5c3a",
   snakeHead: "#48c07c",

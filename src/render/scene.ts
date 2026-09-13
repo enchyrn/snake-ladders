@@ -1,10 +1,26 @@
 import * as THREE from "three"
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js"
 import type { TimelineEvent } from "@/engine/events"
 import type { Board, MatchState, Player } from "@/engine/types"
 import { BoardTexture } from "./board-texture"
 import { Dice } from "./dice"
-import { buildLadder, easeInOutQuad, easeOutCubic, snakeCurve, tilePosition } from "./geometry"
+import {
+  buildLadder,
+  buildSnakeHead,
+  easeInOutQuad,
+  easeOutCubic,
+  pawnGeometry,
+  railGeometry,
+  rungGeometry,
+  snakeCurve,
+  snakeHeadGeometry,
+  snakeRadius,
+  taperedTube,
+  tilePosition,
+} from "./geometry"
 import { palette, seatColour } from "./palette"
+import { snakeSkinTexture, woodTexture } from "./textures"
 
 /** One step of choreography: a duration and a function of normalised time. */
 interface Clip {
@@ -13,11 +29,16 @@ interface Clip {
   readonly done?: () => void
 }
 
-const TOKEN_Y = 0.24
+/** Tokens are pawns standing on the face, so their origin is their base. */
+const TOKEN_Y = 0.01
+/** The default view looks down at the board from this far above horizontal. */
+const TILT = THREE.MathUtils.degToRad(56)
 
 export interface SceneOptions {
   /** Drop shadows and antialiasing off on weaker phones. */
   readonly quality?: "high" | "low"
+  /** Fired when the camera leaves or returns to the default framing. */
+  readonly onViewChange?: (isDefault: boolean) => void
 }
 
 /**
@@ -30,6 +51,7 @@ export class BoardScene {
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
   private readonly camera: THREE.PerspectiveCamera
+  private readonly controls: OrbitControls
   private readonly boardTexture: BoardTexture
   private readonly dice = new Dice()
   private readonly linkGroup = new THREE.Group()
@@ -37,13 +59,38 @@ export class BoardScene {
   private readonly tokens = new Map<string, THREE.Mesh>()
   private readonly clips: Clip[] = []
 
+  // Shared geometry and materials: one of each, however many links or tokens.
+  private readonly pawn = pawnGeometry()
+  private readonly snakeHead = snakeHeadGeometry()
+  private readonly snakeEye = new THREE.SphereGeometry(0.035, 8, 6)
+  private readonly rail = railGeometry()
+  private readonly rung = rungGeometry()
+  private readonly skin = snakeSkinTexture()
+  private readonly wood = woodTexture()
+  private readonly snakeBodyMaterial: THREE.MeshStandardMaterial
+  private readonly snakeHeadMaterial: THREE.MeshStandardMaterial
+  private readonly snakeEyeMaterial: THREE.MeshStandardMaterial
+  private readonly railMaterial: THREE.MeshStandardMaterial
+  private readonly rungMaterial: THREE.MeshStandardMaterial
+  /** Per-snake tube geometry, disposed when the layout is rebuilt. */
+  private snakeBodies: THREE.BufferGeometry[] = []
+
+  // Picking scratch, allocated once.
+  private readonly raycaster = new THREE.Raycaster()
+  private readonly boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+  private readonly pickNdc = new THREE.Vector2()
+  private readonly pickHit = new THREE.Vector3()
+
   private size: number
+  private fitDistance = 20
+  private viewIsDefault = true
   private linkSignature = ""
   private clipElapsed = 0
   private frame = 0
   private lastTime = 0
   private disposed = false
   private onSettled: (() => void) | null = null
+  private readonly onViewChange: ((isDefault: boolean) => void) | undefined
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -51,6 +98,7 @@ export class BoardScene {
     options: SceneOptions = {},
   ) {
     this.size = size
+    this.onViewChange = options.onViewChange
     const highQuality = options.quality !== "low"
 
     this.renderer = new THREE.WebGLRenderer({
@@ -69,42 +117,122 @@ export class BoardScene {
     this.scene.fog = new THREE.Fog(palette.void, 16, 34)
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 100)
-    this.camera.position.set(0, 12.5, 11.5)
-    this.camera.lookAt(0, 0, 0.4)
+
+    /* Materials ---------------------------------------------------- */
+
+    this.snakeBodyMaterial = new THREE.MeshStandardMaterial({
+      map: this.skin,
+      roughness: 0.48,
+      metalness: 0.02,
+    })
+    this.snakeHeadMaterial = new THREE.MeshStandardMaterial({
+      color: palette.snakeHead,
+      roughness: 0.42,
+    })
+    this.snakeEyeMaterial = new THREE.MeshStandardMaterial({
+      color: "#0d1210",
+      roughness: 0.15,
+      metalness: 0.1,
+    })
+    this.railMaterial = new THREE.MeshStandardMaterial({
+      map: this.wood,
+      roughness: 0.72,
+    })
+    this.rungMaterial = new THREE.MeshStandardMaterial({
+      map: this.wood,
+      color: "#cdb37e",
+      roughness: 0.78,
+    })
+
+    /* The board as an object ---------------------------------------- */
 
     this.boardTexture = new BoardTexture(size)
-    const board = new THREE.Mesh(
+    const face = new THREE.Mesh(
       new THREE.PlaneGeometry(size, size),
       new THREE.MeshStandardMaterial({
         map: this.boardTexture.texture,
-        roughness: 0.92,
+        roughness: 0.82,
         metalness: 0.0,
       }),
     )
-    board.rotation.x = -Math.PI / 2
-    board.receiveShadow = highQuality
-    this.scene.add(board)
+    face.rotation.x = -Math.PI / 2
+    face.receiveShadow = highQuality
+    this.scene.add(face)
 
-    // A slim plinth so the board reads as an object rather than a decal.
+    // A plinth with softened edges: the highlight the key light leaves along
+    // its rim is what makes the board read as a thing on a table.
+    const frameMaterial = new THREE.MeshStandardMaterial({
+      map: this.wood,
+      color: "#3b2a1c",
+      roughness: 0.68,
+    })
     const plinth = new THREE.Mesh(
-      new THREE.BoxGeometry(size + 0.5, 0.4, size + 0.5),
-      new THREE.MeshStandardMaterial({ color: palette.boardEdge, roughness: 1 }),
+      new RoundedBoxGeometry(size + 0.8, 0.5, size + 0.8, 3, 0.08),
+      frameMaterial,
     )
-    plinth.position.y = -0.22
+    plinth.position.y = -0.27
     plinth.receiveShadow = highQuality
+    plinth.castShadow = highQuality
     this.scene.add(plinth)
+
+    // A slim lip standing proud of the face, like a picture frame.
+    const lipWidth = 0.34
+    const lipGeometry = new THREE.BoxGeometry(size + lipWidth * 2, 0.09, lipWidth)
+    const lipGeometrySide = new THREE.BoxGeometry(lipWidth, 0.09, size)
+    for (const [geometry, x, z] of [
+      [lipGeometry, 0, size / 2 + lipWidth / 2],
+      [lipGeometry, 0, -(size / 2 + lipWidth / 2)],
+      [lipGeometrySide, size / 2 + lipWidth / 2, 0],
+      [lipGeometrySide, -(size / 2 + lipWidth / 2), 0],
+    ] as const) {
+      const lip = new THREE.Mesh(geometry, frameMaterial)
+      lip.position.set(x, 0.025, z)
+      lip.castShadow = highQuality
+      lip.receiveShadow = highQuality
+      this.scene.add(lip)
+    }
+
+    // The start pad, just in front of tile 1, so a token that has not yet
+    // entered the board still has somewhere to stand.
+    const pad = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.48, 0.55, 20),
+      new THREE.MeshStandardMaterial({ color: palette.start, roughness: 0.85 }),
+    )
+    // Stands on the table, its top flush with the board face.
+    pad.position.copy(tilePosition(0, size, -0.245))
+    pad.receiveShadow = highQuality
+    pad.castShadow = highQuality
+    this.scene.add(pad)
+
+    // A table under everything, fading into the fog: the plinth's shadow on
+    // it is what anchors the board in space once the camera starts orbiting.
+    const table = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: "#0c1117", roughness: 1 }),
+    )
+    table.rotation.x = -Math.PI / 2
+    table.position.y = -0.52
+    table.receiveShadow = highQuality
+    this.scene.add(table)
 
     this.scene.add(this.linkGroup, this.tokenGroup, this.dice.group)
     this.dice.group.position.set(0, 0, size / 2 + 1.6)
 
-    this.scene.add(new THREE.HemisphereLight(0x9fd3e8, 0x101820, 1.15))
-    const key = new THREE.DirectionalLight(0xffffff, 1.5)
-    key.position.set(5, 12, 7)
+    /* Lighting ------------------------------------------------------ */
+
+    // Cool sky, warm ground bounce; a warm key from the upper right with the
+    // only shadow; a cool, shadowless fill from the opposite side so the
+    // shadowed faces of ladders and tokens keep some shape.
+    this.scene.add(new THREE.HemisphereLight(0x8fb4cc, 0x2a1d13, 0.9))
+    const key = new THREE.DirectionalLight(0xffe4c2, 1.9)
+    key.position.set(6, 13, 5)
     key.castShadow = highQuality
     key.shadow.mapSize.set(1024, 1024)
     key.shadow.camera.near = 1
     key.shadow.camera.far = 40
-    const shadowExtent = size * 0.8
+    key.shadow.bias = -0.0006
+    key.shadow.normalBias = 0.02
+    const shadowExtent = size * 0.85
     Object.assign(key.shadow.camera, {
       left: -shadowExtent,
       right: shadowExtent,
@@ -113,6 +241,25 @@ export class BoardScene {
     })
     key.shadow.camera.updateProjectionMatrix()
     this.scene.add(key)
+    const fill = new THREE.DirectionalLight(0x9cc3de, 0.45)
+    fill.position.set(-7, 6, -4)
+    this.scene.add(fill)
+
+    /* Camera controls ----------------------------------------------- */
+
+    // Orbit and zoom only. Panning is off and the polar angle is clamped so
+    // the board can never leave the screen or be seen from underneath; the
+    // zoom range is set relative to the fit distance in `resize`.
+    this.controls = new OrbitControls(this.camera, canvas)
+    this.controls.enablePan = false
+    this.controls.enableDamping = true
+    this.controls.dampingFactor = 0.12
+    this.controls.rotateSpeed = 0.55
+    this.controls.zoomSpeed = 0.7
+    this.controls.minPolarAngle = THREE.MathUtils.degToRad(10)
+    this.controls.maxPolarAngle = THREE.MathUtils.degToRad(68)
+    this.controls.target.set(0, 0, 0)
+    this.controls.addEventListener("change", () => this.noteViewChange())
 
     this.resize()
   }
@@ -138,34 +285,30 @@ export class BoardScene {
     this.linkSignature = signature
 
     this.linkGroup.clear()
-    const snakeBody = new THREE.MeshStandardMaterial({
-      color: palette.snake,
-      roughness: 0.42,
-      metalness: 0.05,
-    })
-    const snakeHead = new THREE.MeshStandardMaterial({
-      color: palette.snakeHead,
-      roughness: 0.35,
-    })
-    const rail = new THREE.MeshStandardMaterial({ color: palette.ladder, roughness: 0.7 })
-    const rung = new THREE.MeshStandardMaterial({ color: palette.ladderDark, roughness: 0.8 })
+    for (const geometry of this.snakeBodies) geometry.dispose()
+    this.snakeBodies = []
 
     for (const link of board.links) {
       const from = tilePosition(link.from, board.size)
       const to = tilePosition(link.to, board.size)
       if (link.kind === "snake") {
         const curve = snakeCurve(from, to)
-        const body = new THREE.Mesh(
-          new THREE.TubeGeometry(curve, 44, 0.11, 7, false),
-          snakeBody,
-        )
+        const geometry = taperedTube(curve, 48, 8, snakeRadius)
+        this.snakeBodies.push(geometry)
+        const body = new THREE.Mesh(geometry, this.snakeBodyMaterial)
         body.castShadow = true
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), snakeHead)
-        head.position.copy(curve.getPoint(0))
-        head.castShadow = true
+        const head = buildSnakeHead(
+          curve,
+          this.snakeHead,
+          this.snakeEye,
+          this.snakeHeadMaterial,
+          this.snakeEyeMaterial,
+        )
         this.linkGroup.add(body, head)
       } else {
-        this.linkGroup.add(buildLadder(from, to, rail, rung))
+        this.linkGroup.add(
+          buildLadder(from, to, this.rail, this.rung, this.railMaterial, this.rungMaterial),
+        )
       }
     }
   }
@@ -176,13 +319,14 @@ export class BoardScene {
       seen.add(player.id)
       let token = this.tokens.get(player.id)
       if (!token) {
+        const colour = new THREE.Color(seatColour(player.seat))
         token = new THREE.Mesh(
-          new THREE.CapsuleGeometry(0.17, 0.2, 4, 10),
+          this.pawn,
           new THREE.MeshStandardMaterial({
-            color: seatColour(player.seat),
-            roughness: 0.3,
-            metalness: 0.15,
-            emissive: new THREE.Color(seatColour(player.seat)).multiplyScalar(0.18),
+            color: colour,
+            roughness: 0.32,
+            metalness: 0.08,
+            emissive: colour.clone().multiplyScalar(0.12),
           }),
         )
         token.castShadow = true
@@ -197,7 +341,8 @@ export class BoardScene {
     for (const [id, token] of this.tokens) {
       if (seen.has(id)) continue
       this.tokenGroup.remove(token)
-      token.geometry.dispose()
+      // Geometry is shared; only the seat-coloured material belongs to it.
+      ;(token.material as THREE.Material).dispose()
       this.tokens.delete(id)
     }
     this.spreadOverlaps(players)
@@ -217,8 +362,8 @@ export class BoardScene {
         const token = this.tokens.get(player.id)
         if (!token || this.clips.length > 0) return
         const angle = (i / group.length) * Math.PI * 2
-        token.position.x += Math.cos(angle) * 0.19
-        token.position.z += Math.sin(angle) * 0.19
+        token.position.x += Math.cos(angle) * 0.21
+        token.position.z += Math.sin(angle) * 0.21
       })
     }
   }
@@ -371,6 +516,8 @@ export class BoardScene {
       const delta = this.lastTime === 0 ? 16 : Math.min(time - this.lastTime, 64)
       this.lastTime = time
       this.step(delta)
+      // Damped controls keep easing after the finger lifts.
+      this.controls.update()
       this.renderer.render(this.scene, this.camera)
     }
     this.frame = requestAnimationFrame(tick)
@@ -395,29 +542,51 @@ export class BoardScene {
     }
   }
 
+  /* ---------------------------------------------------------------- *
+   * Camera
+   * ---------------------------------------------------------------- */
+
   /**
    * Convert a tap in canvas pixels to a board tile, or null if the tap missed
    * the board. Used for flagging suspected mines and for aiming `defuse`.
+   * Works from any orbit angle: it is a ray against the board plane.
    */
   pick(clientX: number, clientY: number): number | null {
     const rect = this.canvas.getBoundingClientRect()
-    const ndc = new THREE.Vector2(
+    this.pickNdc.set(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1,
     )
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(ndc, this.camera)
+    this.raycaster.setFromCamera(this.pickNdc, this.camera)
+    if (!this.raycaster.ray.intersectPlane(this.boardPlane, this.pickHit)) return null
 
-    const hit = new THREE.Vector3()
-    if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) {
-      return null
-    }
+    const hit = this.pickHit
     const col = Math.round(hit.x + (this.size - 1) / 2)
     const row = Math.round((this.size - 1) / 2 - hit.z)
     if (col < 0 || row < 0 || col >= this.size || row >= this.size) return null
     // Undo the boustrophedon numbering to get back to a tile index.
     const offset = row % 2 === 0 ? col : this.size - 1 - col
     return row * this.size + offset + 1
+  }
+
+  /** Put the camera back on the default framing that fits the whole board. */
+  resetView(): void {
+    const d = this.fitDistance
+    this.camera.position.set(0, Math.sin(TILT) * d, Math.cos(TILT) * d)
+    this.controls.target.set(0, 0, 0)
+    this.controls.update()
+    this.noteViewChange()
+  }
+
+  private noteViewChange(): void {
+    const d = this.fitDistance
+    const isDefault =
+      Math.abs(this.camera.position.x) < 0.02 &&
+      Math.abs(this.camera.position.y - Math.sin(TILT) * d) < 0.02 &&
+      Math.abs(this.camera.position.z - Math.cos(TILT) * d) < 0.02
+    if (isDefault === this.viewIsDefault) return
+    this.viewIsDefault = isDefault
+    this.onViewChange?.(isDefault)
   }
 
   resize(): void {
@@ -429,35 +598,48 @@ export class BoardScene {
     // Fit the board in BOTH axes. On a tall phone the binding constraint is
     // the *horizontal* field of view, which is the narrow one; sizing from the
     // vertical axis alone sliced the left and right columns off the board.
-    const span = this.size + 1.2 // board plus its plinth and a little air
-    const tilt = THREE.MathUtils.degToRad(56)
+    const span = this.size + 1.4 // board plus its frame and a little air
+    // Front to back there is more to show: the start pad and the dice sit
+    // in front of the board's near edge.
+    const depthSpan = span + 2.2
     const vFov = THREE.MathUtils.degToRad(this.camera.fov)
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect)
 
-    // Viewed from above at `tilt`, the board's depth foreshortens by sin(tilt)
+    // Viewed from above at `TILT`, the board's depth foreshortens by sin(tilt)
     // while its width is unaffected.
     const forWidth = span / 2 / Math.tan(hFov / 2)
-    const forDepth = (span * Math.sin(tilt)) / 2 / Math.tan(vFov / 2)
+    const forDepth = (depthSpan * Math.sin(TILT)) / 2 / Math.tan(vFov / 2)
     const distance = Math.max(forWidth, forDepth)
 
-    this.camera.position.set(0, Math.sin(tilt) * distance, Math.cos(tilt) * distance)
-    this.camera.lookAt(0, 0, 0)
+    const wasDefault = this.viewIsDefault
+    this.fitDistance = distance
+    this.controls.minDistance = distance * 0.5
+    this.controls.maxDistance = distance * 1.35
+    this.camera.far = distance * 4
     this.camera.updateProjectionMatrix()
 
     // Fog has to track the camera: fixed distances tuned for one viewport
-    // swallow the whole board on another.
+    // swallow the whole board on another. It starts beyond the farthest the
+    // board can be zoomed out to, so only the table ever fades.
     if (this.scene.fog instanceof THREE.Fog) {
-      this.scene.fog.near = distance * 0.75
-      this.scene.fog.far = distance * 2.1
+      this.scene.fog.near = this.controls.maxDistance * 1.15
+      this.scene.fog.far = this.controls.maxDistance * 2.6
     }
-    this.camera.far = distance * 3
+
+    // A camera the player has not touched keeps fitting the board as the
+    // viewport changes; one they have orbited stays put (re-clamped).
+    if (wasDefault) this.resetView()
+    else this.controls.update()
   }
 
   dispose(): void {
     this.disposed = true
     cancelAnimationFrame(this.frame)
+    this.controls.dispose()
     this.dice.dispose()
     this.boardTexture.dispose()
+    this.skin.dispose()
+    this.wood.dispose()
     this.scene.traverse((object) => {
       if (object instanceof THREE.Mesh) {
         object.geometry.dispose()
