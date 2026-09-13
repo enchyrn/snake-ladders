@@ -35,25 +35,37 @@ Any other 'opencode run' flag is passed straight through.`)
   process.exit(argv.length === 0 ? 1 : 0)
 }
 
-/** Resolve the binary, preferring the version mise pins over any global one. */
+/**
+ * Resolve the binary, preferring the version mise pins over any global one.
+ *
+ * When mise owns it, run the *path* `mise which` prints rather than
+ * `mise exec -- opencode`. `mise exec` installs every tool in mise.toml before
+ * it runs anything, so one unreachable pin — java, reliably, in a cloud
+ * container — aborts a delegation that has nothing to do with it. The same
+ * trap bit `scripts/provision.sh`; see ADR 0017.
+ */
 const resolveOpencode = async () => {
-  for (const [cmd, args] of [
-    ["mise", ["which", "opencode"]],
-    ["opencode", ["--version"]],
-  ]) {
-    try {
-      const probe = spawn(cmd, args, { stdio: "ignore" })
-      const [code] = await once(probe, "close")
-      // mise needs the binary named after `exec --`; a direct hit does not.
-      if (code === 0) {
-        return cmd === "mise"
-          ? { cmd: "mise", prefix: ["exec", "--", "opencode"] }
-          : { cmd: "opencode", prefix: [] }
-      }
-    } catch {
-      // Not on PATH; try the next candidate.
-    }
+  try {
+    const chunks = []
+    const probe = spawn("mise", ["which", "opencode"], {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+    probe.stdout.on("data", (c) => chunks.push(c))
+    const [code] = await once(probe, "close")
+    const path = chunks.join("").trim()
+    if (code === 0 && path) return { cmd: path, prefix: [] }
+  } catch {
+    // mise is not installed; fall through to the global binary.
   }
+
+  try {
+    const probe = spawn("opencode", ["--version"], { stdio: "ignore" })
+    const [code] = await once(probe, "close")
+    if (code === 0) return { cmd: "opencode", prefix: [] }
+  } catch {
+    // Not on PATH either.
+  }
+
   return null
 }
 

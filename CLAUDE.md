@@ -209,6 +209,19 @@ the engine. `docs/playing-together.md` covers getting devices connected.
 `docs/handoff.md` is the current state: what is verified, what is not, and the
 open threads in priority order. Read it before starting anything — it records
 what has already been investigated and rejected, which is the expensive part to
-rediscover.
+rediscover. Its "Resuming From This Checkpoint" section names the task to start
+on; trust that over the plan's task order, because some tasks are blocked on
+hardware a container does not have.
+
+Work in progress is driven by the Superpowers skills vendored in
+`.claude/skills/`, and the order matters:
+
+1. `superpowers:using-superpowers` — the bootstrap, before any other action.
+2. `superpowers:executing-plans`, or `subagent-driven-development` where
+   subagents are available. Each plan repeats this requirement in its own
+   first line.
+3. The plan itself, under `docs/superpowers/plans/`. Steps are `- [ ]`
+   checkboxes; tick them as they land and add a short note under the task
+   recording anything the plan did not anticipate.
 
 Designed but unbuilt work lives in `docs/superpowers/specs/`.

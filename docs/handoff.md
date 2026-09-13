@@ -291,24 +291,68 @@ The implementation plan is
 Tasks 1 and 3 of that plan are done. Task 2 is hardware-blocked and Tasks 4
 through 10 have not started.
 
+### The order to pick this up in
+
+1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and it
+   sets the rule that skills come before any other action.
+2. Then `superpowers:executing-plans` (or `subagent-driven-development`, which
+   the plan's own header prefers where subagents are available). The plan file
+   carries that requirement in its first line; do not start from the task list
+   alone.
+3. Read this file and the design before touching code. The design is committed
+   as `f773bf5`.
+4. **Start at Task 4.** Tasks 1 and 3 are done and ticked; Task 2 is
+   hardware-blocked and cannot be done from a container, and Task 4 does not
+   depend on it.
+5. Review each task's diff and test output before moving to the next. Keep
+   `--auto` restricted to trusted, explicitly scoped prompts.
+
+### Running OpenCode, and the one command that does not work
+
+**`mise exec -- opencode` fails here, and so does `mise exec -- <anything>`.**
+`mise exec` installs every tool in `mise.toml` before it runs anything, so the
+java pin — unreachable in a cloud container — aborts a command that has nothing
+to do with java:
+
+```text
+mise ERROR Failed to install tools: aqua:anomalyco/opencode@1.18.30, core:java@21
+```
+
+This trap has now cost two debugging sessions: once in `scripts/provision.sh`
+and once in `scripts/delegate.mjs`. Both now resolve the *path* from
+`mise which <tool>` and run that directly, which mise answers without
+installing anything. Use the same shape yourself:
+
+```bash
+opencode --version            # provision.sh installs it globally from npm
+"$(mise which nub)" run test  # when mise owns the tool
+```
+
 Verified on 2026-09-13:
 
-- `mise exec -- opencode --version` resolves OpenCode `1.18.30`.
-- `mise exec -- opencode run --model opencode/mimo-v2.5-free --format json
-  "Reply exactly HEADLESS_OK. Do not use tools or edit files."` succeeds.
-  (Also verified from a Claude Code web session after `opencode.ai` was added
-  to the environment's Custom allowlist; the change applied without a restart.)
+- `opencode --version` resolves `1.18.30`, installed globally from npm by
+  `scripts/provision.sh`.
+- `mise which opencode` exits non-zero in a cloud session, because mise cannot
+  fetch it there (the GitHub releases API is scoped to this repository), so
+  `scripts/delegate.mjs` falls through to that global binary. The mise-owned
+  branch of that fallback is therefore **unexercised here** — it is the one
+  `mise which` path no cloud session can reach.
+- `opencode.ai` answers 200 through the proxy in this environment.
 - The OpenCode project plugin loads the vendored Superpowers bootstrap and
   exposes the native `skill` tool.
 - OpenCode logs duplicate skill names because Claude's project-scoped vendor
   and the OpenCode plugin both register Superpowers skills. This is currently
   non-blocking, but should be resolved before treating the integration as
   warning-free.
-
-To resume safely, inspect the worktree and read the design plus plan first.
-Create or enter an isolated worktree, begin with Task 1, and review each task
-before proceeding. Keep `--auto` restricted to trusted, explicitly scoped
-prompts.
+- **Delegation works, and it is slow.**
+  `nub run delegate -- "Reply with exactly DELEGATE_OK…"` answered
+  `DELEGATE_OK` from `explore` on `mimo-v2.5-free`, exit 0 — after more than
+  three minutes. A 180s timeout killed it mid-flight and looked exactly like a
+  blocked host or a broken binary. Give a free Zen model **five minutes** before
+  concluding anything is wrong; it is a free tier and it queues.
+- Free Zen models still need an account (`opencode auth login`). This container
+  already had one, which is why the run above succeeded; a fresh container that
+  has never authenticated will not delegate however reachable the host is.
 
 ## Continuing locally
 
