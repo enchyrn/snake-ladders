@@ -17,11 +17,15 @@ export const HomeScreen = () => {
     const seed = randomSeed()
     try {
       if (networked) {
-        await Effect.runPromise(
+        const room = await Effect.runPromise(
           session.transport().host({ seed, name: session.identity.name, capacity: 6 }),
         )
+        // The client is created after hosting resolves, so the room it is
+        // stamped with always matches the seed it was actually opened with.
+        session.open({ role: "host", seed }).setRoom(room)
+      } else {
+        session.open({ role: "local", seed })
       }
-      session.open({ role: networked ? "host" : "local", seed })
       await navigate({ to: "/lobby" })
     } catch (cause) {
       setError(String(cause))

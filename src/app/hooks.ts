@@ -1,11 +1,4 @@
-import { useStore } from "@tanstack/react-store"
 import { useEffect, useState } from "react"
-import type { MatchClient } from "@/store/match-client"
-import type { ClientState } from "@/store/match-client"
-
-/** Subscribe to the whole client state. */
-export const useClientState = (client: MatchClient): ClientState =>
-  useStore(client.store)
 
 /** Re-render on viewport changes, so the canvas can resize with the window. */
 export const useViewport = (): { width: number; height: number } => {

@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from "react"
+import { RegistryContext } from "@effect-atom/atom-react"
 import { Effect } from "effect"
 import { MatchClient } from "@/store/match-client"
 import { isTauri, makeLanTransport } from "@/net/lan"
@@ -37,6 +38,10 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [client, setClient] = useState<MatchClient | null>(null)
   const transportRef = useRef<TransportService | null>(null)
   const networked = useMemo(() => isTauri(), [])
+  // The one registry every `useAtomValue` in the tree reads through — a
+  // client built with any other registry would fold in a state room nobody
+  // is watching.
+  const registry = useContext(RegistryContext)
 
   const transport = (): TransportService => {
     if (!transportRef.current) {
@@ -62,6 +67,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
         { ...defaultConfig(seed), ...config },
         role,
         identity.playerId,
+        registry,
       )
       setClient(fresh)
       return fresh

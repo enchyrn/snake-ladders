@@ -33,8 +33,8 @@ describe("MatchClient", () => {
     commits.emit({ seq: 0, action: join("a") })
     commits.emit({ seq: 1, action: join("b") })
 
-    expect(c.store.state.match.players.map((p) => p.id)).toEqual(["a", "b"])
-    expect(c.store.state.applied).toBe(2)
+    expect(c.state.match.players.map((p) => p.id)).toEqual(["a", "b"])
+    expect(c.state.applied).toBe(2)
     c.dispose()
   })
 
@@ -44,11 +44,11 @@ describe("MatchClient", () => {
 
     // #1 arrives before #0 — nothing may be applied yet.
     commits.emit({ seq: 1, action: join("b") })
-    expect(c.store.state.applied).toBe(0)
+    expect(c.state.applied).toBe(0)
 
     commits.emit({ seq: 0, action: join("a") })
     // Both land, and in the order the host chose, not the order they arrived.
-    expect(c.store.state.match.players.map((p) => p.id)).toEqual(["a", "b"])
+    expect(c.state.match.players.map((p) => p.id)).toEqual(["a", "b"])
     c.dispose()
   })
 
@@ -59,8 +59,8 @@ describe("MatchClient", () => {
     commits.emit({ seq: 0, action: join("a") })
     commits.emit({ seq: 0, action: join("a") })
 
-    expect(c.store.state.match.players).toHaveLength(1)
-    expect(c.store.state.applied).toBe(1)
+    expect(c.state.match.players).toHaveLength(1)
+    expect(c.state.applied).toBe(1)
     c.dispose()
   })
 
@@ -72,7 +72,7 @@ describe("MatchClient", () => {
     // No Start has been committed, so a roll cannot be legal here.
     commits.emit({ seq: 1, action: { _tag: "Commit", playerId: "a" } })
 
-    expect(c.store.state.desync).toMatch(/Commit rejected at #1/)
+    expect(c.state.desync).toMatch(/Commit rejected at #1/)
     c.dispose()
   })
 
@@ -81,8 +81,8 @@ describe("MatchClient", () => {
     const c = client(service)
 
     commits.emit({ seq: 0, action: { _tag: "Nonsense" } })
-    expect(c.store.state.desync).toMatch(/undecodable action at #0/)
-    expect(c.store.state.applied).toBe(0)
+    expect(c.state.desync).toMatch(/undecodable action at #0/)
+    expect(c.state.applied).toBe(0)
     c.dispose()
   })
 
@@ -94,7 +94,7 @@ describe("MatchClient", () => {
     c.send({ _tag: "Commit", playerId: "a" })
 
     expect(sent).toHaveLength(0)
-    expect(c.store.state.notice).toBeTruthy()
+    expect(c.state.notice).toBeTruthy()
     c.dispose()
   })
 
@@ -106,10 +106,10 @@ describe("MatchClient", () => {
     c.send(join("b"))
     // Sent, but not yet folded: applying early would diverge the RNG stream.
     expect(sent).toHaveLength(1)
-    expect(c.store.state.match.players).toHaveLength(1)
+    expect(c.state.match.players).toHaveLength(1)
 
     commits.emit({ seq: 1, action: join("b") })
-    expect(c.store.state.match.players).toHaveLength(2)
+    expect(c.state.match.players).toHaveLength(2)
     c.dispose()
   })
 
@@ -119,7 +119,7 @@ describe("MatchClient", () => {
     c.dispose()
 
     commits.emit({ seq: 0, action: join("a") })
-    expect(c.store.state.applied).toBe(0)
+    expect(c.state.applied).toBe(0)
   })
 })
 
@@ -131,7 +131,7 @@ describe("local transport", () => {
     c.send(join("a"))
     await new Promise((resolve) => queueMicrotask(() => resolve(null)))
 
-    expect(c.store.state.match.players.map((p) => p.id)).toEqual(["a"])
+    expect(c.state.match.players.map((p) => p.id)).toEqual(["a"])
     c.dispose()
   })
 })

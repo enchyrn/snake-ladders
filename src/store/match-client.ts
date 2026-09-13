@@ -1,88 +1,74 @@
-import { Store } from "@tanstack/store"
+import { Registry } from "@effect-atom/atom"
 import { Effect, Either } from "effect"
 import { decodeAction, type Action } from "@/engine/actions"
-import { applyAction, initialMatch } from "@/engine/match"
-import { defaultConfig, type MatchConfig, type MatchState } from "@/engine/types"
-import type {
-  Committed,
-  ConnectionStatus,
-  HostedRoom,
-  RosterEntry,
-  TransportService,
-  Unsubscribe,
-} from "@/net/transport"
+import { applyAction } from "@/engine/match"
+import { defaultConfig, type MatchConfig } from "@/engine/types"
+import type { Committed, HostedRoom, TransportService, Unsubscribe } from "@/net/transport"
+import { clientStateAtom, emptyState, type ClientState, type Role } from "./atoms"
 
-export type Role = "host" | "peer" | "local"
-
-export interface ClientState {
-  readonly match: MatchState
-  readonly role: Role
-  readonly me: string
-  readonly room: HostedRoom | null
-  readonly roster: ReadonlyArray<RosterEntry>
-  readonly connection: ConnectionStatus
-  /** Set when a committed action was refused locally — i.e. a real desync. */
-  readonly desync: string | null
-  /** Last locally-rejected action, shown to the player as a nudge. */
-  readonly notice: string | null
-  readonly applied: number
-}
-
-const emptyState = (config: MatchConfig, role: Role, me: string): ClientState => ({
-  match: initialMatch(config),
-  role,
-  me,
-  room: null,
-  roster: [],
-  connection: { connected: role === "local", reason: null },
-  desync: null,
-  notice: null,
-  applied: 0,
-})
+export type { ClientState, Role } from "./atoms"
 
 /**
- * Holds the local copy of the match and folds the host's numbered log into it.
+ * Folds the host's numbered action log into `clientStateAtom` and exposes the
+ * one imperative escape hatch — `send` — that the UI needs on top of reading
+ * atoms.
  *
- * Nothing here ever applies a local action optimistically. A player's own roll
- * takes the same round trip as everyone else's, because the moment one device
- * folds in a different order from another, the shared PRNG stream diverges and
- * the two phones are playing different games.
+ * Nothing here ever applies a local action optimistically. A player's own
+ * roll takes the same round trip as everyone else's, because the moment one
+ * device folds in a different order from another, the shared PRNG stream
+ * diverges and the two phones are playing different games.
+ *
+ * A `Registry` is accepted rather than assumed so the app can hand this the
+ * one registry every component reads through (via `RegistryContext`), while
+ * a test — or a second, unrelated match — gets an isolated one for free by
+ * simply not passing one: the atom identity is shared, but its stored value
+ * lives per-registry.
  */
 export class MatchClient {
-  readonly store: Store<ClientState>
+  private readonly registry: Registry.Registry
+  private readonly transport: TransportService
   private readonly subscriptions: Unsubscribe[] = []
   /** Commits that arrived before the one we are waiting for. */
   private readonly buffer = new Map<number, unknown>()
   private nextSeq = 0
 
   constructor(
-    private readonly transport: TransportService,
+    transport: TransportService,
     config: MatchConfig,
     role: Role,
     me: string,
+    registry: Registry.Registry = Registry.make(),
   ) {
-    this.store = new Store<ClientState>(emptyState(config, role, me))
+    this.transport = transport
+    this.registry = registry
+    this.registry.set(clientStateAtom, emptyState(config, role, me))
     this.subscriptions.push(
       transport.onCommit((entry) => this.receive(entry)),
-      transport.onRoster((roster) => this.store.setState((s) => ({ ...s, roster }))),
-      transport.onStatus((connection) => this.store.setState((s) => ({ ...s, connection }))),
+      transport.onRoster((roster) => this.patch((s) => ({ ...s, roster }))),
+      transport.onStatus((connection) => this.patch((s) => ({ ...s, connection }))),
     )
   }
 
+  /** A synchronous snapshot, for callers that are not React components. */
+  get state(): ClientState {
+    return this.registry.get(clientStateAtom)
+  }
+
   /** Rebuild for a new match. Used when the seed or the rule set changes. */
-  reset(config: MatchConfig, role: Role = this.store.state.role): void {
+  reset(config: MatchConfig, role: Role = this.state.role): void {
     this.buffer.clear()
     this.nextSeq = 0
-    this.store.setState((s) => ({
+    const s = this.state
+    this.registry.set(clientStateAtom, {
       ...emptyState(config, role, s.me),
       room: s.room,
       roster: s.roster,
       connection: s.connection,
-    }))
+    })
   }
 
   setRoom(room: HostedRoom): void {
-    this.store.setState((s) => ({ ...s, room }))
+    this.patch((s) => ({ ...s, room }))
   }
 
   /**
@@ -91,25 +77,29 @@ export class MatchClient {
    * to this player instead of network traffic and a rejection everywhere else.
    */
   send(action: Action): void {
-    const check = Effect.runSync(Effect.either(applyAction(this.store.state.match, action)))
+    const check = Effect.runSync(Effect.either(applyAction(this.state.match, action)))
     if (Either.isLeft(check)) {
-      this.store.setState((s) => ({ ...s, notice: check.left.reason }))
+      this.patch((s) => ({ ...s, notice: check.left.reason }))
       return
     }
-    this.store.setState((s) => ({ ...s, notice: null }))
+    this.patch((s) => ({ ...s, notice: null }))
     Effect.runPromise(this.transport.submit(action)).catch((cause: unknown) => {
-      this.store.setState((s) => ({ ...s, notice: `could not send: ${String(cause)}` }))
+      this.patch((s) => ({ ...s, notice: `could not send: ${String(cause)}` }))
     })
   }
 
   dismissNotice(): void {
-    this.store.setState((s) => ({ ...s, notice: null }))
+    this.patch((s) => ({ ...s, notice: null }))
   }
 
   dispose(): void {
     for (const off of this.subscriptions) off()
     this.subscriptions.length = 0
     this.buffer.clear()
+  }
+
+  private patch(f: (s: ClientState) => ClientState): void {
+    this.registry.set(clientStateAtom, f(this.registry.get(clientStateAtom)))
   }
 
   /* -------------------------------------------------------------- *
@@ -124,10 +114,11 @@ export class MatchClient {
 
   /** Apply buffered commits in strict sequence order, stopping at the first gap. */
   private drain(): void {
-    let state = this.store.state
+    let state = this.state
     let changed = false
 
     while (this.buffer.has(this.nextSeq)) {
+      // `has` just confirmed this key is present; nothing else touches `buffer`.
       const raw = this.buffer.get(this.nextSeq)!
       this.buffer.delete(this.nextSeq)
       this.nextSeq += 1
@@ -155,7 +146,7 @@ export class MatchClient {
       changed = true
     }
 
-    if (changed) this.store.setState(() => state)
+    if (changed) this.registry.set(clientStateAtom, state)
   }
 }
 
@@ -165,5 +156,6 @@ export const newClient = (
   role: Role,
   me: string,
   overrides: Partial<MatchConfig> = {},
+  registry?: Registry.Registry,
 ): MatchClient =>
-  new MatchClient(transport, { ...defaultConfig(seed), ...overrides }, role, me)
+  new MatchClient(transport, { ...defaultConfig(seed), ...overrides }, role, me, registry)
