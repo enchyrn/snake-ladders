@@ -28,10 +28,10 @@ migration sits on. Task 2 remains untouched and hardware-blocked.
   modules.
 - **Rust relay** — 19 tests over real TCP and UDP sockets: ordering agreement,
   gapless sequencing under load, mid-match catch-up, readmitting a device that
-  dropped off Wi-Fi, locked and full rooms, junk frames. All 19 pass locally,
-  every time. One of them, `a_peer_notices_the_host_going_away`, does **not**
-  pass reliably on a GitHub runner — see open thread 2, and do not read this
-  bullet as saying the Rust suite is green in CI.
+  dropped off Wi-Fi, locked and full rooms, junk frames. **18 of them pass.**
+  `a_peer_notices_the_host_going_away` fails about 3 in 7 CI runs and 3 in 25
+  locally, and open thread 2 shows it is a defect in `host.rs`, not a flaky
+  test. Do not read this bullet as saying the Rust suite is green.
 - **WebSocket relay + browser transport** — tested against a live relay: two
   clients fold identically, a late joiner catches up, a refusal surfaces
   instead of hanging, and a deliberate two-socket race still leaves both
@@ -60,7 +60,7 @@ migration sits on. Task 2 remains untouched and hardware-blocked.
 - **The whole CI command set runs in a cloud session**, despite `mise install`
   reporting three tools failed: `tsc --noEmit`, `vitest` (101), `vite build`,
   `cargo fmt --check`, `cargo clippy -D warnings` and `cargo test -p lan-sync`
-  (19) all pass. Sessions ship `node`, `npm`, `cargo`, `rustc` and a JDK
+  (19, of which one fails intermittently — thread 2) all run. Sessions ship `node`, `npm`, `cargo`, `rustc` and a JDK
   already, so mise failing to *download* them costs nothing — and nub, which
   mise resolves through `npm:@nubjs/nub`, is one of the tools it *can* fetch
   here.
@@ -109,30 +109,46 @@ migration sits on. Task 2 remains untouched and hardware-blocked.
   code: a certificate means a public host, which cuts against the promise that
   the game never touches the internet. ADR 0012 and 0013 are the prior art and
   this deserves its own ADR. Plan Tasks 8 and 9 cover the work.
-2. **`a_peer_notices_the_host_going_away` is flaky in CI, and it is not a flake
-  to shrug at.** `crates/lan-sync/tests/session.rs:117` fails intermittently on
-  GitHub runners — two of five recent runs (`34760372632` on `d81b662`,
-  `34762543150` on `f2feca8`) — always identically, always after the full 5s
-  `TIMEOUT`, and never locally. It predates the Nub migration and the branch
-  changes no Rust, so it was not introduced here.
+2. **A peer can miss the host going away. This is a defect in `host.rs`, not a
+  flaky test.** `a_peer_notices_the_host_going_away`
+  (`crates/lan-sync/tests/session.rs:117`) fails in roughly 3 of 7 CI runs, and
+  **reproduces locally at 3 in 25** — run the test binary directly in a loop
+  rather than through `cargo test`, which is why single runs kept passing and
+  it was nearly written off as CI noise. It predates the Nub migration and this
+  branch changes no Rust.
 
-  One concrete lead, not yet confirmed as *the* cause. The test's settle step is
+  It always fails after the *full* 5s timeout, which is 250 polls at 20ms. That
+  is not a timing margin, and chasing it with a longer timeout would bury it.
 
-  ```rust
-  pump_until(&peer, &mut sink, 0);
-  ```
+  The mechanism, read out of the code and consistent with every observation:
 
-  and `pump_until` loops `while … sink.commits().len() < want`. With `want` of
-  `0` that condition is false immediately, so the call polls **zero** times and
-  returns instantly — it does nothing at all. The same no-op appears at line 32.
-  So `host.close()` can run before the peer has polled even once, and a peer
-  that never observed a connection may have no disconnection to report.
+  - `serve_client` runs on its own thread, reads the peer's hello, and only
+    *then* does `state.clients.insert(…)` (`host.rs:273`). Until that insert, an
+    accepted connection exists only inside that thread.
+  - `Host::shutdown` (`host.rs:136`) iterates `state.clients` and calls
+    `stream.shutdown(Shutdown::Both)` on each. A peer that is connected but not
+    yet inserted **is not in that map**, so its socket is never shut down.
+  - Clearing `running` and joining `listener_thread` does not touch
+    `serve_client` threads, so that peer's stream stays open, no FIN arrives,
+    and the peer polls for five seconds seeing nothing.
 
-  Whether that is the whole story matters: if the peer can genuinely miss a host
-  disappearing, that is a real defect that reaches real devices, not a test bug,
-  and it belongs in the Rust audit (Task 7) rather than being timed out of
-  existence. Reproduce it under load before changing either the test or the
-  session pump.
+  The test makes the race reachable because its settle step is a no-op:
+  `pump_until(&peer, &mut sink, 0)` loops `while … commits().len() < want`, and
+  with `want` of `0` that is false immediately, so it polls **zero** times and
+  returns. The same no-op is at line 32. So `host.close()` can fire while the
+  peer's registration is still in flight — which is exactly the window above.
+
+  **This is a real gameplay failure**, not a test artefact: a player joining at
+  the moment the host quits hangs instead of being told the host went away.
+
+  Proposed, deliberately not applied here — it is Rust work outside Task 3's
+  scope, in a crate this branch does not touch, and it belongs to the Rust
+  audit (Task 7). `shutdown` needs to reach connections that exist before
+  registration: either track every accepted stream (a registry the accept loop
+  populates immediately and `serve_client` promotes on hello), or have
+  `serve_client` observe `running` and close its own stream when it clears.
+  Fix `host.rs` first and keep the test's race, then fix the `pump_until` no-op
+  separately — fixing only the test would hide the defect it just found.
 3. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
