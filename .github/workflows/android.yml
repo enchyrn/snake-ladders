@@ -65,18 +65,11 @@ jobs:
         # npm_execpath is unset, so it writes a path-relative `node <path>` that
         # Gradle then runs from src-tauri, where the path does not resolve. See
         # ADR 0017; run 34761512711 is the failure.
-        run: npx tauri android init --ci
-
-      - name: Patch generated manifest for LAN networking
-        # tauri android init regenerates gen/android from scratch every time,
-        # so the INTERNET/multicast permissions and cleartext-traffic flag
-        # documented in src-tauri/mobile/README.md must be re-applied after
-        # every init, not just once. See scripts/patch-android-manifest.mjs.
-        run: node scripts/patch-android-manifest.mjs
+        run: nubx nx run tauri:android-init
 
       # npx for the same reason as the init step above. The Gradle re-invocation
       # is baked in at init time and must match how the CLI is launched here.
-      - run: npx tauri android build --debug --apk
+      - run: nubx nx run tauri:android-build
 
       - name: List built APKs
         # Diagnoses a failed upload-artifact glob from the log instead of

@@ -1,0 +1,19 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "tauri",
+  "sourceRoot": "src-tauri",
+  "projectType": "application",
+  "tags": ["layer:native"],
+  "targets": {
+    "android-init": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx tauri android init --ci && node scripts/patch-android-manifest.mjs"
+      }
+    },
+    "android-build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "npx tauri android build --debug --apk" }
+    }
+  }
+}

@@ -22,6 +22,46 @@
     "sharedGlobals": []
   },
   "targetDefaults": {
+    "relay": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "icons": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "verify-ui": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "verify-ui-pages": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "pages-build": {
+      "cache": false,
+      "inputs": ["production", "^production"]
+    },
+    "cargo-fmt": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "cargo-clippy": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "cargo-test": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "android-init": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "android-build": {
+      "cache": false,
+      "inputs": ["default"]
+    },
     "typecheck": {
       "inputs": ["default", "^default"]
     },

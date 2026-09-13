@@ -51,7 +51,33 @@ from `src-tauri`, where it does not resolve, and the APK build dies in
 `:app:rustBuildArm64Debug`. ADR 0017 has the detail and the failing run.
 
 Everything around it is nub, including `tauri.conf.json`'s
-`beforeDevCommand` / `beforeBuildCommand`, which call `nub run`.
+`beforeDevCommand` / `beforeBuildCommand`, which call `nubx nx`.
+
+## Nx target reference
+
+Nx owns the JavaScript project graph and invokes the native tools without
+replacing them. Live servers, browser drives, icon generation, Cargo checks,
+and the Pages build are non-cached targets because they depend on external
+processes or deployment state.
+
+```bash
+nubx nx run relay:serve
+nubx nx run tooling:icons
+nubx nx run tooling:verify-ui
+nubx nx run tooling:verify-ui-pages
+nubx nx run native:cargo-fmt
+nubx nx run native:cargo-clippy
+nubx nx run native:cargo-test
+nubx nx run tauri:android-init  # npx is retained inside this target by design
+nubx nx run tauri:android-build
+nubx nx run tooling:pages-build
+```
+
+The Android target runs `tauri android init --ci` and immediately patches the
+generated manifest before the build. CI still owns Java 17, the pinned Android
+NDK, Rust targets, caching, and APK artifact upload; Nx only orchestrates those
+commands. GitHub Actions remains the authority for the Pages deployment after
+the Nx Pages build produces `dist/`.
 
 ## Provisioning
 
@@ -268,11 +294,11 @@ This table maps mise tasks to their underlying commands if you're not using mise
 | Task       | Mise Command       | Raw Commands                              |
 |------------|--------------------|-------------------------------------------|
 | Install    | —                  | `nub install` (or `nub ci`, as CI does)   |
-| Test       | `mise run test`    | `nub run test && cargo test -p lan-sync`  |
-| Type Check | `mise run typecheck` | `nubx tsc --noEmit`                     |
-| Lint       | `mise run lint`    | `cargo clippy -p lan-sync --all-targets`  |
-| Format     | `mise run fmt`     | `cargo fmt --all`                         |
-| Build      | `mise run build`   | `nub run build`                           |
+| Test       | `mise run test`    | `nubx nx run game-web:test && nubx nx run native:cargo-test` |
+| Type Check | `mise run typecheck` | `nubx nx run game-web:typecheck`       |
+| Lint       | `mise run lint`    | `nubx nx run native:cargo-clippy`         |
+| Format     | `mise run fmt`     | `nubx nx run native:cargo-fmt`            |
+| Build      | `mise run build`   | `nubx nx run game-web:build`              |
 | Provision  | `mise run provision` | `bash scripts/provision.sh`             |
 | Delegate   | `mise run delegate` | `nub run delegate -- "<prompt>"`         |
 

@@ -49,7 +49,7 @@ jobs:
         # <owner>.github.io — is served from the root and would need "/".)
         env:
           PUBLIC_BASE_PATH: ${{ github.event.repository.name }}
-        run: nub run build
+        run: nubx nx run tooling:pages-build
 
       - uses: actions/upload-pages-artifact@v3
         with:

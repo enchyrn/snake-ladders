@@ -20,11 +20,7 @@ jobs:
 
       - run: nub ci
 
-      - run: nubx tsc --noEmit
-
-      - run: nub run test
-
-      - run: nubx vite build
+      - run: nubx nx run-many -t typecheck,test,build --projects=game-web
 
   rust:
     name: Rust (lan-sync)
@@ -47,8 +43,8 @@ jobs:
           # Root Cargo.toml's workspace is "." (members = ["crates/*"]).
           workspaces: "."
 
-      - run: cargo fmt --all -- --check
+      - run: nubx nx run native:cargo-fmt
 
-      - run: cargo clippy -p lan-sync --all-targets -- -D warnings
+      - run: nubx nx run native:cargo-clippy
 
-      - run: cargo test -p lan-sync
+      - run: nubx nx run native:cargo-test

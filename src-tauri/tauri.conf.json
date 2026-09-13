@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "dev.mutation.snakesladders",
   "build": {
-    "beforeDevCommand": "nub run dev",
+    "beforeDevCommand": "nubx nx serve game-web",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "nub run build",
+    "beforeBuildCommand": "nubx nx run game-web:build",
     "frontendDist": "../dist"
   },
   "app": {
