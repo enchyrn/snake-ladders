@@ -34,6 +34,11 @@ migration sits on. Task 2 remains untouched and hardware-blocked.
   instead of hanging, and a deliberate two-socket race still leaves both
   devices agreeing.
 - **Android APK** — CI green, artifact produced and installed on a real phone.
+  Still green after the toolchain migration: run `34762050952` on the nub
+  branch produced `android-debug-apk`, 129 MB,
+  `sha256:840244f4ca6250722f775c45b93f014ae9d8aec9d96e17914b80fd8e6e8cc776`.
+  That run is the evidence for the `npx` exception below — it took two attempts
+  to get there, and the first one is what found the incompatibility.
 - **PWA** — deployed to GitHub Pages at
   `https://enchyrn.github.io/snake-ladders/` by `.github/workflows/pages.yml`,
   from Actions run `34758473488`. Opened on a real device: the app renders, the
@@ -247,9 +252,8 @@ under `nubx` it recorded a path-relative `node <path>` that Gradle ran from
 back to `nubx` without a Tauri release that knows about nub — the web suite
 will stay green and only the Android job will tell you.
 
-`tauri.conf.json`'s before-commands do call `nub run`, and that half is fine:
-the failing run got past the frontend build and all the way to Gradle, which it
-could not have done if `nub run build` had failed.
+`tauri.conf.json`'s before-commands do call `nub run`, and that half is fine —
+run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 

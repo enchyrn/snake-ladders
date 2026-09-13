@@ -132,7 +132,8 @@
 > `:app:rustBuildArm64Debug` (`Cannot find module '…/src-tauri/tauri'`, run
 > `34761512711`). So `android.yml` launches the CLI with `npx` and that is
 > recorded in ADR 0017 rather than worked around — everything else, including
-> `tauri.conf.json`'s before-commands, is nub.
+> `tauri.conf.json`'s before-commands, is nub. Green again on run
+> `34762050952`, which produced the APK.
 >
 > Parity evidence: the production build is
 > byte-identical to the npm baseline — 872 modules, the same asset hashes, 13
