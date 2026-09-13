@@ -96,13 +96,45 @@
 - Produces a reproducible Node 24 + Nub environment launched by Mise.
 - Produces the repository-approved installation command and lockfile format.
 
-- [ ] Verify the selected Nub release supports the repository's workspace install, lifecycle scripts, binaries, Node 24 selection, and Linux CI environment; record the exact version and command syntax.
-- [ ] Change Mise and GitHub Actions to Node 24 and add the exact Nub bootstrap without silently invoking npm.
-- [ ] Regenerate the JavaScript lockfile with Nub and verify a clean install from an empty dependency directory.
-- [ ] Update tooling docs and agent instructions so setup, test, build, and CI commands use Nub/Nx after their targets exist.
-- [ ] Run the clean bootstrap, current Vitest suite, typecheck, and production build before moving project files; expected result is behavior parity with the pre-migration baseline.
-- [ ] If Nub cannot satisfy a required operation, stop the migration at the failed boundary and record the exact incompatibility rather than adding an undocumented fallback.
-- [ ] Commit: `build: establish node24 and nub toolchain`.
+- [x] Verify the selected Nub release supports the repository's workspace install, lifecycle scripts, binaries, Node 24 selection, and Linux CI environment; record the exact version and command syntax.
+- [x] Change Mise and GitHub Actions to Node 24 and add the exact Nub bootstrap without silently invoking npm.
+- [x] Regenerate the JavaScript lockfile with Nub and verify a clean install from an empty dependency directory.
+- [x] Update tooling docs and agent instructions so setup, test, build, and CI commands use Nub/Nx after their targets exist.
+- [x] Run the clean bootstrap, current Vitest suite, typecheck, and production build before moving project files; expected result is behavior parity with the pre-migration baseline.
+- [x] If Nub cannot satisfy a required operation, stop the migration at the failed boundary and record the exact incompatibility rather than adding an undocumented fallback.
+- [x] Commit: `build: establish node24 and nub toolchain`.
+
+> **Task 3 done, 2026-09-13**, at Nub `0.9.1` and Node `24.21.0`. ADR 0017
+> records the decision. Three things the plan did not anticipate:
+>
+> - **Nub is not only a package manager**, so "the exact command syntax" is
+>   `nub install` / `nub ci` / `nub run <script>` / `nubx <bin>`, plus
+>   `nub node install|pin`, which is what provisions Node 24 from
+>   `.node-version`. CI needs no `setup-node` at all: `nubjs/setup-nub@v0` is a
+>   documented drop-in that reads that pin.
+> - **The lockfile is `nub.lock`** (pnpm's format under another name), written
+>   by `nub pm use nub`, which also deletes `package-lock.json` and writes
+>   `devEngines.packageManager`. Nub will maintain a `package-lock.json`
+>   instead; keeping both writers is what was rejected.
+> - **The isolated layout found a phantom dependency on the first build.**
+>   `workbox-window` reaches the client bundle through
+>   `virtual:pwa-register` and was never declared — npm's hoisting had been
+>   supplying it out of `vite-plugin-pwa`. Declared now. This is the failure
+>   mode to expect when Task 4 moves files into `packages/`: a cross-project
+>   import that resolves today only because everything is one flat tree.
+>
+> Nub satisfied every required operation, so the "stop at the failed boundary"
+> step recorded no incompatibility. Parity evidence: the production build is
+> byte-identical to the npm baseline — 872 modules, the same asset hashes, 13
+> precache entries — with 101 vitest tests, a clean `tsc --noEmit`, and both
+> `verify:ui` runs green.
+>
+> Two deviations from the file list, both because leaving them would have
+> broken something this task touched. `pages.yml` (listed under Task 5) had to
+> move off `npm ci` the moment `package-lock.json` was deleted, and
+> `src-tauri/tauri.conf.json`'s before-commands were still shelling out to npm,
+> which the design forbids; the Android workflow is the feedback loop for that
+> second one, and it runs on this branch.
 
 ## Task 4: Generate Nx Workspace and Physical Project Boundaries
 

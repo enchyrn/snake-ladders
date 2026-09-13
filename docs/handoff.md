@@ -4,13 +4,25 @@ State of the branch `claude/snake-ladders-cross-device-3uu177` as of
 2026-09-13, written so another session — or the same person on a different
 machine — can pick it up without re-deriving anything.
 
-Task 1 of the Nx/Nub/PWA plan is complete: the PWA is deployed and was opened
-on a real device. That deployment also settled a question the plan had left
-open, and not in the direction anyone hoped — see open thread 1.
+Tasks 1 and 3 of the Nx/Nub/PWA plan are complete. Task 1 deployed the PWA and
+it was opened on a real device; that deployment also settled a question the
+plan had left open, and not in the direction anyone hoped — see open thread 1.
+Task 3 moved the toolchain to Nub and Node 24, which is the base Task 4's Nx
+migration sits on. Task 2 remains untouched and hardware-blocked.
 
 ## What works, and how it was verified
 
-- **Engine** — pure deterministic reducer, four rule modules. 94 TypeScript
+- **Toolchain** — Nub `0.9.1` is the package manager and Node `24.21.0` the
+  runtime (ADR 0017). Verified by deleting `node_modules`, running `nub ci`
+  strictly from `nub.lock`, and then the whole suite: 101 vitest tests, a clean
+  `tsc --noEmit`, `verify:ui` and `verify:ui:pages` both green, and a
+  production build **byte-identical to the npm baseline** — 872 modules, the
+  same asset hashes, 13 precache entries. A cold install with an isolated
+  `HOME` — an empty store as well as an empty `node_modules` — pulled 442 MB
+  and linked in 8.9s, so `nub.lock` is self-sufficient and CI's first run has
+  nothing else to resolve. `scripts/provision.sh` ran end to end in this
+  container and exited 0.
+- **Engine** — pure deterministic reducer, four rule modules. 101 TypeScript
   tests including a fuzz driver that plays whole random matches and asserts two
   independent peers fold to byte-identical state, for every combination of
   modules.
@@ -27,8 +39,8 @@ open, and not in the direction anyone hoped — see open thread 1.
   from Actions run `34758473488`. Opened on a real device: the app renders, the
   hashed asset bundle loads, hash routes work. Everything below `/snake-ladders/`
   — manifest, icons, service worker, all nine precache entries — resolves under
-  the subpath, and `npm run build` emits no root-absolute URL that would 404
-  there. The service worker was watched registering at
+  the subpath, and the production build emits no root-absolute URL that would
+  404 there. The service worker was watched registering at
   `https://localhost:8910/snake-ladders/sw.js` under
   `node scripts/drive-app.mjs --https --base-path /snake-ladders`, which is the
   first evidence the offline shell actually installs under the subpath rather
@@ -38,10 +50,12 @@ open, and not in the direction anyone hoped — see open thread 1.
   and OpenCode, reported the toolchain as partial, and exited 0. The
   `SessionStart` hook was run the same way and is idempotent.
 - **The whole CI command set runs in a cloud session**, despite `mise install`
-  reporting three tools failed: `tsc --noEmit`, `vitest` (94), `vite build`,
+  reporting three tools failed: `tsc --noEmit`, `vitest` (101), `vite build`,
   `cargo fmt --check`, `cargo clippy -D warnings` and `cargo test -p lan-sync`
   (19) all pass. Sessions ship `node`, `npm`, `cargo`, `rustc` and a JDK
-  already, so mise failing to *download* them costs nothing.
+  already, so mise failing to *download* them costs nothing — and nub, which
+  mise resolves through `npm:@nubjs/nub`, is one of the tools it *can* fetch
+  here.
 - **OpenCode delegation** — verified end to end from a web session once
   `opencode.ai` was added to the environment's Custom allowlist. Both agents
   answer on their own models (`explore` on `mimo-v2.5-free`, `review` on
@@ -93,8 +107,10 @@ open, and not in the direction anyone hoped — see open thread 1.
 3. **Complete the available Phase 1 device checks.** With one Android device,
   test native behavior separately and use the laptop relay for the PWA. Do
   not claim Android-native-host to PWA interoperability yet.
-4. **Perform the wholesale Nx/Nub/Node 24 refactor.** Follow the approved
-  implementation plan and preserve Cargo/Tauri as native authorities.
+4. **Perform the wholesale Nx refactor.** The Nub and Node 24 half is done
+  (plan Task 3, ADR 0017); what remains is the project split, plan Task 4
+  onward. Follow the approved implementation plan and preserve Cargo/Tauri as
+  native authorities.
 5. **Audit Effect TS and Rust.** Measure correctness, ownership, concurrency,
   allocation, and release performance before changing implementations.
 6. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
@@ -148,7 +164,7 @@ open, and not in the direction anyone hoped — see open thread 1.
   all — only the Actions logs can be read. Confirming a deployment actually
   serves needs someone with a browser.
 
-- **`npm run verify:ui` drives the built app in a real browser and
+- **`nub run verify:ui` drives the built app in a real browser and
   screenshots it.** Three bugs were found this way and none were visible in the
   source: the board clipping its left and right columns, a router rendering
   "Not Found" when served from a subdirectory, and a disabled button styled as
@@ -193,8 +209,9 @@ Each agent framework reads its own configuration to follow the same rules:
 All three share one contract: read the repo docs before editing, get design
 approval before writing code, and verify before claiming completion.
 
-**Next checkpoint:** Task 1 is complete and its steps are ticked in
-`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
+**Next checkpoint:** Tasks 1 and 3 are complete and their steps are ticked in
+`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`. Task 4 is
+next.
 
 Task 2 is next in the plan's order but is **hardware-blocked for a container
 session**: it is host-local Android capture and needs a device, wireless ADB and
@@ -202,10 +219,28 @@ Chrome on the operator's own machine. `docs/android-debugging.md` is the written
 procedure and has not yet been executed against hardware — whoever runs it first
 should correct whatever turns out to be wrong.
 
-Task 3 (Nub and Node 24 bootstrap) is the next task a container can actually
-do, and does not depend on Task 2. Node 24 is known good here: the Pages
-workflow builds on it, and `mise exec node@24 -- npm ci && npm run build` runs
-clean locally.
+Task 3 (Nub and Node 24 bootstrap) is **done** — see the note under it in the
+plan, and ADR 0017. Nub `0.9.1` is the package manager, `nub.lock` is the
+lockfile, `package-lock.json` is gone, and every workflow bootstraps through
+`nubjs/setup-nub@v0`.
+
+Two things from it that Task 4 should expect. First, the isolated
+`node_modules` layout turns a phantom dependency into a build failure rather
+than a silent success — it caught `workbox-window`, which reaches the client
+bundle through `virtual:pwa-register` and had never been declared — so a
+cross-project import that only resolves today because everything is one flat
+tree will fail loudly the moment files move into `packages/`. That is the
+desired behaviour; the fix is always to declare the dependency, never to switch
+the linker back to hoisted. Second, `nx@23.2.1` is already a dependency and
+installs cleanly under nub, so Task 4 starts from a working `nx` binary.
+
+**Task 4 (the Nx workspace split) is the next task a container can do.**
+
+Untested by anything here: the Android workflow's move to `nubx tauri android
+build`, and `src-tauri/tauri.conf.json`'s before-commands now calling `nub run`
+rather than `npm run`. That build cannot run in a container (ADR 0011), so the
+first push of this branch is its first real exercise — check the `Android`
+workflow before trusting it.
 
 ## Resuming From This Checkpoint
 
@@ -213,7 +248,8 @@ The approved design is committed as `f773bf5` in
 `docs/superpowers/specs/2026-09-13-wholesale-nx-nub-and-pwa-design.md`.
 The implementation plan is
 `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
-Task 1 of that plan is done; Tasks 2 through 10 have not started.
+Tasks 1 and 3 of that plan are done. Task 2 is hardware-blocked and Tasks 4
+through 10 have not started.
 
 Verified on 2026-09-13:
 
@@ -239,15 +275,17 @@ prompts.
 ```bash
 git clone <repo> && cd snake-ladders
 git checkout claude/snake-ladders-cross-device-3uu177
-bash scripts/provision.sh           # mise, the toolchain, OpenCode, npm deps
-npx playwright install chromium     # only needed for npm run verify:ui
-npm test && npm run typecheck       # 94 tests, clean types
+bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
+nubx playwright install chromium    # only needed for nub run verify:ui
+nub run test && nub run typecheck   # 101 tests, clean types
 ```
 
 A Codespace and a Claude Code web session run `scripts/provision.sh`
 themselves, through `.devcontainer/devcontainer.json` and the `SessionStart`
 hook in `.claude/settings.json` respectively. ADR 0015 covers why it tolerates
-partial failure and why mise and OpenCode have npm fallbacks.
+partial failure and why mise and OpenCode have npm fallbacks. Nub has the same
+fallbacks and is the one tool provisioning refuses to degrade on, because
+nothing after it can run — ADR 0017.
 
 For physical-device capture, switch to the host machine rather than trying to
 route ADB through the Codespace:
