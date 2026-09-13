@@ -1,4 +1,5 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::io::{Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 
 use lan_sync::{room_code, RecordingSink, Sequenced, Session, SessionStatus};
@@ -115,6 +116,22 @@ fn a_peer_notices_the_host_going_away() {
         std::thread::sleep(Duration::from_millis(20));
     }
     assert!(sink.statuses().contains(&SessionStatus::Disconnected));
+}
+
+#[test]
+fn host_shutdown_closes_a_peer_still_in_handshake() {
+    let mut host = lan_sync::Host::bind("room", 0, 4).expect("host should open");
+    let mut peer = TcpStream::connect(local(host.port())).expect("peer should connect");
+    peer.write_all(b"{").expect("partial hello should be sent");
+
+    std::thread::sleep(Duration::from_millis(100));
+    host.shutdown();
+
+    peer.set_read_timeout(Some(Duration::from_millis(250)))
+        .expect("read timeout should be set");
+    let mut byte = [0; 1];
+    let read = peer.read(&mut byte).expect("shutdown should unblock peer");
+    assert_eq!(read, 0, "shutdown must close an unregistered socket");
 }
 
 #[test]

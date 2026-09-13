@@ -33,6 +33,7 @@ struct HostState {
     next_seq: u64,
     log: Vec<Sequenced>,
     clients: HashMap<String, Client>,
+    pending: HashMap<SocketAddr, TcpStream>,
     /// Actions committed locally, drained by the host's own UI thread.
     outbox: Vec<Sequenced>,
 }
@@ -65,8 +66,16 @@ impl Host {
                 }
                 match incoming {
                     Ok(stream) => {
+                        let peer_addr = stream.peer_addr().ok();
+                        if let Some(peer_addr) = peer_addr {
+                            if let Ok(mut state) = listener_inner.state.lock() {
+                                if let Ok(registry_stream) = stream.try_clone() {
+                                    state.pending.insert(peer_addr, registry_stream);
+                                }
+                            }
+                        }
                         let per_client = Arc::clone(&listener_inner);
-                        thread::spawn(move || serve_client(per_client, stream));
+                        thread::spawn(move || serve_client(per_client, stream, peer_addr));
                     }
                     // A single refused connection must not take the room down.
                     Err(_) => continue,
@@ -136,6 +145,9 @@ impl Host {
     pub fn shutdown(&mut self) {
         self.inner.running.store(false, Ordering::SeqCst);
         if let Ok(mut state) = self.inner.state.lock() {
+            for stream in state.pending.values_mut() {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
             for client in state.clients.values_mut() {
                 let _ = client.stream.shutdown(Shutdown::Both);
             }
@@ -203,9 +215,11 @@ fn send(stream: &mut TcpStream, frame: &Downstream) -> std::io::Result<()> {
     stream.write_all(payload.as_bytes())
 }
 
-fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
-    let peer_addr: Option<SocketAddr> = stream.peer_addr().ok();
-    let _ = peer_addr;
+fn serve_client(shared: Arc<Shared>, stream: TcpStream, peer_addr: Option<SocketAddr>) {
+    let mut pending = PendingClient {
+        shared: Arc::clone(&shared),
+        peer_addr,
+    };
     let Ok(read_half) = stream.try_clone() else {
         return;
     };
@@ -294,6 +308,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
         };
         broadcast(&mut state, &roster);
     }
+    pending.complete();
 
     // --- frame loop ------------------------------------------------------
     loop {
@@ -332,5 +347,26 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
             peers: roster_of(&state),
         };
         broadcast(&mut state, &roster);
+    }
+}
+
+struct PendingClient {
+    shared: Arc<Shared>,
+    peer_addr: Option<SocketAddr>,
+}
+
+impl PendingClient {
+    fn complete(&mut self) {
+        if let Some(peer_addr) = self.peer_addr.take() {
+            if let Ok(mut state) = self.shared.state.lock() {
+                state.pending.remove(&peer_addr);
+            }
+        }
+    }
+}
+
+impl Drop for PendingClient {
+    fn drop(&mut self) {
+        self.complete();
     }
 }
