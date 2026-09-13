@@ -531,6 +531,46 @@ button.start {
 }
 
 /* ------------------------------------------------------------------ *
+ * Service-worker toast
+ * ------------------------------------------------------------------ */
+
+.pwa-toast {
+  position: fixed;
+  /* Clears the home indicator on a notched phone; the viewport is
+     viewport-fit=cover, so without this the toast sits under it. */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+  left: max(env(safe-area-inset-left, 0px), 0.75rem);
+  right: max(env(safe-area-inset-right, 0px), 0.75rem);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  border: 1px solid var(--revealed-edge, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  font-size: 0.9rem;
+}
+
+.pwa-toast span {
+  flex: 1;
+}
+
+.pwa-toast button {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+.pwa-toast button.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------ *
  * Small phones: 360px is the floor this has to hold up at.
  * ------------------------------------------------------------------ */
 

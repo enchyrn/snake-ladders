@@ -14,10 +14,11 @@ import { HomeScreen } from "@/routes/home"
 import { JoinScreen } from "@/routes/join"
 import { LobbyScreen } from "@/routes/lobby"
 import { MatchScreen } from "@/routes/match"
+import { PwaPrompt } from "@/ui/PwaPrompt"
 import "@/styles.css"
 
-// The ternary, not an `if`, matters: esbuild folds `import.meta.env.DEV` to a
-// literal at build time and then dead-code-eliminates the untaken branch —
+// The ternary, not an `if`, matters: the bundler folds `import.meta.env.DEV`
+// to a literal at build time and then eliminates the untaken branch —
 // including the dynamic import inside it — so devtools never end up in a
 // production chunk at all, rather than merely being hidden behind a flag.
 const RouterDevtools = import.meta.env.DEV
@@ -40,6 +41,7 @@ const rootRoute = createRootRoute({
   component: () => (
     <>
       <Outlet />
+      <PwaPrompt />
       <RouterDevtools />
       <QueryDevtools />
     </>
