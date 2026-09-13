@@ -38,10 +38,11 @@ mise.jdx.dev
 mise-java.jdx.dev
 ```
 
-That enables delegation and the Java toolchain. It does **not** make mise's
-OpenCode or Rust downloads work — those read the GitHub releases API for
-repositories not attached to the session, which the GitHub proxy refuses at
-every access level. The npm fallbacks cover both.
+`opencode.ai` is the one delegation needs, and it takes effect in a running
+session — no restart. It does **not** make mise's OpenCode or Rust downloads
+work: those read the GitHub releases API for repositories not attached to the
+session, which the GitHub proxy refuses at every access level. The npm
+fallbacks cover both.
 
 ## Getting Started with Mise
 
@@ -105,6 +106,16 @@ Two agents are defined in `opencode.json`:
 
 `scripts/delegate.mjs` checks the binary, the network and the exit code
 separately, because `opencode run` fails all three ways with the same shape.
+Its network probe goes through `HTTPS_PROXY` when one is set — Node's `fetch`
+otherwise ignores the proxy and reports a blocked host for one that is allowed.
+
+Both agents are `"mode": "all"` rather than `"subagent"` on purpose. Running
+`--agent` against a subagent-only agent makes OpenCode fall back to its default
+`build` agent, which **can write files and run commands** — the read-only
+guarantee rests on that one field, so leave it alone.
+
+Attaching files with `--file` sends source to a third party, which Claude
+Code's auto-mode classifier blocks from inside a session. Run those yourself.
 
 ### First run
 

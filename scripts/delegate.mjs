@@ -60,21 +60,58 @@ const resolveOpencode = async () => {
 /**
  * Zen is a hosted API, so delegation needs egress to it. Restricted
  * environments — a Claude Cloud container, for one — reach the npm registry
- * but answer 403 to a CONNECT for opencode.ai, and without this check that
- * surfaces as an opaque model error several seconds later.
+ * but refuse opencode.ai, and without this check that surfaces as an opaque
+ * model error several seconds later.
+ *
+ * The probe has to go through the same proxy OpenCode itself uses. Node's
+ * fetch ignores HTTPS_PROXY unless EnvHttpProxyAgent is switched on, and
+ * probing around the proxy reports the sandbox's own refusal rather than the
+ * policy — which reads as "blocked" for a host that is in fact allowed.
  */
 const zenReachable = async () => {
-  try {
-    const res = await fetch(`https://${ZEN_HOST}/`, {
-      method: "HEAD",
-      signal: AbortSignal.timeout(8000),
-    })
-    // A blocked host still answers - the egress proxy returns 403 itself -
-    // so a response is not evidence of reach. Only a success is.
-    return res.status < 400
-  } catch {
-    return false
+  const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy
+
+  // With no proxy configured, fetch is already talking to the real network.
+  if (!proxy) {
+    try {
+      const res = await fetch(`https://${ZEN_HOST}/`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(8000),
+      })
+      return res.status < 400
+    } catch {
+      return false
+    }
   }
+
+  // Ask the proxy to open a tunnel, which is exactly what it will be asked for
+  // in earnest. A refused host answers the CONNECT with 403 rather than
+  // failing to connect, so the status line is the answer.
+  const { request } = await import("node:http")
+  const target = new URL(proxy)
+
+  return new Promise((resolve) => {
+    const req = request({
+      host: target.hostname,
+      port: target.port || 80,
+      method: "CONNECT",
+      path: `${ZEN_HOST}:443`,
+      timeout: 8000,
+    })
+
+    const settle = (value) => {
+      req.destroy()
+      resolve(value)
+    }
+
+    req.on("connect", (res, socket) => {
+      socket.destroy()
+      settle(res.statusCode === 200)
+    })
+    req.on("error", () => settle(false))
+    req.on("timeout", () => settle(false))
+    req.end()
+  })
 }
 
 const bin = await resolveOpencode()

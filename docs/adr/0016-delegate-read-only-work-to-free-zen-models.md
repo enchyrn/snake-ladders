@@ -24,6 +24,12 @@ Delegation is read-only. The `explore` and `review` agents in `opencode.json`
 have `write`, `edit`, `patch` and `bash` switched off, and `scripts/delegate.mjs`
 defaults to `explore`.
 
+Both agents are declared `"mode": "all"`, not `"subagent"`. This is what makes
+the restriction real: `opencode run --agent explore` on a subagent-only agent
+prints a warning and **falls back to the default `build` agent**, which can
+write files and run commands. The read-only guarantee lives entirely in that
+one field.
+
 The free Zen models are the default: `opencode/mimo-v2.5-free` for the agents
 and `opencode/nemotron-3.5-lightning-free` as the small model.
 
@@ -50,7 +56,19 @@ retired; when one is, `opencode models` lists what replaced it and the two IDs
 in `opencode.json` are the only places to change. A missing model fails at the
 model layer, which is exactly the case the wrapper's exit message points at.
 
-Delegation cannot run from a Claude Code on the web session at all, because
-`opencode.ai` is outside the Trusted allowlist (ADR 0015). It works from a
-Codespace and a laptop. The wrapper detects this and says so rather than
-timing out.
+Delegation needs `opencode.ai`, which the Trusted access level does not allow
+(ADR 0015). Adding it to a **Custom** allowlist is sufficient and was verified
+from a web session; a Codespace and a laptop need nothing. The wrapper detects
+an unreachable Zen and says so rather than timing out.
+
+That probe has to go through the environment's proxy to mean anything. Node's
+`fetch` ignores `HTTPS_PROXY` unless `EnvHttpProxyAgent` is enabled, so probing
+with it reported the sandbox's own refusal of a host the policy had already
+allowed — a false negative that blocked delegation after the allowlist was
+fixed. The wrapper now issues a proxy `CONNECT` when a proxy is configured and
+falls back to `fetch` only when one is not.
+
+One limitation is not ours: attaching repository files with `--file` sends
+source to a third party, and Claude Code's auto-mode classifier blocks that
+from inside a session. Delegating a review of a specific file therefore has to
+be run by a person, not by Claude.

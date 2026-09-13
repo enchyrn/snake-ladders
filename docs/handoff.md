@@ -23,6 +23,12 @@ machine — can pick it up without re-deriving anything.
   web container, which is the hostile case: it fell back to npm for both mise
   and OpenCode, reported the toolchain as partial, and exited 0. The
   `SessionStart` hook was run the same way and is idempotent.
+- **OpenCode delegation** — verified end to end from a web session once
+  `opencode.ai` was added to the environment's Custom allowlist. Both agents
+  answer on their own models (`explore` on `mimo-v2.5-free`, `review` on
+  `nemotron-3-ultra-free`), and the read-only restriction was tested rather
+  than assumed: asked to write a file, `explore` described the change instead
+  and the working tree was unchanged.
 
 ## What has not been verified
 
@@ -37,13 +43,11 @@ machine — can pick it up without re-deriving anything.
   valuable next thing to do, and it needs hardware this container does not have.
 - **Pinch-zoom on the board** is code-reviewed, not driven — Playwright's mouse
   harness cannot simulate a second pointer.
-- **No OpenCode delegation has actually completed a task.** `opencode.json`
-  parses and both agents register (`opencode agent list` shows `explore` and
-  `review`), and the wrapper's failure paths were exercised. The success path
-  was not: `opencode.ai` is outside a web session's Trusted allowlist, so the
-  first real delegation has to happen from a Codespace or a laptop.
 - **`.devcontainer/devcontainer.json` has never been built.** It is the same
   script the web hook runs, but no Codespace has been created from it.
+- **`--file` delegation is untested.** Claude Code's auto-mode classifier
+  blocks attaching repository source to a third-party model from inside a
+  session, so that flag has only ever been passed through, never exercised.
 
 ## Open threads, roughly in priority order
 
@@ -129,9 +133,8 @@ Verified on 2026-09-13:
 - `mise exec -- opencode --version` resolves OpenCode `1.18.30`.
 - `mise exec -- opencode run --model opencode/mimo-v2.5-free --format json
   "Reply exactly HEADLESS_OK. Do not use tools or edit files."` succeeds.
-  (Verified from the Codespace. It cannot be reproduced from a Claude Code web
-  session, where `opencode.ai` is blocked — `npm run delegate` detects that and
-  says so rather than hanging.)
+  (Also verified from a Claude Code web session after `opencode.ai` was added
+  to the environment's Custom allowlist; the change applied without a restart.)
 - The OpenCode project plugin loads the vendored Superpowers bootstrap and
   exposes the native `skill` tool.
 - OpenCode logs duplicate skill names because Claude's project-scoped vendor
@@ -175,3 +178,16 @@ report review.
 
 `CLAUDE.md` holds the architecture and the invariants worth knowing before
 changing anything. `docs/adr/` holds the decisions and what each one cost.
+
+## Two traps in the delegation setup
+
+Both were found by running it, and both fail quietly:
+
+- **`opencode.json` agents must be `"mode": "all"`.** As `"subagent"` they
+  cannot be selected by `opencode run --agent`, which warns once and falls back
+  to the default `build` agent — an agent that can write files and run
+  commands. The read-only guarantee is that one field.
+- **Node's `fetch` ignores `HTTPS_PROXY`.** A reachability probe written with
+  it bypasses the environment's proxy and reports the sandbox's own refusal, so
+  a host the policy allows still looks blocked. `scripts/delegate.mjs` issues a
+  proxy `CONNECT` instead when a proxy is configured.

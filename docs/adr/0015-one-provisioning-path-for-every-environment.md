@@ -62,6 +62,9 @@ cannot be built in a container anyway (ADR 0011).
 
 The environment-level fix is a user's to make, not the repository's: raising a
 cloud environment to **Custom** network access and allowing `opencode.ai` and
-`mise.jdx.dev` removes the first fallback's reason to exist. It does **not**
-remove the second — the GitHub repository scope applies at every access level,
-so the npm path for OpenCode is permanent for cloud sessions.
+`mise.jdx.dev` removes the first fallback's reason to exist. Allowing
+`opencode.ai` was done and verified — delegation runs from a web session now.
+
+It does **not** remove the second. The GitHub repository scope applies at every
+access level, so the npm path for OpenCode is permanent for cloud sessions, and
+a `mise install` there will keep reporting a partial toolchain.

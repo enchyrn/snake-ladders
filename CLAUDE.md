@@ -50,8 +50,10 @@ only on `npm install`.
 free Zen model. The `explore` and `review` agents have write, edit, patch and
 bash switched off deliberately: a free model is a reasonable reviewer of the
 determinism contract and a poor author of code that has to honour it
-(ADR 0016). It needs `opencode.ai`, which a web session blocks — delegate from
-a Codespace or a laptop.
+(ADR 0016). The agents must stay `"mode": "all"`: as `"subagent"` they cannot be
+selected by `--agent`, and OpenCode silently falls back to an agent that *can*
+write. Delegation needs `opencode.ai` allowed, which is the default everywhere
+except a cloud environment below **Custom** access.
 
 The Tauri app cannot be built in most dev containers: it needs webkit2gtk on
 Linux, an Android SDK+NDK for Android, and macOS with Xcode for iOS. **Do not
