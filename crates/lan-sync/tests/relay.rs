@@ -266,3 +266,14 @@ fn room_codes_round_trip_to_their_seed() {
     assert_eq!(seed_from_room(&room_code(1234).to_lowercase()), Some(1234));
     assert_eq!(seed_from_room("!!!!"), None);
 }
+
+/// The room code is the seed, and three implementations derive it: this crate,
+/// `src/app/hooks.ts`, and `scripts/lan-relay.mjs`. If they ever disagree, two
+/// devices in the same room build different boards and desync on the first
+/// roll — so pin the encoding to literals rather than only round-tripping it.
+#[test]
+fn room_codes_match_the_javascript_implementations() {
+    assert_eq!(room_code(0), "2222");
+    assert_eq!(room_code(1234), "UA32");
+    assert_eq!(room_code(923_520), "ZZZZ");
+}

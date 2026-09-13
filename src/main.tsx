@@ -1,6 +1,7 @@
 import { RegistryProvider } from "@effect-atom/atom-react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import {
+  createHashHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -54,7 +55,12 @@ const lobbyRoute = createRoute({ getParentRoute: () => rootRoute, path: "/lobby"
 const matchRoute = createRoute({ getParentRoute: () => rootRoute, path: "/match", component: MatchScreen })
 
 const routeTree = rootRoute.addChildren([homeRoute, joinRoute, lobbyRoute, matchRoute])
-const router = createRouter({ routeTree })
+// Hash history, not path history: this bundle is served from wherever it
+// happens to land — a Tauri custom scheme, a static host under a subdirectory,
+// a file:// path — and a path router matches none of its routes when the page
+// sits below the origin root, rendering a not-found page instead of the game.
+// The fragment is the one part of the URL no host rewrites.
+const router = createRouter({ routeTree, history: createHashHistory() })
 
 declare module "@tanstack/react-router" {
   interface Register {
