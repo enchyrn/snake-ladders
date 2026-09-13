@@ -64,7 +64,7 @@ describe("MatchClient", () => {
     c.dispose()
   })
 
-  it("reports a desync when the host commits something this device refuses", () => {
+  it("notes an unapplicable action without calling it a desync", () => {
     const { service, commits } = controllable()
     const c = client(service)
 
@@ -72,7 +72,11 @@ describe("MatchClient", () => {
     // No Start has been committed, so a roll cannot be legal here.
     commits.emit({ seq: 1, action: { _tag: "Commit", playerId: "a" } })
 
-    expect(c.state.desync).toMatch(/Commit rejected at #1/)
+    // Every device folds this same log through this same reducer, so they all
+    // reject it identically and remain consistent. Two players acting at once
+    // produces this legitimately.
+    expect(c.state.notice).toMatch(/Commit could not be applied/)
+    expect(c.state.desync).toBeNull()
     c.dispose()
   })
 

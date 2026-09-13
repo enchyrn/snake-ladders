@@ -125,6 +125,9 @@ export class MatchClient {
 
       const decoded = decodeAction(raw)
       if (Either.isLeft(decoded)) {
+        // This one IS alarming: a frame this device cannot even parse means
+        // the room is running mismatched builds, and from here the folds can
+        // genuinely diverge.
         state = { ...state, desync: `undecodable action at #${this.nextSeq - 1}` }
         changed = true
         continue
@@ -132,11 +135,15 @@ export class MatchClient {
 
       const result = Effect.runSync(Effect.either(applyAction(state.match, decoded.right)))
       if (Either.isLeft(result)) {
-        // The host accepted an action this device refuses: the two are no
-        // longer folding the same game. Surface it rather than drifting on.
+        // NOT a desync. Every device folds this same log through this same
+        // reducer, so every device rejects this action identically and they
+        // all stay consistent. It happens legitimately when two players act
+        // at once — someone joining as the host presses start, say, since the
+        // relay orders by arrival and their sockets race. Report it as
+        // information, not alarm.
         state = {
           ...state,
-          desync: `${decoded.right._tag} rejected at #${this.nextSeq - 1}: ${result.left.reason}`,
+          notice: `${decoded.right._tag} could not be applied: ${result.left.reason}`,
         }
         changed = true
         continue
