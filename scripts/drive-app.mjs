@@ -14,6 +14,13 @@
  *
  *   PUBLIC_BASE_PATH=/snake-ladders npm run build   # what Pages deploys
  *   npm run verify:ui:pages
+ *   node scripts/drive-app.mjs --https --base-path /snake-ladders
+ *
+ * `--https` serves over TLS with a certificate minted for the run, because a
+ * secure origin is not cosmetic: a service worker will not register without
+ * one, and a page will not refuse an insecure socket without one either. Both
+ * were invisible until the deployed site had them and this harness did not.
+ * Needs openssl on PATH.
  *
  * `--base-path` serves the app from a subdirectory, which is how a static
  * host, an artifact or GitHub Pages serves it, and nothing outside that
@@ -26,7 +33,10 @@
  */
 import { chromium } from "playwright"
 import { createServer } from "node:http"
-import { readFile, mkdir, readdir } from "node:fs/promises"
+import { createServer as createTlsServer } from "node:https"
+import { execFileSync } from "node:child_process"
+import { readFile, mkdir, mkdtemp, readdir } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { extname, join, normalize, resolve } from "node:path"
 
 const arg = (flag, fallback) => {
@@ -42,6 +52,10 @@ const OUT = resolve(arg("--out", "screenshots"))
 const BASE = arg("--base-path", "").replace(/\/+$/, "")
 const [WIDTH, HEIGHT] = arg("--viewport", "390x844").split("x").map(Number)
 const PORT = Number(arg("--port", 8910))
+// A secure origin, so the run can reach behaviour that does not exist on
+// http at all: a service worker registering, an install prompt, and a page
+// refusing the insecure socket a LAN match needs.
+const HTTPS = process.argv.includes("--https")
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -53,37 +67,83 @@ const TYPES = {
   ".json": "application/json",
 }
 
-const serve = () =>
-  new Promise((ready) => {
-    const server = createServer(async (req, res) => {
-      let path = decodeURIComponent((req.url ?? "/").split("?")[0])
-      if (BASE) {
-        // Outside the base nothing exists, exactly as on a host serving a
-        // project site from a subdirectory. Falling back to dist/ instead
-        // would serve a root-absolute URL — the manifest, an icon, the
-        // service worker — happily here and 404 only once deployed, which
-        // is the one failure this flag exists to catch.
-        if (!path.startsWith(BASE)) {
-          res.writeHead(404).end("not found")
-          return
-        }
-        path = path.slice(BASE.length)
-      }
-      path = normalize(path).replace(/^\/+/, "")
-      // normalize("") is "." — reading that is a directory, not the page.
-      const file = join(DIST, path === "" || path === "." ? "index.html" : path)
-      try {
-        const body = await readFile(file)
-        res.writeHead(200, {
-          "content-type": TYPES[extname(file)] ?? "application/octet-stream",
-        })
-        res.end(body)
-      } catch {
+/**
+ * A throwaway certificate for `localhost`, minted per run.
+ *
+ * Nothing trusts it and nothing should: the browser is told to accept it for
+ * this one session. It exists only so the page has a secure origin, which is
+ * not a detail — mixed-content refusal, service-worker registration and
+ * installability do not exist on http, so a plain harness cannot reproduce
+ * any of them however carefully it drives the page.
+ */
+const selfSigned = async () => {
+  const dir = await mkdtemp(join(tmpdir(), "drive-app-cert-"))
+  const key = join(dir, "key.pem")
+  const cert = join(dir, "cert.pem")
+  try {
+    execFileSync(
+      "openssl",
+      [
+        "req", "-x509", "-newkey", "rsa:2048",
+        "-keyout", key, "-out", cert,
+        "-days", "1", "-nodes", "-subj", "/CN=localhost",
+        "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+      ],
+      { stdio: "ignore" },
+    )
+  } catch (cause) {
+    throw new Error(`--https needs openssl on PATH to mint a certificate: ${cause}`)
+  }
+  return { key: await readFile(key), cert: await readFile(cert) }
+}
+
+/**
+ * Serve `dist` the way a static host does, optionally over TLS.
+ *
+ * Exported so a test can exercise the serving rules without launching a
+ * browser; the CLI below is the only caller that also drives a page.
+ */
+export const serveDist = async ({ dist, base = "", port = 0, https = false }) => {
+  // Both spellings of the prefix have to resolve: a host serving a project
+  // site answers /snake-ladders and /snake-ladders/ with the same page.
+  const prefix = base.replace(/\/+$/, "")
+  const handler = async (req, res) => {
+    let path = decodeURIComponent((req.url ?? "/").split("?")[0])
+    if (prefix) {
+      // Outside the base nothing exists, exactly as on a host serving a
+      // project site from a subdirectory. Falling back to dist/ instead
+      // would serve a root-absolute URL — the manifest, an icon, the
+      // service worker — happily here and 404 only once deployed, which
+      // is the one failure this flag exists to catch.
+      if (!path.startsWith(prefix)) {
         res.writeHead(404).end("not found")
+        return
       }
-    })
-    server.listen(PORT, () => ready(server))
-  })
+      path = path.slice(prefix.length)
+    }
+    path = normalize(path).replace(/^\/+/, "")
+    // normalize("") is "." — reading that is a directory, not the page.
+    const file = join(dist, path === "" || path === "." ? "index.html" : path)
+    try {
+      const body = await readFile(file)
+      res.writeHead(200, {
+        "content-type": TYPES[extname(file)] ?? "application/octet-stream",
+      })
+      res.end(body)
+    } catch {
+      res.writeHead(404).end("not found")
+    }
+  }
+
+  const server = https ? createTlsServer(await selfSigned(), handler) : createServer(handler)
+  await new Promise((ready) => server.listen(port, ready))
+  const bound = server.address().port
+  return {
+    server,
+    port: bound,
+    origin: `${https ? "https" : "http"}://localhost:${bound}`,
+  }
+}
 
 /**
  * Launch Chromium, falling back to any build already present under
@@ -95,6 +155,12 @@ const serve = () =>
 const launchChromium = async () => {
   // swiftshader: CI and containers have no GPU, and WebGL must still work.
   const args = ["--no-sandbox", "--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+  // A context's ignoreHTTPSErrors does not cover the service worker: Chrome
+  // fetches that script outside the context and refuses a certificate it
+  // cannot verify, so registration fails with an SSL error while every other
+  // request succeeds. Registration is most of why a secure origin is worth
+  // having, so the browser has to be told as well.
+  if (HTTPS) args.push("--ignore-certificate-errors")
   const explicit = arg("--browser", "")
   if (explicit) return chromium.launch({ args, executablePath: explicit })
   try {
@@ -117,11 +183,27 @@ const problems = []
 
 const run = async () => {
   await mkdir(OUT, { recursive: true })
-  const server = await serve()
-  const browser = await launchChromium()
+  const served = await serveDist({ dist: DIST, base: BASE, port: PORT, https: HTTPS })
+  let browser
+  try {
+    browser = await launchChromium()
+    await drive(served, browser)
+  } finally {
+    // Without this a thrown error left the server listening, and an open
+    // handle keeps node alive: the run hung instead of reporting the very
+    // problem it had just found.
+    await browser?.close()
+    served.server.close()
+  }
+}
+
+const drive = async (served, browser) => {
   const page = await browser.newPage({
     viewport: { width: WIDTH, height: HEIGHT },
     deviceScaleFactor: 2,
+    // The certificate is minted for this run and trusted by nothing, which
+    // is the point: the origin is secure, the issuer is irrelevant.
+    ignoreHTTPSErrors: HTTPS,
   })
 
   page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`))
@@ -143,8 +225,9 @@ const run = async () => {
     console.log(`  screenshot -> ${join(OUT, `${name}.png`)}`)
   }
 
-  console.log(`Serving ${DIST} at http://localhost:${PORT}${BASE || "/"}`)
-  await page.goto(`http://localhost:${PORT}${BASE || "/"}`, { waitUntil: "networkidle" })
+  const entry = `${served.origin}${BASE || "/"}`
+  console.log(`Serving ${DIST} at ${entry}`)
+  await page.goto(entry, { waitUntil: "networkidle" })
   await page.waitForTimeout(1200)
 
   const root = await page.$("#root")
@@ -155,6 +238,23 @@ const run = async () => {
   }
   console.log("home:", await page.$$eval("button", (b) => b.map((x) => x.textContent.trim())))
   await shot("1-home")
+
+  // The whole reason for a secure origin: registration is a no-op on http,
+  // so without this the offline shell is only ever inspected as files in
+  // dist/ and never watched to install.
+  if (HTTPS) {
+    // Asked of the context, not evaluated in the page: a page being claimed by
+    // a newly activated worker can lose its execution context mid-call, and
+    // navigator.serviceWorker.ready never settles when nothing registers — it
+    // does not reject — so the obvious version of this check hangs rather
+    // than reporting the failure it exists to catch.
+    const context = page.context()
+    const worker =
+      context.serviceWorkers()[0] ??
+      (await context.waitForEvent("serviceworker", { timeout: 15_000 }).catch(() => null))
+    console.log("service worker:", worker ? worker.url() : "none registered")
+    if (!worker) problems.push("no service worker registered on a secure origin")
+  }
 
   await page.getByRole("button", { name: /pass and play/i }).click()
   await page.waitForTimeout(800)
@@ -224,15 +324,20 @@ const run = async () => {
   )
   if (overflow > 0) problems.push(`page overflows horizontally by ${overflow}px`)
 
-  await browser.close()
-  server.close()
 }
 
-await run()
+// Importing this module must not drive a browser: the serving rules above are
+// exercised directly by src/__tests__/drive-app.test.ts.
+const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())
+if (!isMain) {
+  // Nothing to do — the export is the point.
+} else {
+  await run()
 
-if (problems.length > 0) {
-  console.error("\nProblems:")
-  for (const p of problems) console.error("  - " + p)
-  process.exit(1)
+  if (problems.length > 0) {
+    console.error("\nProblems:")
+    for (const p of problems) console.error("  - " + p)
+    process.exit(1)
+  }
+  console.log("\nNo console errors, no page errors, no horizontal overflow.")
 }
-console.log("\nNo console errors, no page errors, no horizontal overflow.")

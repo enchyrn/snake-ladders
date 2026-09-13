@@ -19,6 +19,7 @@ cargo fmt --all
 npm run relay            # WebSocket relay; prints the join string to paste
 npm run verify:ui        # build first, then drive the app in a real browser
 npm run verify:ui:pages  # the same, but served from the /snake-ladders/ subpath
+node scripts/drive-app.mjs --https   # over TLS, where a service worker registers
 
 PUBLIC_BASE_PATH=/snake-ladders npm run build   # what the Pages workflow builds
 ```
@@ -28,7 +29,14 @@ page errors or horizontal overflow. `--base-path /nested/path` reproduces
 being served from a subdirectory, and nothing outside that prefix resolves —
 a root-absolute URL that would 404 on GitHub Pages fails here instead. The
 prefix must match the base the bundle was built with, hence the pair of
-`verify:ui:pages` commands above. It needs `npx playwright install chromium`
+`verify:ui:pages` commands above.
+
+`--https` serves over TLS with a throwaway certificate (needs `openssl`). A
+secure origin is not cosmetic: a service worker will not register without one,
+and a page will not refuse an insecure `ws://` without one — so neither the
+offline shell installing nor the LAN-join refusal can be reproduced on plain
+http, however carefully the page is driven. The serving rules are unit-tested
+in `src/__tests__/drive-app.test.ts` via the exported `serveDist`. It needs `npx playwright install chromium`
 once. Run it after any UI change: the clipped board, the not-found router and
 the mis-styled disabled button were all found this way and none of them were
 visible in the source.
