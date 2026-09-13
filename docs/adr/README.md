@@ -14,3 +14,4 @@ An ADR is a short document that records one significant architectural decision: 
 | [0008](0008-effect-atom-for-ui-state.md) | Effect Atom for UI state, alongside TanStack | Accepted |
 | [0009](0009-progression-declared-at-join-trust-is-social.md) | Progression is declared at join time, and trust is social | Accepted |
 | [0010](0010-vendor-superpowers-skills.md) | Superpowers skills vendored rather than installed as a plugin | Accepted |
+| [0011](0011-ci-builds-the-android-apk-ios-stays-manual.md) | CI builds the Android APK; iOS stays manual | Accepted |
