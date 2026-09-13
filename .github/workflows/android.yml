@@ -58,7 +58,14 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Generate Android project
-        run: nubx tauri android init --ci
+        # npx, not nubx, and this is the one place npm survives the migration.
+        # The Tauri CLI bakes the command Gradle will use to re-invoke it into
+        # the generated BuildTask.kt, deriving it from argv[1] and npm_execpath.
+        # It knows npm/npx/pnpm/yarn/bun and does not know nub: under nubx
+        # npm_execpath is unset, so it writes a path-relative `node <path>` that
+        # Gradle then runs from src-tauri, where the path does not resolve. See
+        # ADR 0017; run 34761512711 is the failure.
+        run: npx tauri android init --ci
 
       - name: Patch generated manifest for LAN networking
         # tauri android init regenerates gen/android from scratch every time,
@@ -67,7 +74,9 @@ jobs:
         # every init, not just once. See scripts/patch-android-manifest.mjs.
         run: node scripts/patch-android-manifest.mjs
 
-      - run: nubx tauri android build --debug --apk
+      # npx for the same reason as the init step above. The Gradle re-invocation
+      # is baked in at init time and must match how the CLI is launched here.
+      - run: npx tauri android build --debug --apk
 
       - name: List built APKs
         # Diagnoses a failed upload-artifact glob from the log instead of

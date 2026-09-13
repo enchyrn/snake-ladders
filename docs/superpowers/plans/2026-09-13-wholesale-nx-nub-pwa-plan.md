@@ -123,8 +123,18 @@
 >   mode to expect when Task 4 moves files into `packages/`: a cross-project
 >   import that resolves today only because everything is one flat tree.
 >
-> Nub satisfied every required operation, so the "stop at the failed boundary"
-> step recorded no incompatibility. Parity evidence: the production build is
+> **The "stop at the failed boundary" step found one boundary**, and CI is what
+> found it. Nub satisfies every operation the *web* pipeline needs, but the
+> Tauri CLI cannot be launched through it: Tauri bakes the command Gradle uses
+> to re-invoke it into the generated Android project, derives that command from
+> `argv[1]` and `npm_execpath`, and has explicit cases for npm/npx/pnpm/yarn/bun
+> and none for nub. Under `nubx` the Android build died in
+> `:app:rustBuildArm64Debug` (`Cannot find module '…/src-tauri/tauri'`, run
+> `34761512711`). So `android.yml` launches the CLI with `npx` and that is
+> recorded in ADR 0017 rather than worked around — everything else, including
+> `tauri.conf.json`'s before-commands, is nub.
+>
+> Parity evidence: the production build is
 > byte-identical to the npm baseline — 872 modules, the same asset hashes, 13
 > precache entries — with 101 vitest tests, a clean `tsc --noEmit`, and both
 > `verify:ui` runs green.

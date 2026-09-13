@@ -38,6 +38,21 @@ tree. **The fix for this class of failure is to declare the dependency**, not to
 add `node-linker=hoisted` to `.npmrc`, which would restore the flat layout and
 hide the next one.
 
+## The one command that is still npm
+
+`.github/workflows/android.yml` launches the Tauri CLI with **`npx tauri`**,
+not `nubx tauri`. This is deliberate and is the only npm left in the build.
+
+The Tauri CLI bakes the command Gradle will use to re-invoke it into the
+generated Android project, deriving it from `argv[1]` and `npm_execpath`. It
+has explicit cases for npm, npx, pnpm, yarn and bun, and none for nub — so
+under `nubx` it records a path-relative `node <path>` that Gradle then runs
+from `src-tauri`, where it does not resolve, and the APK build dies in
+`:app:rustBuildArm64Debug`. ADR 0017 has the detail and the failing run.
+
+Everything around it is nub, including `tauri.conf.json`'s
+`beforeDevCommand` / `beforeBuildCommand`, which call `nub run`.
+
 ## Provisioning
 
 One script sets up every environment:

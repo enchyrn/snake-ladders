@@ -236,11 +236,20 @@ installs cleanly under nub, so Task 4 starts from a working `nx` binary.
 
 **Task 4 (the Nx workspace split) is the next task a container can do.**
 
-Untested by anything here: the Android workflow's move to `nubx tauri android
-build`, and `src-tauri/tauri.conf.json`'s before-commands now calling `nub run`
-rather than `npm run`. That build cannot run in a container (ADR 0011), so the
-first push of this branch is its first real exercise — check the `Android`
-workflow before trusting it.
+**The Tauri CLI is launched with `npx`, not `nubx`, and that is the one npm
+command left in the repository.** It is not an oversight — Actions run
+`34761512711` is the failure that established it. Tauri bakes the command
+Gradle uses to re-invoke it into the generated Android project, derives it from
+`argv[1]` and `npm_execpath`, and knows npm/npx/pnpm/yarn/bun but not nub;
+under `nubx` it recorded a path-relative `node <path>` that Gradle ran from
+`src-tauri`, where it does not resolve, and the APK build died in
+`:app:rustBuildArm64Debug`. ADR 0017 has the mechanism. Do not "tidy" that line
+back to `nubx` without a Tauri release that knows about nub — the web suite
+will stay green and only the Android job will tell you.
+
+`tauri.conf.json`'s before-commands do call `nub run`, and that half is fine:
+the failing run got past the frontend build and all the way to Gradle, which it
+could not have done if `nub run build` had failed.
 
 ## Resuming From This Checkpoint
 

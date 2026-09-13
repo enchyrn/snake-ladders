@@ -61,9 +61,46 @@ this repository. npm is no longer a supported interface.
   the client bundle alongside React and Three. The dependency was always real;
   only its declaration is new.
 
-Cargo and Tauri are untouched: they remain the native authorities, and
-`src-tauri/tauri.conf.json` still drives the frontend through its existing
-commands until the Nx targets in Task 5 of the plan replace them.
+Cargo and Tauri remain the native authorities. `tauri.conf.json`'s
+`beforeDevCommand` / `beforeBuildCommand` now call `nub run`, which is an
+ordinary shell command and works.
+
+**The Tauri CLI itself is launched with `npx`, and that is the one place npm
+survives this migration.** It is a real incompatibility, not a preference, so
+it is written down rather than worked around.
+
+`@tauri-apps/cli`'s Node wrapper computes a name for the binary and hands it to
+the Rust CLI, which bakes it into the generated Android project as
+
+```kotlin
+val executable = """{{tauri-binary}}"""
+val args = listOf({{quote-and-join tauri-binary-args}})
+project.exec { workingDir(File(project.projectDir, rootDirRel)) … }
+```
+
+Gradle runs that command later, from `src-tauri`, to re-enter the CLI for
+`android-studio-script`. The wrapper picks between two forms: if
+`npm_execpath` is set it emits a package-manager form, otherwise a path form,
+`node <path relative to the CLI's cwd>`. The Rust side has explicit cases for
+npm, npx, dlx and pnpm; it has none for nub.
+
+Under `nubx`, `npm_execpath` is unset, so the path form is chosen — and the
+path it records is relative to the repository root while Gradle runs it from
+`src-tauri`. The Android build got as far as linking the arm64 `.so` and then
+died in `:app:rustBuildArm64Debug` with
+
+```text
+Error: Cannot find module '…/snake-ladders/src-tauri/tauri'
+```
+
+(Actions run `34761512711`.) `nub run tauri` would take the other branch, since
+`nub run` does set `npm_execpath` — measured — but the manager it names would
+still be one the Rust side does not recognise, so that is a guess and an
+eight-minute CI cycle per guess. Direct `./node_modules/.bin/tauri` fails the
+same way `nubx` does, for the same reason.
+
+So the CLI stays on `npx` until Tauri knows about nub. Everything around it —
+installing dependencies, the frontend build, the whole web pipeline — is nub.
 
 ## Consequences
 
@@ -74,6 +111,13 @@ as a resolution failure at build time rather than a silent success that
 depends on another package's dependency tree. The cost is that the failure
 looks like a Nub bug until you read it closely; this ADR exists partly so the
 next person reads it closely.
+
+The Tauri exception above is the migration's one loose end, and it is loose in
+a specific way: `npx` resolves through whatever Node is on `PATH`, which
+`setup-nub` and `.node-version` do pin, so it is not unpinned — but it does
+mean the Android job runs one command through npm's resolver rather than
+nub's. If Tauri ever grows a nub case, or exposes the re-invocation command
+directly, that line becomes `nubx` again and nothing else changes.
 
 `npm ci` no longer works, because there is no `package-lock.json` to read.
 Anything that assumed it does has to change with this commit or break: CI,
