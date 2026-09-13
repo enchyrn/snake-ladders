@@ -28,7 +28,10 @@ pub enum PeerEvent {
 pub struct Peer {
     stream: Mutex<TcpStream>,
     running: Arc<AtomicBool>,
-    events: Receiver<PeerEvent>,
+    /// Behind a mutex purely to be `Sync`: an `mpsc::Receiver` is `Send` but
+    /// not `Sync`, and Tauri's managed state requires both. Only one caller
+    /// ever drains it, so the lock is never actually contended.
+    events: Mutex<Receiver<PeerEvent>>,
     reader_thread: Option<JoinHandle<()>>,
 }
 
@@ -62,7 +65,7 @@ impl Peer {
         Ok(Self {
             stream: Mutex::new(stream),
             running,
-            events,
+            events: Mutex::new(events),
             reader_thread: Some(reader_thread),
         })
     }
@@ -90,12 +93,16 @@ impl Peer {
 
     /// Non-blocking: everything received since the last call.
     pub fn drain(&self) -> Vec<PeerEvent> {
-        self.events.try_iter().collect()
+        let Ok(events) = self.events.lock() else {
+            return Vec::new();
+        };
+        events.try_iter().collect()
     }
 
     /// Blocks until the next event or the timeout elapses.
     pub fn next_event(&self, timeout: Duration) -> Option<PeerEvent> {
-        self.events.recv_timeout(timeout).ok()
+        let events = self.events.lock().ok()?;
+        events.recv_timeout(timeout).ok()
     }
 
     pub fn is_running(&self) -> bool {

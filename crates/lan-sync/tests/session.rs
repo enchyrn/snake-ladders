@@ -145,3 +145,20 @@ fn a_hosted_room_reports_the_code_its_seed_encodes() {
     assert!(host.is_host());
     assert!(host.port().is_some());
 }
+
+/// Tauri stores a session in managed state, and `State<T>` requires
+/// `T: Send + Sync + 'static`. Nothing in this crate needs that on its own, so
+/// without this assertion the constraint is only discovered by an Android
+/// cross-compile in CI — which is a slow and confusing place to learn it.
+/// These are compile-time checks; that they build at all is the test.
+#[test]
+fn session_types_satisfy_tauri_managed_state_bounds() {
+    fn assert_send_sync<T: Send + Sync + 'static>() {}
+
+    assert_send_sync::<Session>();
+    assert_send_sync::<lan_sync::Host>();
+    assert_send_sync::<lan_sync::Peer>();
+    assert_send_sync::<lan_sync::Browser>();
+    assert_send_sync::<lan_sync::Advertiser>();
+    assert_send_sync::<std::sync::Arc<Session>>();
+}
