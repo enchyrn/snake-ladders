@@ -9,6 +9,10 @@ on:
   push:
     branches:
       - main
+      # TEMPORARY: proving the first deployment from the branch that adds it,
+      # because workflow_dispatch only registers for workflows already on the
+      # default branch. Remove once the URL has been seen serving the app.
+      - claude/snake-ladders-cross-device-3uu177
 
 # GITHUB_TOKEN defaults to read-only; deploy-pages needs to write the Pages
 # deployment and mint an OIDC token to prove the artifact came from this run.
