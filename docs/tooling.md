@@ -35,14 +35,32 @@ package managers*, and add
 ```text
 opencode.ai
 mise.jdx.dev
-mise-java.jdx.dev
 ```
 
-`opencode.ai` is the one delegation needs, and it takes effect in a running
-session — no restart. It does **not** make mise's OpenCode or Rust downloads
-work: those read the GitHub releases API for repositories not attached to the
-session, which the GitHub proxy refuses at every access level. The npm
-fallbacks cover both.
+`opencode.ai` is the one that matters — delegation needs it, and it takes
+effect in a running session with no restart.
+
+The rest of mise's downloads cannot be fixed this way, and are not worth
+chasing:
+
+- **Rust and OpenCode** read the GitHub releases API for repositories not
+  attached to the session. The GitHub proxy refuses those at *every* access
+  level, so no allowlist entry helps.
+- **Java** needs `mise-versions.jdx.dev` and `download.java.net` on top of
+  `mise-java.jdx.dev`; allowing only the last gets past the version lookup and
+  still fails on the download.
+
+None of this blocks anything, because a cloud session already ships `node`,
+`npm`, `cargo`, `rustc` and a JDK. mise's value here is pinning and its task
+runner, not fetching. Everything CI runs — `tsc`, `vitest`, `vite build`,
+`cargo fmt`, `cargo clippy`, `cargo test` — passes in a session where
+`mise install` reports three tools failed. CI itself never uses mise: it pins
+Node, Rust and JDK 17 with `setup-node`, `dtolnay/rust-toolchain` and
+`setup-java`.
+
+The one real gap is the JDK version: sessions carry 21, `mise.toml` pins 17.
+That matters only for Android Gradle builds, which cannot run in a container
+anyway (ADR 0011) and get their own JDK 17 in `android.yml`.
 
 ## Getting Started with Mise
 

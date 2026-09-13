@@ -54,11 +54,18 @@ ours and can change; when they do, the failure is visible — provisioning
 reports which tools resolved — but the workaround may become dead code that
 nobody notices is dead.
 
-Tolerating partial provisioning is the other real cost. A session can start
-with Rust or Java missing and only discover it when a Cargo command fails.
-That is still better than the alternative: failing the whole session over a
-toolchain that most tasks in this repository never touch, given the Tauri shell
-cannot be built in a container anyway (ADR 0011).
+Tolerating partial provisioning is the other real cost, and it has turned out
+cheaper than expected. A cloud session reports three tools failed and still
+runs every command CI does — `tsc`, `vitest`, `vite build`, `cargo fmt`,
+`cargo clippy` and `cargo test` — because the image already carries `cargo`,
+`rustc`, `node`, `npm` and a JDK. mise is pinning versions and running tasks
+there, not provisioning.
+
+The risk this leaves is a silent version mismatch rather than a missing tool:
+sessions carry JDK 21 against a pin of 17, and nothing announces it. That
+particular gap is harmless because Android Gradle builds cannot run in a
+container anyway (ADR 0011) and CI pins its own JDK, but the next mismatch
+might not be.
 
 The environment-level fix is a user's to make, not the repository's: raising a
 cloud environment to **Custom** network access and allowing `opencode.ai` and

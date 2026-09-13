@@ -10,7 +10,7 @@ machine — can pick it up without re-deriving anything.
   tests including a fuzz driver that plays whole random matches and asserts two
   independent peers fold to byte-identical state, for every combination of
   modules.
-- **Rust relay** — 18 tests over real TCP and UDP sockets: ordering agreement,
+- **Rust relay** — 19 tests over real TCP and UDP sockets: ordering agreement,
   gapless sequencing under load, mid-match catch-up, readmitting a device that
   dropped off Wi-Fi, locked and full rooms, junk frames.
 - **WebSocket relay + browser transport** — tested against a live relay: two
@@ -23,6 +23,11 @@ machine — can pick it up without re-deriving anything.
   web container, which is the hostile case: it fell back to npm for both mise
   and OpenCode, reported the toolchain as partial, and exited 0. The
   `SessionStart` hook was run the same way and is idempotent.
+- **The whole CI command set runs in a cloud session**, despite `mise install`
+  reporting three tools failed: `tsc --noEmit`, `vitest` (94), `vite build`,
+  `cargo fmt --check`, `cargo clippy -D warnings` and `cargo test -p lan-sync`
+  (19) all pass. Sessions ship `node`, `npm`, `cargo`, `rustc` and a JDK
+  already, so mise failing to *download* them costs nothing.
 - **OpenCode delegation** — verified end to end from a web session once
   `opencode.ai` was added to the environment's Custom allowlist. Both agents
   answer on their own models (`explore` on `mimo-v2.5-free`, `review` on
@@ -191,3 +196,26 @@ Both were found by running it, and both fail quietly:
   it bypasses the environment's proxy and reports the sandbox's own refusal, so
   a host the policy allows still looks blocked. `scripts/delegate.mjs` issues a
   proxy `CONNECT` instead when a proxy is configured.
+
+## What `mise install` cannot fetch in a cloud session, and why it is fine
+
+`mise install` reports `opencode`, `rust` and `java` as failed there. None of
+it blocks work, and only one is fixable:
+
+| Tool | Fails on | Fixable by allowlist? |
+|---|---|---|
+| Rust, OpenCode | GitHub releases API for an unattached repository | No — the GitHub proxy refuses at every access level |
+| Java | `mise-versions.jdx.dev`, then `download.java.net` | Yes, but only if all three hosts are allowed |
+
+The session already has `cargo`, `rustc`, `node`, `npm` and a JDK on `PATH`,
+and OpenCode is installed from npm by `scripts/provision.sh`. So mise is doing
+version pinning and task running here, not provisioning, and a partial install
+is the expected steady state rather than a fault.
+
+CI never uses mise at all — it pins Node, Rust and JDK 17 with `setup-node`,
+`dtolnay/rust-toolchain` and `setup-java` — which is why none of this has ever
+shown up there.
+
+The JDK version is the one genuine mismatch: sessions carry 21 against a pin of
+17. It only affects Android Gradle builds, which cannot run in a container
+regardless (ADR 0011).
