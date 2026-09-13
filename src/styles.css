@@ -105,6 +105,16 @@ button.primary {
   font-weight: 600;
 }
 
+/* Opacity alone is not enough for a saturated fill: at 45% on a dark ground a
+   gold button still reads as the main action while refusing to respond to a
+   tap. A disabled primary gives up its fill and looks like what it is. */
+button.primary:disabled {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
 input {
   min-height: var(--tap-min);
   padding: 0 0.75em;
