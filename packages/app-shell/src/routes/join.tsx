@@ -32,6 +32,7 @@ export const JoinScreen = () => {
 
   const enter = async (addr: string, seed: number) => {
     setError(null)
+    session.open({ role: "peer", seed, kind: "network" })
     let joined
     try {
       joined = await Effect.runPromise(
@@ -43,6 +44,7 @@ export const JoinScreen = () => {
         ),
       )
     } catch {
+      session.close()
       setError(unexpected)
       return
     }
@@ -50,10 +52,10 @@ export const JoinScreen = () => {
     // full, the code is wrong, the page may not open an insecure socket —
     // and every one of those is something the player can act on.
     if (Either.isLeft(joined)) {
+      session.close()
       setError(joined.left.reason)
       return
     }
-    session.open({ role: "peer", seed, kind: "network" })
     await navigate({ to: "/lobby" })
   }
 

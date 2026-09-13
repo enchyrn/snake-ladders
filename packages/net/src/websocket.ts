@@ -124,6 +124,17 @@ export const makeWebSocketTransport = (): TransportService => {
         return
       }
       socket = ws
+      let settled = false
+      const succeed = () => {
+        if (settled) return
+        settled = true
+        resume(Effect.void)
+      }
+      const fail = (reason: string) => {
+        if (settled) return
+        settled = true
+        resume(Effect.fail(new TransportError({ reason })))
+      }
 
       // The open event only means the socket connected; the relay may still
       // refuse the handshake, which arrives as a `rejected` frame.
@@ -131,17 +142,10 @@ export const makeWebSocketTransport = (): TransportService => {
         ws.send(
           JSON.stringify({ t: "hello", player_id: identity.player_id, name: identity.name }),
         )
-        resume(Effect.void)
       }
 
       ws.onerror = () => {
-        resume(
-          Effect.fail(
-            new TransportError({
-              reason: `could not reach ${url}. Is the relay running and on this network?`,
-            }),
-          ),
-        )
+        fail(`could not reach ${url}. Is the relay running and on this network?`)
       }
 
       ws.onmessage = (event) => {
@@ -157,6 +161,7 @@ export const makeWebSocketTransport = (): TransportService => {
             // joined-but-empty match for one that is already in progress.
             for (const entry of frame.log) commits.emit(entry)
             statuses.emit({ connected: true, reason: null })
+            succeed()
             break
           case "commit":
             commits.emit({ seq: frame.seq, action: frame.action })
@@ -167,6 +172,7 @@ export const makeWebSocketTransport = (): TransportService => {
           case "rejected":
             refused = true
             statuses.emit({ connected: false, reason: frame.reason })
+            fail(frame.reason)
             break
           case "pong":
             break
@@ -177,6 +183,7 @@ export const makeWebSocketTransport = (): TransportService => {
         if (socket !== ws) return // Superseded by a newer connection.
         socket = null
         if (refused) return
+        fail(`could not reach ${url}. Is the relay running and on this network?`)
         statuses.emit({ connected: false, reason: "lost the relay" })
       }
 

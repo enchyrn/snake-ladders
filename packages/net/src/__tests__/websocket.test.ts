@@ -175,6 +175,24 @@ describe("WebSocket transport against a live relay", () => {
     expect(b.commits[0]!.seq).toBe(0)
   })
 
+  it("does not resolve join before the late joiner history is delivered", async () => {
+    const { port } = relay()
+    const a = await joined(port, "a")
+    await Effect.runPromise(a.transport.submit({ _tag: "Join", playerId: "a", name: "A" }))
+    await until(() => a.commits.length === 1)
+
+    const transport = makeWebSocketTransport()
+    transports.push(transport)
+    const commits: Committed[] = []
+    transport.onCommit((commit) => commits.push(commit))
+
+    await Effect.runPromise(
+      transport.join(`127.0.0.1:${port}`, { player_id: "b", name: "B" }),
+    )
+
+    expect(commits).toEqual([{ seq: 0, action: { _tag: "Join", playerId: "a", name: "A" } }])
+  })
+
   it("surfaces the relay's refusal rather than hanging", async () => {
     const { port, sequencer } = relay()
     const a = await joined(port, "a")
@@ -185,9 +203,13 @@ describe("WebSocket transport against a live relay", () => {
     transports.push(late)
     const statuses: ConnectionStatus[] = []
     late.onStatus((s) => statuses.push(s))
-    await Effect.runPromise(late.join(`127.0.0.1:${port}`, { player_id: "x", name: "X" }))
+    const result = await Effect.runPromise(
+      Effect.either(late.join(`127.0.0.1:${port}`, { player_id: "x", name: "X" })),
+    )
 
     await until(() => statuses.some((s) => !s.connected && s.reason !== null))
+    expect(Either.isLeft(result)).toBe(true)
+    if (Either.isLeft(result)) expect(result.left.reason).toBe("match already started")
     expect(statuses.at(-1)!.reason).toMatch(/already started/)
   })
 
