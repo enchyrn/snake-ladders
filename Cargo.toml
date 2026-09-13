@@ -1,0 +1,15 @@
+# The Tauri app lives in its own workspace (src-tauri/), so the networking
+# crate here can be built and tested on any machine — including CI — without
+# the platform webview toolchain a Tauri build needs.
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

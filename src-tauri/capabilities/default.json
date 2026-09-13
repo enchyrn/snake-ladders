@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The game's own commands plus the event channel the LAN pump writes to. No filesystem, shell, or HTTP access is granted: the game never reaches the internet.",
+  "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows", "android", "iOS"],
+  "permissions": [
+    "core:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

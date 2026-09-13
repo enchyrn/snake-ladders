@@ -1,0 +1,55 @@
+# Mise configuration for snake-ladders Tauri + React + Rust project
+# Pins toolchain versions to ensure consistent development and CI environments
+
+[tools]
+# Node 22 (LTS) for React frontend and npm ecosystem
+node = "22"
+
+# Rust stable for Tauri app and lan-sync library compilation
+rust = "stable"
+
+# Java for Android builds via the Gradle plugin, which requires JDK 17+.
+# Used by the Tauri v2 Android pipeline, not by the app itself.
+#
+# 21 rather than 17 to match the JDK cloud sessions and current Codespace
+# images already put on PATH. mise still downloads its own copy where it can
+# reach download.java.net, so this does not save a fetch; what it buys is that
+# when that download is blocked and the system JDK is used instead, it is the
+# same major version this file claims — previously the pin said 17 while every
+# such environment silently ran 21.
+#
+# CI pins its own 17 in .github/workflows/android.yml and does not read this
+# file. If the two are ever made to agree, change them together and re-run the
+# Android build, which is the only thing a JDK change can break.
+java = "21"
+
+# OpenCode CLI with the project-level Superpowers plugin in opencode.json
+opencode = "1.18.30"
+
+[tasks.test]
+description = "Run all tests (npm + cargo)"
+run = ["npm test", "cargo test -p lan-sync"]
+
+[tasks.typecheck]
+description = "TypeScript type checking"
+run = "npx tsc --noEmit"
+
+[tasks.lint]
+description = "Run Rust linter"
+run = "cargo clippy -p lan-sync --all-targets"
+
+[tasks.fmt]
+description = "Format Rust code"
+run = "cargo fmt --all"
+
+[tasks.build]
+description = "Build the project (npm)"
+run = "npm run build"
+
+[tasks.provision]
+description = "Install the toolchain and project dependencies (same path CI, Codespaces and Claude Code use)"
+run = "bash scripts/provision.sh"
+
+[tasks.delegate]
+description = "Delegate a read-only task to OpenCode on a free Zen model"
+run = "node scripts/delegate.mjs"

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "superpowers@git+https://github.com/obra/superpowers.git#v6.3.0"
+  ],
+
+  "model": "opencode/mimo-v2.5-free",
+  "small_model": "opencode/nemotron-3.5-lightning-free",
+
+  "agent": {
+    "explore": {
+      "description": "Read-only codebase questions: where something lives, how a module is wired, what a test covers.",
+      "mode": "all",
+      "model": "opencode/mimo-v2.5-free",
+      "prompt": "You are answering questions about the snake-ladders repository. Read CLAUDE.md before answering anything about the engine, transport or renderer. Cite files as path:line. You cannot modify anything - if a question needs a change, describe the change instead of attempting it.",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "patch": false,
+        "bash": false
+      }
+    },
+
+    "review": {
+      "description": "Read-only review of a diff or file against the repository's documented invariants.",
+      "mode": "all",
+      "model": "opencode/nemotron-3-ultra-free",
+      "prompt": "You are reviewing changes to the snake-ladders repository. The determinism contract in CLAUDE.md is the highest-priority invariant: src/engine/** must be pure, with no Math.random, no Date.now, no iteration over unordered collections, and dice drawn from the shared PRNG during resolution rather than sent by a client. Report concrete defects with file:line. Do not restate the diff back, and do not report style preferences as defects.",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "patch": false,
+        "bash": false
+      }
+    }
+  },
+
+  "permission": {
+    "edit": "ask",
+    "bash": "ask",
+    "webfetch": "ask"
+  }
+}

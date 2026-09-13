@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web:
+    name: Web (typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      - run: npm test
+
+      - run: npx vite build
+
+  rust:
+    name: Rust (lan-sync)
+    runs-on: ubuntu-latest
+    # This job intentionally covers only crates/lan-sync (the root workspace),
+    # not src-tauri. src-tauri is its own cargo workspace and building it
+    # requires the platform webview toolchain (webkit2gtk, etc.) plus, for
+    # mobile targets, the Android NDK/SDK — that's handled by android.yml
+    # instead, which builds the full app. Keeping this job to lan-sync means
+    # fast, toolchain-free feedback on every push/PR.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Root Cargo.toml's workspace is "." (members = ["crates/*"]).
+          workspaces: "."
+
+      - run: cargo fmt --all -- --check
+
+      - run: cargo clippy -p lan-sync --all-targets -- -D warnings
+
+      - run: cargo test -p lan-sync
