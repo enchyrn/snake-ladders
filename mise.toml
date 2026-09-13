@@ -12,6 +12,9 @@ rust = "stable"
 # This is used by the Android build pipeline in Tauri v2, not the main app
 java = "17"
 
+# OpenCode CLI with the project-level Superpowers plugin in opencode.json
+opencode = "1.18.30"
+
 [tasks.test]
 description = "Run all tests (npm + cargo)"
 run = ["npm test", "cargo test -p lan-sync"]

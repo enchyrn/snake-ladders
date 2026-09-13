@@ -14,6 +14,21 @@ curl https://mise.jdx.dev/install.sh | sh
 mise install
 ```
 
+This also installs the pinned OpenCode CLI. OpenCode loads the same Superpowers
+release used by the project-scoped Claude skills through `opencode.json`.
+
+To activate mise in a new shell, run:
+
+```bash
+eval "$(mise activate bash)"
+```
+
+Then launch OpenCode with:
+
+```bash
+mise exec -- opencode
+```
+
 Then run common tasks with:
 
 ```bash
@@ -23,6 +38,28 @@ mise run lint       # Rust linting
 mise run fmt        # Format Rust code
 mise run build      # Build the project
 ```
+
+OpenCode users can load the native Superpowers skills with its `skill` tool.
+The project plugin is pinned to `v6.3.0` so it stays aligned with the vendored
+skills under `.claude/skills`.
+
+### Headless OpenCode recipe
+
+For scripted or CI-adjacent use, run OpenCode non-interactively via mise:
+
+```bash
+mise exec -- opencode run --format json "your prompt here"
+```
+
+- `mise exec` activates the pinned toolchain (Node, Rust, OpenCode 1.18.30)
+  without polluting the shell.
+- `--format json` returns structured output suitable for parsing.
+- Example with an explicit free model: `opencode run --model opencode/mimo-v2.5-free --format json "run the test suite"`
+
+**`--auto` bypasses all permission prompts.** It lets the agent write files,
+run commands, and make network requests without asking. Use it deliberately —
+only when you trust the prompt and have reviewed the agent's previous output.
+Never run `--auto` on untrusted input.
 
 **Important:** Mise is optional. Every command works with plain `npm` and `cargo`, and it is not required or used in CI. Use it if you like, or skip it entirely—both approaches are fully supported.
 

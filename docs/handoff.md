@@ -83,6 +83,45 @@ machine — can pick it up without re-deriving anything.
   public would make GitHub-hosted macOS runners free; it would not remove the
   signing requirement.
 
+## Agent Workflow Checkpoint
+
+Each agent framework reads its own configuration to follow the same rules:
+
+| Agent | Config source | Notes |
+|-------|--------------|-------|
+| Claude Code | `.claude/skills/` | Superpowers skills vendored; bootstrap in `using-superpowers/SKILL.md` |
+| GitHub Copilot | `.github/copilot-instructions.md` | Points to the vendored Superpowers bootstrap, CLAUDE.md, and handoff |
+| OpenCode | `opencode.json` | Plugin pinned to Superpowers `v6.3.0`; mise pins OpenCode `1.18.30` |
+
+All three share one contract: read the repo docs before editing, get design
+approval before writing code, and verify before claiming completion.
+
+**Next checkpoint:** one explicitly scoped delegated task with reviewed output.
+Pick a small, well-defined item from the open threads list, dispatch it to an
+agent, and review the diff before merging.
+
+## Resuming From This Checkpoint
+
+The workflow integration is present but not committed. The current worktree
+changes are `.github/copilot-instructions.md`, `docs/handoff.md`,
+`docs/tooling.md`, `mise.toml`, and `opencode.json`.
+
+Verified on 2026-09-13:
+
+- `mise exec -- opencode --version` resolves OpenCode `1.18.30`.
+- `mise exec -- opencode run --model opencode/mimo-v2.5-free --format json
+  "Reply exactly HEADLESS_OK. Do not use tools or edit files."` succeeds.
+- The OpenCode project plugin loads the vendored Superpowers bootstrap and
+  exposes the native `skill` tool.
+- OpenCode logs duplicate skill names because Claude's project-scoped vendor
+  and the OpenCode plugin both register Superpowers skills. This is currently
+  non-blocking, but should be resolved before treating the integration as
+  warning-free.
+
+To resume safely, inspect the uncommitted diff first, then choose one small
+delegated task from the open threads above and review its output before merging.
+Keep `--auto` restricted to trusted, explicitly scoped prompts.
+
 ## Continuing locally
 
 ```bash
