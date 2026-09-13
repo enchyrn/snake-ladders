@@ -2,7 +2,7 @@ import { Effect, Either } from "effect"
 import { afterEach, describe, expect, it } from "vitest"
 // @ts-expect-error -- plain .mjs with no type declarations
 import { startRelay } from "../../../scripts/lan-relay.mjs"
-import { makeWebSocketTransport, relayUrl } from "../websocket"
+import { makeWebSocketTransport, refuseInsecure, relayUrl } from "../websocket"
 import { MatchClient } from "@/store/match-client"
 import { defaultConfig } from "@/engine/types"
 import type { Committed, ConnectionStatus, TransportService } from "../transport"
@@ -56,6 +56,39 @@ describe("relayUrl", () => {
 
   it("refuses an empty address", () => {
     expect(() => relayUrl("   ")).toThrow()
+  })
+
+  it("keeps an explicit wss, rather than downgrading it", () => {
+    // A relay behind TLS is the only kind an https page can reach at all, so
+    // rewriting the scheme the player pasted would break the one address
+    // that could have worked.
+    expect(relayUrl("wss://relay.example.com:443")).toBe("wss://relay.example.com:443")
+    expect(relayUrl("wss://relay.example.com")).toBe("wss://relay.example.com:4455")
+  })
+})
+
+describe("refuseInsecure", () => {
+  const insecure = "ws://192.168.1.2:38355"
+
+  it("explains the refusal an https page cannot avoid", () => {
+    const message = refuseInsecure(insecure, "https:")
+    expect(message).toContain("HTTPS")
+    expect(message).toContain(insecure)
+    // The failure the browser reports is indistinguishable from an
+    // unreachable host, so the message has to rule that reading out: telling
+    // a player to check the relay sends them after something that is fine.
+    expect(message).toMatch(/will not help|makes no difference/i)
+  })
+
+  it("allows everything it has no reason to refuse", () => {
+    expect(refuseInsecure(insecure, "http:")).toBeNull()
+    expect(refuseInsecure(insecure, null)).toBeNull()
+    expect(refuseInsecure("wss://relay.example.com:443", "https:")).toBeNull()
+  })
+
+  it("allows loopback, which counts as a trustworthy origin", () => {
+    expect(refuseInsecure("ws://localhost:4455", "https:")).toBeNull()
+    expect(refuseInsecure("ws://127.0.0.1:4455", "https:")).toBeNull()
   })
 })
 

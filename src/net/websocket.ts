@@ -33,11 +33,43 @@ type Downstream =
   | { t: "rejected"; reason: string }
   | { t: "pong" }
 
-/** `host:port`, with `ws://` and a default port filled in if omitted. */
+/**
+ * `host:port`, with a default port filled in if omitted.
+ *
+ * A scheme the player typed is kept rather than normalised away: `wss://` is
+ * the only kind of relay a page served over HTTPS is allowed to reach, so
+ * rewriting it to `ws://` would break the one address that could work.
+ */
 export const relayUrl = (address: string): string => {
-  const trimmed = address.trim().replace(/^wss?:\/\//, "")
-  if (trimmed === "") throw new TransportError({ reason: "no address given" })
-  return `ws://${trimmed.includes(":") ? trimmed : `${trimmed}:4455`}`
+  const trimmed = address.trim()
+  const scheme = /^wss?:\/\//.exec(trimmed)?.[0] ?? "ws://"
+  const bare = trimmed.slice(/^wss?:\/\//.exec(trimmed)?.[0].length ?? 0)
+  if (bare === "") throw new TransportError({ reason: "no address given" })
+  return `${scheme}${bare.includes(":") ? bare : `${bare}:4455`}`
+}
+
+/**
+ * Why this page may not open `url`, or null when it may.
+ *
+ * A browser refuses an insecure socket from an HTTPS page before the
+ * connection leaves the tab, and reports it through `onerror` — exactly the
+ * event an unreachable host produces. Without this the player is told to
+ * check whether the relay is running, which is both wrong and unfixable: the
+ * relay is fine, and no amount of restarting it will change the answer.
+ *
+ * Loopback is exempt because browsers treat it as a trustworthy origin, so
+ * `ws://localhost` from an HTTPS page genuinely does connect.
+ */
+export const refuseInsecure = (url: string, pageProtocol: string | null): string | null => {
+  if (pageProtocol !== "https:" || !url.startsWith("ws://")) return null
+  const host = url.slice("ws://".length).replace(/:\d+$/, "")
+  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return null
+  return (
+    `This page is served over HTTPS, so the browser refuses the insecure ` +
+    `connection to ${url} before it reaches the network — starting the relay ` +
+    `will not help. Join from the installed app, or open the game over http:// ` +
+    `on this network.`
+  )
 }
 
 export const makeWebSocketTransport = (): TransportService => {
@@ -72,6 +104,15 @@ export const makeWebSocketTransport = (): TransportService => {
         url = relayUrl(address)
       } catch (cause) {
         resume(Effect.fail(cause as TransportError))
+        return
+      }
+
+      const refusal = refuseInsecure(
+        url,
+        typeof window === "undefined" ? null : window.location.protocol,
+      )
+      if (refusal) {
+        resume(Effect.fail(new TransportError({ reason: refusal })))
         return
       }
 

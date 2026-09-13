@@ -43,6 +43,18 @@ export class TransportError extends Data.TaggedError("TransportError")<{
   readonly reason: string
 }> {}
 
+/**
+ * What to show when an effect fails with something that is not a
+ * `TransportError`.
+ *
+ * Reaching for `String(cause)` on a rejected `Effect.runPromise` renders
+ * Effect's own FiberFailure dump, which in a production bundle is a minified
+ * stack trace with a bundle offset — a player once saw exactly that in a
+ * banner. A `TransportError` carries a `reason` written to be read, so take
+ * that wherever there is one and fall back to this only for a real defect.
+ */
+export const unexpected = "Something went wrong. Try again, or restart the app."
+
 export type Unsubscribe = () => void
 
 /**

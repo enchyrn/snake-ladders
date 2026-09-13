@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
 import { useEffect, useState } from "react"
 import { seedFromRoom } from "@/app/hooks"
 import { useSession } from "@/app/session"
-import type { RoomView } from "@/net/transport"
+import { unexpected, type RoomView } from "@/net/transport"
 
 export const JoinScreen = () => {
   const session = useSession()
@@ -14,9 +14,11 @@ export const JoinScreen = () => {
 
   // Kick discovery off once; the query below just reads what it has found.
   useEffect(() => {
-    Effect.runPromise(session.transport("network").browse).catch((cause) =>
-      setError(String(cause)),
-    )
+    Effect.runPromise(Effect.either(session.transport("network").browse))
+      .then((browsing) => {
+        if (Either.isLeft(browsing)) setError(browsing.left.reason)
+      })
+      .catch(() => setError(unexpected))
   }, [session])
 
   const rooms = useQuery({
@@ -30,18 +32,29 @@ export const JoinScreen = () => {
 
   const enter = async (addr: string, seed: number) => {
     setError(null)
+    let joined
     try {
-      await Effect.runPromise(
-        session.transport("network").join(addr, {
-          player_id: session.identity.playerId,
-          name: session.identity.name,
-        }),
+      joined = await Effect.runPromise(
+        Effect.either(
+          session.transport("network").join(addr, {
+            player_id: session.identity.playerId,
+            name: session.identity.name,
+          }),
+        ),
       )
-      session.open({ role: "peer", seed, kind: "network" })
-      await navigate({ to: "/lobby" })
-    } catch (cause) {
-      setError(String(cause))
+    } catch {
+      setError(unexpected)
+      return
     }
+    // The reason, not the failure: a refused join says why — the room is
+    // full, the code is wrong, the page may not open an insecure socket —
+    // and every one of those is something the player can act on.
+    if (Either.isLeft(joined)) {
+      setError(joined.left.reason)
+      return
+    }
+    session.open({ role: "peer", seed, kind: "network" })
+    await navigate({ to: "/lobby" })
   }
 
   const enterManually = () => {

@@ -3,7 +3,13 @@ import { Effect, Either } from "effect"
 import { decodeAction, type Action } from "@/engine/actions"
 import { applyAction } from "@/engine/match"
 import { defaultConfig, type MatchConfig } from "@/engine/types"
-import type { Committed, HostedRoom, TransportService, Unsubscribe } from "@/net/transport"
+import {
+  unexpected,
+  type Committed,
+  type HostedRoom,
+  type TransportService,
+  type Unsubscribe,
+} from "@/net/transport"
 import { clientStateAtom, emptyState, type ClientState, type Role } from "./atoms"
 
 export type { ClientState, Role } from "./atoms"
@@ -83,9 +89,15 @@ export class MatchClient {
       return
     }
     this.patch((s) => ({ ...s, notice: null }))
-    Effect.runPromise(this.transport.submit(action)).catch((cause: unknown) => {
-      this.patch((s) => ({ ...s, notice: `could not send: ${String(cause)}` }))
-    })
+    Effect.runPromise(Effect.either(this.transport.submit(action)))
+      .then((sent) => {
+        if (Either.isLeft(sent)) {
+          this.patch((s) => ({ ...s, notice: `could not send: ${sent.left.reason}` }))
+        }
+      })
+      .catch(() => {
+        this.patch((s) => ({ ...s, notice: `could not send: ${unexpected}` }))
+      })
   }
 
   dismissNotice(): void {

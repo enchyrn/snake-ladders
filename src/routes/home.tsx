@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router"
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
 import { useState } from "react"
+import { unexpected } from "@/net/transport"
 import { useSession } from "@/app/session"
 import { randomSeed } from "@/app/hooks"
 import { allModules, moduleBlurbs, moduleLabels } from "@/engine/primitives"
@@ -22,20 +23,29 @@ export const HomeScreen = () => {
     const seed = randomSeed()
     try {
       if (kind === "network") {
-        const room = await Effect.runPromise(
-          session
-            .transport("network")
-            .host({ seed, name: session.identity.name, capacity: 6 }),
+        const hosted = await Effect.runPromise(
+          Effect.either(
+            session
+              .transport("network")
+              .host({ seed, name: session.identity.name, capacity: 6 }),
+          ),
         )
+        if (Either.isLeft(hosted)) {
+          setError(hosted.left.reason)
+          return
+        }
         // The client is created after hosting resolves, so the room it is
         // stamped with always matches the seed it was actually opened with.
-        session.open({ role: "host", seed, kind }).setRoom(room)
+        session.open({ role: "host", seed, kind }).setRoom(hosted.right)
       } else {
         session.open({ role: "local", seed, kind })
       }
       await navigate({ to: "/lobby" })
-    } catch (cause) {
-      setError(String(cause))
+    } catch {
+      // A defect, not a TransportError. Effect renders one as its own cause
+      // dump, which in a production bundle is a minified stack trace — worse
+      // for the player than admitting there is nothing useful to say.
+      setError(unexpected)
     } finally {
       setBusy(null)
     }
