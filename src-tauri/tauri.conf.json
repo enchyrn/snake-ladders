@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Snakes & Ladders: Mutation",
+  "productName": "Snakes & Ladders Mutation",
   "version": "0.1.0",
   "identifier": "dev.mutation.snakesladders",
   "build": {
