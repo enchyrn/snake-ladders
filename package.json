@@ -4,19 +4,19 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
+    "dev": "nx serve game-web",
+    "build": "nx run game-web:build",
+    "preview": "vite preview --config apps/game-web/vite.config.ts",
+    "test": "nx run game-web:test",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "android": "tauri android dev",
     "ios": "tauri ios dev",
-    "icons": "node scripts/make-pwa-icons.mjs",
+    "icons": "nx run tooling:icons",
     "verify:ui": "node scripts/drive-app.mjs",
     "verify:ui:pages": "node scripts/drive-app.mjs --base-path /snake-ladders",
-    "relay": "node scripts/lan-relay.mjs",
+    "relay": "nx run relay:serve",
     "delegate": "node scripts/delegate.mjs",
     "provision": "bash scripts/provision.sh"
   },
@@ -35,6 +35,10 @@
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {
+    "@nx/js": "23.2.1",
+    "@nx/react": "23.2.1",
+    "@nx/vite": "23.2.1",
+    "@nx/workspace": "23.2.1",
     "@tanstack/react-query-devtools": "^5.102.8",
     "@tanstack/react-router-devtools": "^1.167.1",
     "@tauri-apps/cli": "^2.11.4",
@@ -44,9 +48,9 @@
     "@types/three": "^0.186.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.1.1",
-    "nx": "^23.2.1",
+    "nx": "23.2.1",
     "playwright": "^1.63.0",
-    "typescript": "^7.0.2",
+    "typescript": "6.0.3",
     "vite": "^8.3.0",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^5.0.0",
@@ -58,5 +62,6 @@
       "version": "^0.9.1",
       "onFail": "ignore"
     }
-  }
+  },
+  "nx": {}
 }

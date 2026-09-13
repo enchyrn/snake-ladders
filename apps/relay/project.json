@@ -1,0 +1,10 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "relay",
+  "sourceRoot": "apps/relay",
+  "projectType": "application",
+  "tags": ["layer:relay"],
+  "targets": {
+    "serve": { "executor": "nx:run-commands", "options": { "command": "node apps/relay/lan-relay.mjs" } }
+  }
+}

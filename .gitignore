@@ -40,3 +40,9 @@ mise.local.toml
 
 # Linked agent worktrees
 .worktrees/
+
+
+
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs

@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "tooling",
+  "sourceRoot": "scripts",
+  "projectType": "library",
+  "tags": ["layer:tooling"],
+  "targets": {
+    "icons": { "executor": "nx:run-commands", "options": { "command": "node scripts/make-pwa-icons.mjs" } },
+    "verify-ui": { "executor": "nx:run-commands", "options": { "command": "node scripts/drive-app.mjs" } }
+  }
+}

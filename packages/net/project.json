@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "net",
+  "sourceRoot": "packages/net/src",
+  "projectType": "library",
+  "tags": ["layer:net"],
+  "targets": {
+    "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p packages/net/tsconfig.json" } },
+    "test": { "executor": "nx:run-commands", "options": { "command": "vitest run packages/net/src/**/*.test.ts" } }
+  }
+}

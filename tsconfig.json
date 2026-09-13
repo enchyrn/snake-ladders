@@ -16,7 +16,13 @@
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
     "types": ["vite/client", "node"],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@mutation/engine/*": ["./packages/engine/src/*"],
+      "@mutation/net/*": ["./packages/net/src/*"],
+      "@mutation/render/*": ["./packages/render/src/*"],
+      "@mutation/ui/*": ["./packages/ui/src/*"],
+      "@mutation/app-shell/*": ["./packages/app-shell/src/*"]
+    }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["apps", "packages", "vite.config.ts"]
 }

@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "analytics": false,
+  "plugins": [
+    {
+      "plugin": "@nx/vite/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "devServerTargetName": "serve",
+        "previewTargetName": "preview",
+        "testTargetName": "test"
+      }
+    }
+  ],
+  "useInferencePlugins": true,
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.{spec,test}.{js,jsx,ts,tsx}"
+    ],
+    "sharedGlobals": []
+  },
+  "targetDefaults": {
+    "typecheck": {
+      "inputs": ["default", "^default"]
+    },
+    "test": {
+      "inputs": ["default", "^default"]
+    },
+    "build": {
+      "inputs": ["production", "^production"],
+      "dependsOn": ["^build"]
+    }
+  }
+}
