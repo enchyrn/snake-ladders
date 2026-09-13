@@ -8,9 +8,20 @@ node = "22"
 # Rust stable for Tauri app and lan-sync library compilation
 rust = "stable"
 
-# Java 17 for Android builds via Gradle Plugin, which requires JDK 17+
-# This is used by the Android build pipeline in Tauri v2, not the main app
-java = "17"
+# Java for Android builds via the Gradle plugin, which requires JDK 17+.
+# Used by the Tauri v2 Android pipeline, not by the app itself.
+#
+# 21 rather than 17 to match the JDK cloud sessions and current Codespace
+# images already put on PATH. mise still downloads its own copy where it can
+# reach download.java.net, so this does not save a fetch; what it buys is that
+# when that download is blocked and the system JDK is used instead, it is the
+# same major version this file claims — previously the pin said 17 while every
+# such environment silently ran 21.
+#
+# CI pins its own 17 in .github/workflows/android.yml and does not read this
+# file. If the two are ever made to agree, change them together and re-run the
+# Android build, which is the only thing a JDK change can break.
+java = "21"
 
 # OpenCode CLI with the project-level Superpowers plugin in opencode.json
 opencode = "1.18.30"

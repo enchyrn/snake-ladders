@@ -216,6 +216,11 @@ CI never uses mise at all — it pins Node, Rust and JDK 17 with `setup-node`,
 `dtolnay/rust-toolchain` and `setup-java` — which is why none of this has ever
 shown up there.
 
-The JDK version is the one genuine mismatch: sessions carry 21 against a pin of
-17. It only affects Android Gradle builds, which cannot run in a container
-regardless (ADR 0011).
+The JDK pin is now 21, matching what these environments ship, so a blocked
+download falls back to the same major version the file declares rather than a
+different one. mise still tries to fetch its own JDK 21 and still fails on
+`download.java.net`; that is expected and costs nothing.
+
+CI remains on 17 via `android.yml`, which does not read `mise.toml`. That gap
+only reaches Android Gradle builds, which cannot run in a container regardless
+(ADR 0011).

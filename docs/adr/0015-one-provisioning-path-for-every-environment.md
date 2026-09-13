@@ -61,11 +61,11 @@ runs every command CI does — `tsc`, `vitest`, `vite build`, `cargo fmt`,
 `rustc`, `node`, `npm` and a JDK. mise is pinning versions and running tasks
 there, not provisioning.
 
-The risk this leaves is a silent version mismatch rather than a missing tool:
-sessions carry JDK 21 against a pin of 17, and nothing announces it. That
-particular gap is harmless because Android Gradle builds cannot run in a
-container anyway (ADR 0011) and CI pins its own JDK, but the next mismatch
-might not be.
+The risk this leaves is a silent version mismatch rather than a missing tool.
+The JDK was one: sessions ran 21 against a pin of 17 and nothing said so, which
+is why the pin is now 21. The class of problem remains — when a tool cannot be
+fetched, whatever the image happens to carry is used instead, and only the pin
+records what that was supposed to be. Keeping the two honest is manual.
 
 The environment-level fix is a user's to make, not the repository's: raising a
 cloud environment to **Custom** network access and allowing `opencode.ai` and

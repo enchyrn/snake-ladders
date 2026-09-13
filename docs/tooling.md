@@ -58,9 +58,15 @@ runner, not fetching. Everything CI runs — `tsc`, `vitest`, `vite build`,
 Node, Rust and JDK 17 with `setup-node`, `dtolnay/rust-toolchain` and
 `setup-java`.
 
-The one real gap is the JDK version: sessions carry 21, `mise.toml` pins 17.
-That matters only for Android Gradle builds, which cannot run in a container
-anyway (ADR 0011) and get their own JDK 17 in `android.yml`.
+`mise.toml` pins JDK **21** to match what these environments actually put on
+`PATH`. mise still fetches its own copy where it can, so the pin does not save
+a download — it means that when the download is blocked and the system JDK is
+used instead, it is the same major version the file claims.
+
+CI is the remaining divergence: `android.yml` pins its own **17** and never
+reads `mise.toml`. That only affects Android Gradle builds, which cannot run in
+a container anyway (ADR 0011). If you align them, change both and re-run the
+Android build.
 
 ## Getting Started with Mise
 
