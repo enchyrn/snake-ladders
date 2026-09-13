@@ -84,9 +84,19 @@ plain HTTP and cannot be installed. Once installed it runs fully offline —
 board, 3D view, rules and all — because the service worker precaches the entire
 app shell rather than a subset.
 
-The `Pages` workflow publishes that URL from `main`. The site is the app only;
-the relay is a socket, and a static host cannot run one, so several devices in
-a browser still need a computer running `npm run relay`.
+The `Pages` workflow publishes that URL from `main`. The site is the app only:
+a static host cannot run the relay, which is a socket.
+
+**Joining another device from the deployed site does not work yet.** The page
+is served over HTTPS — which is exactly what makes it installable — and a
+browser refuses to open the plain `ws://` connection that both the relay
+(`scripts/lan-relay.mjs`) and the native host speak. It is refused before it
+reaches the network, so it fails the same way whether or not a relay is
+running. Closing that needs a relay reachable over `wss://`; until then, use
+the installed app on every device, or serve the game over plain HTTP from a
+computer on the same network with `npm run dev -- --host`, where `ws://` is
+allowed. Pass-and-play works on the deployed site regardless: it never opens a
+socket.
 
 It updates by asking rather than reloading underneath you: a new version
 precaches in the background and the app offers it between matches, because
