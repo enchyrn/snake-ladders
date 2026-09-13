@@ -34,3 +34,11 @@ run = "cargo fmt --all"
 [tasks.build]
 description = "Build the project (npm)"
 run = "npm run build"
+
+[tasks.provision]
+description = "Install the toolchain and project dependencies (same path CI, Codespaces and Claude Code use)"
+run = "bash scripts/provision.sh"
+
+[tasks.delegate]
+description = "Delegate a read-only task to OpenCode on a free Zen model"
+run = "node scripts/delegate.mjs"

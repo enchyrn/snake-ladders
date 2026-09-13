@@ -39,6 +39,20 @@ cargo test -p lan-sync a_late_joiner_catches_up
 `mise.toml` wraps the common ones (`mise run test`), but npm and cargo are the
 supported path and CI uses them directly.
 
+`scripts/provision.sh` sets up a fresh environment — mise, the pinned
+toolchain, OpenCode, npm dependencies. A Codespace runs it from
+`.devcontainer/devcontainer.json` and a Claude Code web session from the
+`SessionStart` hook in `.claude/settings.json`, so all three environments
+provision identically (ADR 0015). It tolerates tools it cannot fetch and fails
+only on `npm install`.
+
+`npm run delegate -- "<prompt>"` hands a **read-only** task to OpenCode on a
+free Zen model. The `explore` and `review` agents have write, edit, patch and
+bash switched off deliberately: a free model is a reasonable reviewer of the
+determinism contract and a poor author of code that has to honour it
+(ADR 0016). It needs `opencode.ai`, which a web session blocks — delegate from
+a Codespace or a laptop.
+
 The Tauri app cannot be built in most dev containers: it needs webkit2gtk on
 Linux, an Android SDK+NDK for Android, and macOS with Xcode for iOS. **Do not
 try to `cargo build` or `cargo check` `src-tauri/`** unless those are present.

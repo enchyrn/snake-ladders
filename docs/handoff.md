@@ -19,6 +19,10 @@ machine — can pick it up without re-deriving anything.
   devices agreeing.
 - **Android APK** — CI green, artifact produced and installed on a real phone.
 - **PWA** — builds, precaches, installs from an HTTPS origin.
+- **Provisioning** — `scripts/provision.sh` was run end to end in a Claude Code
+  web container, which is the hostile case: it fell back to npm for both mise
+  and OpenCode, reported the toolchain as partial, and exited 0. The
+  `SessionStart` hook was run the same way and is idempotent.
 
 ## What has not been verified
 
@@ -33,6 +37,13 @@ machine — can pick it up without re-deriving anything.
   valuable next thing to do, and it needs hardware this container does not have.
 - **Pinch-zoom on the board** is code-reviewed, not driven — Playwright's mouse
   harness cannot simulate a second pointer.
+- **No OpenCode delegation has actually completed a task.** `opencode.json`
+  parses and both agents register (`opencode agent list` shows `explore` and
+  `review`), and the wrapper's failure paths were exercised. The success path
+  was not: `opencode.ai` is outside a web session's Trusted allowlist, so the
+  first real delegation has to happen from a Codespace or a laptop.
+- **`.devcontainer/devcontainer.json` has never been built.** It is the same
+  script the web hook runs, but no Codespace has been created from it.
 
 ## Open threads, roughly in priority order
 
@@ -95,7 +106,7 @@ Each agent framework reads its own configuration to follow the same rules:
 |-------|--------------|-------|
 | Claude Code | `.claude/skills/` | Superpowers skills vendored; bootstrap in `using-superpowers/SKILL.md` |
 | GitHub Copilot | `.github/copilot-instructions.md` | Points to the vendored Superpowers bootstrap, CLAUDE.md, and handoff |
-| OpenCode | `opencode.json` | Plugin pinned to Superpowers `v6.3.0`; mise pins OpenCode `1.18.30` |
+| OpenCode | `opencode.json` | Plugin pinned to Superpowers `v6.3.0`; mise pins OpenCode `1.18.30`. Two read-only agents, `explore` and `review`, on free Zen models — see ADR 0016 |
 
 All three share one contract: read the repo docs before editing, get design
 approval before writing code, and verify before claiming completion.
@@ -118,6 +129,9 @@ Verified on 2026-09-13:
 - `mise exec -- opencode --version` resolves OpenCode `1.18.30`.
 - `mise exec -- opencode run --model opencode/mimo-v2.5-free --format json
   "Reply exactly HEADLESS_OK. Do not use tools or edit files."` succeeds.
+  (Verified from the Codespace. It cannot be reproduced from a Claude Code web
+  session, where `opencode.ai` is blocked — `npm run delegate` detects that and
+  says so rather than hanging.)
 - The OpenCode project plugin loads the vendored Superpowers bootstrap and
   exposes the native `skill` tool.
 - OpenCode logs duplicate skill names because Claude's project-scoped vendor
@@ -135,11 +149,15 @@ prompts.
 ```bash
 git clone <repo> && cd snake-ladders
 git checkout claude/snake-ladders-cross-device-3uu177
-mise install
-npm install                         # current baseline only; Task 3 replaces this
-npx playwright install chromium     # only needed for current UI verification
-npm test && npm run typecheck       # current baseline before the clean break
+bash scripts/provision.sh           # mise, the toolchain, OpenCode, npm deps
+npx playwright install chromium     # only needed for npm run verify:ui
+npm test && npm run typecheck       # 94 tests, clean types
 ```
+
+A Codespace and a Claude Code web session run `scripts/provision.sh`
+themselves, through `.devcontainer/devcontainer.json` and the `SessionStart`
+hook in `.claude/settings.json` respectively. ADR 0015 covers why it tolerates
+partial failure and why mise and OpenCode have npm fallbacks.
 
 For physical-device capture, switch to the host machine rather than trying to
 route ADB through the Codespace:

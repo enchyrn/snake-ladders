@@ -15,7 +15,9 @@
     "ios": "tauri ios dev",
     "icons": "node scripts/make-pwa-icons.mjs",
     "verify:ui": "node scripts/drive-app.mjs",
-    "relay": "node scripts/lan-relay.mjs"
+    "relay": "node scripts/lan-relay.mjs",
+    "delegate": "node scripts/delegate.mjs",
+    "provision": "bash scripts/provision.sh"
   },
   "dependencies": {
     "@effect-atom/atom": "^0.7.0",

@@ -1,0 +1,32 @@
+{
+  "name": "snake-ladders",
+
+  // Node is the only toolchain the container needs up front: mise.toml pins
+  // the rest and scripts/provision.sh installs it. Rust and the Android SDK
+  // are deliberately absent — the Tauri shell cannot be built in a container
+  // anyway (it needs webkit2gtk, an NDK, or macOS), and CI builds the APK.
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+
+  // The same script a Claude Code session and a laptop run. Codespaces caches
+  // the container after this completes, so the install cost is paid once.
+  "postCreateCommand": "bash scripts/provision.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tauri-apps.tauri-vscode",
+        "vitest.explorer"
+      ]
+    }
+  },
+
+  // 1420 is the Vite dev server; 4455 is the WebSocket relay that lets phones
+  // on the same network join a match. Both need to be reachable from a device
+  // that is not the container, so neither is silent.
+  "forwardPorts": [1420, 4455],
+  "portsAttributes": {
+    "1420": { "label": "Vite dev server", "onAutoForward": "notify" },
+    "4455": { "label": "LAN relay", "onAutoForward": "notify" }
+  }
+}
