@@ -33,6 +33,10 @@ interface Clip {
 const TOKEN_Y = 0.01
 /** The default view looks down at the board from this far above horizontal. */
 const TILT = THREE.MathUtils.degToRad(56)
+/** How far the plinth extends past the board face on each side. */
+const PLINTH_BORDER = 0.32
+/** How far the start tray reaches past the plinth's near edge. */
+const PAD_DEPTH = 0.9
 
 export interface SceneOptions {
   /** Drop shadows and antialiasing off on weaker phones. */
@@ -167,7 +171,7 @@ export class BoardScene {
       roughness: 0.68,
     })
     const plinth = new THREE.Mesh(
-      new RoundedBoxGeometry(size + 0.8, 0.5, size + 0.8, 3, 0.08),
+      new RoundedBoxGeometry(size + PLINTH_BORDER * 2, 0.5, size + PLINTH_BORDER * 2, 3, 0.08),
       frameMaterial,
     )
     plinth.position.y = -0.27
@@ -176,7 +180,7 @@ export class BoardScene {
     this.scene.add(plinth)
 
     // A slim lip standing proud of the face, like a picture frame.
-    const lipWidth = 0.34
+    const lipWidth = PLINTH_BORDER - 0.05
     const lipGeometry = new THREE.BoxGeometry(size + lipWidth * 2, 0.09, lipWidth)
     const lipGeometrySide = new THREE.BoxGeometry(lipWidth, 0.09, size)
     for (const [geometry, x, z] of [
@@ -192,16 +196,25 @@ export class BoardScene {
       this.scene.add(lip)
     }
 
-    // The start pad, just in front of tile 1, so a token that has not yet
-    // entered the board still has somewhere to stand.
+    // The start pad: a short tray growing out of the frame under tile 1,
+    // with an inset disc a waiting token stands on. Part of the same object,
+    // so it never reads as something dropped beside the board.
+    const padCentre = tilePosition(0, size)
+    const tray = new THREE.Mesh(
+      new RoundedBoxGeometry(1.1, 0.5, PAD_DEPTH + 0.3, 2, 0.08),
+      frameMaterial,
+    )
+    // Overlaps the plinth's near edge so the two merge into one silhouette.
+    tray.position.set(padCentre.x, -0.27, padCentre.z - 0.15)
+    tray.castShadow = highQuality
+    tray.receiveShadow = highQuality
+    this.scene.add(tray)
     const pad = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.48, 0.55, 20),
+      new THREE.CylinderGeometry(0.36, 0.36, 0.05, 20),
       new THREE.MeshStandardMaterial({ color: palette.start, roughness: 0.85 }),
     )
-    // Stands on the table, its top flush with the board face.
-    pad.position.copy(tilePosition(0, size, -0.245))
+    pad.position.set(padCentre.x, -0.015, padCentre.z)
     pad.receiveShadow = highQuality
-    pad.castShadow = highQuality
     this.scene.add(pad)
 
     // A table under everything, fading into the fog: the plinth's shadow on
@@ -223,8 +236,8 @@ export class BoardScene {
     // Cool sky, warm ground bounce; a warm key from the upper right with the
     // only shadow; a cool, shadowless fill from the opposite side so the
     // shadowed faces of ladders and tokens keep some shape.
-    this.scene.add(new THREE.HemisphereLight(0x8fb4cc, 0x2a1d13, 0.9))
-    const key = new THREE.DirectionalLight(0xffe4c2, 1.9)
+    this.scene.add(new THREE.HemisphereLight(0x9ccbe0, 0x2a1d13, 1.15))
+    const key = new THREE.DirectionalLight(0xffe9cf, 2.1)
     key.position.set(6, 13, 5)
     key.castShadow = highQuality
     key.shadow.mapSize.set(1024, 1024)
@@ -241,7 +254,7 @@ export class BoardScene {
     })
     key.shadow.camera.updateProjectionMatrix()
     this.scene.add(key)
-    const fill = new THREE.DirectionalLight(0x9cc3de, 0.45)
+    const fill = new THREE.DirectionalLight(0x9cc3de, 0.5)
     fill.position.set(-7, 6, -4)
     this.scene.add(fill)
 
@@ -598,18 +611,30 @@ export class BoardScene {
     // Fit the board in BOTH axes. On a tall phone the binding constraint is
     // the *horizontal* field of view, which is the narrow one; sizing from the
     // vertical axis alone sliced the left and right columns off the board.
-    const span = this.size + 1.4 // board plus its frame and a little air
-    // Front to back there is more to show: the start pad and the dice sit
-    // in front of the board's near edge.
-    const depthSpan = span + 2.2
+    //
+    // Seen from above at TILT, a point at board-space (x, z) sits at camera
+    // depth d - cos(TILT) * z and offset (x, sin(TILT) * z) from the axis, so
+    // the near edge of the board projects wider than the far one. Each
+    // extreme of the object — frame corners, the start pad, the dice — is
+    // checked in both axes, and the camera backs off to the largest distance
+    // any of them needs. Nothing on the plinth can be clipped at the default.
     const vFov = THREE.MathUtils.degToRad(this.camera.fov)
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect)
-
-    // Viewed from above at `TILT`, the board's depth foreshortens by sin(tilt)
-    // while its width is unaffected.
-    const forWidth = span / 2 / Math.tan(hFov / 2)
-    const forDepth = (depthSpan * Math.sin(TILT)) / 2 / Math.tan(vFov / 2)
-    const distance = Math.max(forWidth, forDepth)
+    const tanV = Math.tan(vFov / 2)
+    const tanH = tanV * this.camera.aspect
+    const half = this.size / 2 + PLINTH_BORDER
+    const extremes: ReadonlyArray<readonly [number, number]> = [
+      [half, half], // near frame corners
+      [half, -half], // far frame corners
+      [(this.size - 1) / 2 + 0.55, half + PAD_DEPTH], // start tray
+      [0.75, this.size / 2 + 1.6 + 0.35], // dice
+    ]
+    let distance = 0
+    for (const [x, z] of extremes) {
+      const forWidth = x / tanH + Math.cos(TILT) * z
+      const forDepth = (Math.sin(TILT) * Math.abs(z)) / tanV + Math.cos(TILT) * z
+      distance = Math.max(distance, forWidth, forDepth)
+    }
+    distance *= 1.02 // a little air
 
     const wasDefault = this.viewIsDefault
     this.fitDistance = distance

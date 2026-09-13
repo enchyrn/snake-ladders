@@ -8,8 +8,8 @@ import { tileToCell } from "@/engine/board"
  */
 export const tilePosition = (tile: number, size: number, y = 0): THREE.Vector3 => {
   if (tile <= 0) {
-    // The start pad sits just in front of tile 1, inside the camera's fit.
-    return new THREE.Vector3(-(size - 1) / 2, y, size / 2 + 0.85)
+    // The start pad sits on a tray in front of tile 1, inside the camera's fit.
+    return new THREE.Vector3(-(size - 1) / 2, y, size / 2 + 0.78)
   }
   const { row, col } = tileToCell(tile, size)
   return new THREE.Vector3(col - (size - 1) / 2, y, (size - 1) / 2 - row)

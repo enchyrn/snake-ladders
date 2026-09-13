@@ -70,7 +70,7 @@ export class BoardTexture {
       const cy = y + cell / 2
 
       if (t.flagged && !t.revealed) {
-        this.tintTile(x, y, palette.flag, 0.1)
+        this.tintTile(x, y, palette.flag, 0.16)
         this.drawTileNumber(tile, x, y, t.revealed)
         this.drawFlag(cx, cy)
         continue
@@ -160,8 +160,8 @@ export class BoardTexture {
    *  minesweeper count. */
   private drawTileNumber(tile: number, x: number, y: number, revealed: boolean): void {
     const { ctx, cell } = this
-    ctx.fillStyle = revealed ? "#8fb0be" : palette.textDim
-    ctx.font = `600 ${Math.round(cell * 0.19)}px ui-monospace, monospace`
+    ctx.fillStyle = revealed ? "#a3c0cc" : "#7b9aa8"
+    ctx.font = `600 ${Math.round(cell * 0.2)}px ui-monospace, monospace`
     ctx.textAlign = "left"
     ctx.textBaseline = "top"
     ctx.fillText(String(tile), x + cell * 0.1, y + cell * 0.09)
@@ -184,33 +184,37 @@ export class BoardTexture {
 
   private drawFlag(cx: number, cy: number): void {
     const { ctx, cell } = this
-    const poleX = cx - cell * 0.08
+    const poleX = cx - cell * 0.1
     // Ground shadow so the flag sits on the tile rather than floating.
     ctx.fillStyle = "rgba(0, 0, 0, 0.35)"
     ctx.beginPath()
-    ctx.ellipse(cx, cy + cell * 0.27, cell * 0.2, cell * 0.06, 0, 0, Math.PI * 2)
+    ctx.ellipse(cx, cy + cell * 0.3, cell * 0.22, cell * 0.06, 0, 0, Math.PI * 2)
     ctx.fill()
     // Pole with a base.
     ctx.strokeStyle = palette.text
     ctx.lineCap = "round"
-    ctx.lineWidth = cell * 0.05
+    ctx.lineWidth = cell * 0.055
     ctx.beginPath()
-    ctx.moveTo(poleX, cy - cell * 0.28)
-    ctx.lineTo(poleX, cy + cell * 0.26)
+    ctx.moveTo(poleX, cy - cell * 0.32)
+    ctx.lineTo(poleX, cy + cell * 0.29)
     ctx.stroke()
-    ctx.lineWidth = cell * 0.06
+    ctx.lineWidth = cell * 0.065
     ctx.beginPath()
-    ctx.moveTo(poleX - cell * 0.12, cy + cell * 0.26)
-    ctx.lineTo(poleX + cell * 0.12, cy + cell * 0.26)
+    ctx.moveTo(poleX - cell * 0.14, cy + cell * 0.29)
+    ctx.lineTo(poleX + cell * 0.14, cy + cell * 0.29)
     ctx.stroke()
-    // Pennant.
+    // Pennant, outlined so it holds up over a ladder or a snake.
     ctx.fillStyle = palette.flag
+    ctx.strokeStyle = "rgba(4, 10, 14, 0.7)"
+    ctx.lineWidth = cell * 0.03
+    ctx.lineJoin = "round"
     ctx.beginPath()
-    ctx.moveTo(poleX, cy - cell * 0.3)
-    ctx.lineTo(poleX + cell * 0.34, cy - cell * 0.15)
-    ctx.lineTo(poleX, cy + cell * 0.0)
+    ctx.moveTo(poleX, cy - cell * 0.34)
+    ctx.lineTo(poleX + cell * 0.42, cy - cell * 0.16)
+    ctx.lineTo(poleX, cy + cell * 0.02)
     ctx.closePath()
     ctx.fill()
+    ctx.stroke()
   }
 
   /** A mine: a dark sphere with spikes. A spent one (tripped or disarmed —
