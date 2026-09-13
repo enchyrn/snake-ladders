@@ -1,0 +1,33 @@
+# Mise configuration for snake-ladders Tauri + React + Rust project
+# Pins toolchain versions to ensure consistent development and CI environments
+
+[tools]
+# Node 22 (LTS) for React frontend and npm ecosystem
+node = "22"
+
+# Rust stable for Tauri app and lan-sync library compilation
+rust = "stable"
+
+# Java 17 for Android builds via Gradle Plugin, which requires JDK 17+
+# This is used by the Android build pipeline in Tauri v2, not the main app
+java = "17"
+
+[tasks.test]
+description = "Run all tests (npm + cargo)"
+run = ["npm test", "cargo test -p lan-sync"]
+
+[tasks.typecheck]
+description = "TypeScript type checking"
+run = "npx tsc --noEmit"
+
+[tasks.lint]
+description = "Run Rust linter"
+run = "cargo clippy -p lan-sync --all-targets"
+
+[tasks.fmt]
+description = "Format Rust code"
+run = "cargo fmt --all"
+
+[tasks.build]
+description = "Build the project (npm)"
+run = "npm run build"

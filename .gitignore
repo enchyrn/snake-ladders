@@ -27,3 +27,10 @@ dist
 
 # Tauri
 src-tauri/gen
+
+# Mise local configuration (per-developer overrides)
+.mise.local.toml
+mise.local.toml
+
+# Nub (Node toolkit) local caches and state
+.nub/
