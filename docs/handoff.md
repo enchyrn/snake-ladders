@@ -36,26 +36,30 @@ machine — can pick it up without re-deriving anything.
 
 ## Open threads, roughly in priority order
 
-1. **Play a real cross-device match.** Run `npm run relay` on the Mac, join
-   from the iPhone and the Android. This is the first end-to-end exercise of
-   the whole stack and is likely to surface things no test has.
-2. **Rust-side logging.** There is none. A failure in `net_host`/`net_submit`
-   is invisible unless it happens to surface as a command error.
-   `tauri-plugin-log` would route it to logcat and the WebView console.
-3. **The error banner prints raw stack traces.** A transport failure shows the
-   user a minified `index-*.js:46655:20`. It should show a sentence.
-4. **Lobby copy contradicts itself in a hosted room** — it says "Pass this
-   device to the next player" underneath a room code that other devices are
-   meant to join. The code *is* meaningful in pass-and-play (it is the seed),
-   but the sentence is wrong for a Wi-Fi room.
-5. **On-device debugging doc.** Wireless ADB pairing, `chrome://inspect`
-   against the running WebView (the debug APK already permits this — no rebuild
-   needed), `adb logcat`, and the Safari equivalent for iOS.
-6. **The RPG layer.** Designed and approved, not built. See
-   `docs/superpowers/specs/2026-09-13-rpg-layer-design.md`. Extend the fuzz
-   driver before writing any class.
-7. **WebRTC/QR** (ADR 0013) and **NX** (ADR 0014), both deliberately deferred
-   with the reasoning recorded.
+1. **Deploy the PWA to GitHub Pages.** Make the `/snake-ladders/` base path,
+  manifest, service worker, hash routes, installation, and offline pass-and-
+  play work before QR/transport changes.
+2. **Run host-local Android capture.** The Codespace cannot see the device.
+  Use wireless ADB and a host-local OpenCode session to install the latest
+  debug APK, inspect the WebView, capture `logcat`, and record evidence.
+3. **Complete the available Phase 1 device checks.** With one Android device,
+  test native behavior separately and use the laptop relay for the PWA. Do
+  not claim Android-native-host to PWA interoperability yet.
+4. **Perform the wholesale Nx/Nub/Node 24 refactor.** Follow the approved
+  implementation plan and preserve Cargo/Tauri as native authorities.
+5. **Audit Effect TS and Rust.** Measure correctness, ownership, concurrency,
+  allocation, and release performance before changing implementations.
+6. **Implement QR and shared relay transport.** Mixed Android/PWA rooms use a
+  shared TLS WebSocket relay; direct browser-to-Android raw TCP is not the
+  target architecture.
+7. **Add Rust-side logging and improve error messages.** A failure in
+  `net_host`/`net_submit` is currently difficult to diagnose, and transport
+  banners can expose raw minified stack traces.
+8. **The RPG layer.** Designed and approved, not built. See
+  `docs/superpowers/specs/2026-09-13-rpg-layer-design.md`. Extend the fuzz
+  driver before writing any class.
+9. **iOS and pinch-zoom validation.** Both require hardware or interaction
+  tooling unavailable in this Codespace.
 
 ## Things that would otherwise have to be rediscovered
 
@@ -96,15 +100,18 @@ Each agent framework reads its own configuration to follow the same rules:
 All three share one contract: read the repo docs before editing, get design
 approval before writing code, and verify before claiming completion.
 
-**Next checkpoint:** one explicitly scoped delegated task with reviewed output.
-Pick a small, well-defined item from the open threads list, dispatch it to an
-agent, and review the diff before merging.
+**Next checkpoint:** execute Task 1 in
+`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` from an isolated
+worktree. Review the Pages build and subpath verification before starting the
+Nx/Nub migration.
 
 ## Resuming From This Checkpoint
 
-The workflow integration is present but not committed. The current worktree
-changes are `.github/copilot-instructions.md`, `docs/handoff.md`,
-`docs/tooling.md`, `mise.toml`, and `opencode.json`.
+The approved design is committed as `f773bf5` in
+`docs/superpowers/specs/2026-09-13-wholesale-nx-nub-and-pwa-design.md`.
+The implementation plan is
+`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
+No implementation task from that plan has started.
 
 Verified on 2026-09-13:
 
@@ -118,20 +125,35 @@ Verified on 2026-09-13:
   non-blocking, but should be resolved before treating the integration as
   warning-free.
 
-To resume safely, inspect the uncommitted diff first, then choose one small
-delegated task from the open threads above and review its output before merging.
-Keep `--auto` restricted to trusted, explicitly scoped prompts.
+To resume safely, inspect the worktree and read the design plus plan first.
+Create or enter an isolated worktree, begin with Task 1, and review each task
+before proceeding. Keep `--auto` restricted to trusted, explicitly scoped
+prompts.
 
 ## Continuing locally
 
 ```bash
 git clone <repo> && cd snake-ladders
 git checkout claude/snake-ladders-cross-device-3uu177
-npm install
-npx playwright install chromium   # only needed for npm run verify:ui
-npm test && npm run typecheck
-npm run dev -- --host             # open the printed address on any phone
+mise install
+npm install                         # current baseline only; Task 3 replaces this
+npx playwright install chromium     # only needed for current UI verification
+npm test && npm run typecheck       # current baseline before the clean break
 ```
+
+For physical-device capture, switch to the host machine rather than trying to
+route ADB through the Codespace:
+
+```bash
+mise install
+mise x -- adb devices
+mise x -- opencode
+```
+
+Pair/connect with wireless ADB, install the latest Android artifact, and save
+the evidence bundle locally. The host must have Android Platform Tools and
+Chrome; the Codespace remains the coordinator for source, Actions, Pages, and
+report review.
 
 `CLAUDE.md` holds the architecture and the invariants worth knowing before
 changing anything. `docs/adr/` holds the decisions and what each one cost.
