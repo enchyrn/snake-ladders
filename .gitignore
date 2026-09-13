@@ -34,3 +34,6 @@ mise.local.toml
 
 # Nub (Node toolkit) local caches and state
 .nub/
+
+# Linked agent worktrees
+.worktrees/
