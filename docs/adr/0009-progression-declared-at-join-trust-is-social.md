@@ -2,9 +2,7 @@
 
 ## Status
 
-Proposed — the alternatives (cosmetic-only progression, or host ratification
-in the lobby) are still open, and this ADR is not Accepted until that choice
-is made. See `docs/superpowers/specs/` for the RPG design this belongs to.
+Accepted
 
 ## Context
 
