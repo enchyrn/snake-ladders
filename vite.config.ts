@@ -5,9 +5,25 @@ import { fileURLToPath, URL } from "node:url"
 
 const host = process.env.TAURI_DEV_HOST
 
+// GitHub Pages serves a project site below /<repository>/, while Tauri's
+// webview, `vite preview` and the dist server all serve from the origin
+// root. Every URL the shell emits — the module script, the manifest, the
+// precache list — has to agree with wherever it actually lands, so the base
+// is a build input rather than a constant. It stays "/" unless a deployment
+// asks for otherwise, which keeps native packaging untouched.
+const base = withTrailingSlash(process.env.PUBLIC_BASE_PATH ?? "/")
+
+/** Vite's `base` and a manifest's `scope` both require the trailing slash;
+ *  `${base}pwa-192.png` silently becomes a sibling path without it. */
+function withTrailingSlash(value: string): string {
+  const prefixed = value.startsWith("/") ? value : `/${value}`
+  return prefixed.endsWith("/") ? prefixed : `${prefixed}/`
+}
+
 // Tauri mobile serves the dev server to a physical device, so the dev server
 // must bind to the LAN address Tauri hands us rather than localhost.
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -43,19 +59,19 @@ export default defineConfig({
         background_color: "#0b0f14",
         display: "standalone",
         orientation: "portrait",
-        start_url: "/",
-        scope: "/",
+        start_url: base,
+        scope: base,
         icons: [
-          { src: "/pwa-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: `${base}pwa-192.png`, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: `${base}pwa-512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
           {
-            src: "/pwa-maskable-512.png",
+            src: `${base}pwa-maskable-512.png`,
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
           },
           {
-            src: "/apple-touch-icon.png",
+            src: `${base}apple-touch-icon.png`,
             sizes: "180x180",
             type: "image/png",
             purpose: "any",

@@ -12,10 +12,15 @@
  *   node scripts/drive-app.mjs
  *   node scripts/drive-app.mjs --base-path /code/artifact/abc --out /tmp/shots
  *
+ *   PUBLIC_BASE_PATH=/snake-ladders npm run build   # what Pages deploys
+ *   npm run verify:ui:pages
+ *
  * `--base-path` serves the app from a subdirectory, which is how a static
- * host or an artifact serves it. That is not a hypothetical: a path-history
- * router matched none of its routes there and rendered a not-found page
- * instead of the game.
+ * host, an artifact or GitHub Pages serves it, and nothing outside that
+ * prefix resolves. That is not a hypothetical: a path-history router matched
+ * none of its routes there and rendered a not-found page instead of the game.
+ * The prefix has to match the base the bundle was built with — built at "/"
+ * and served under one, every asset 404s, which is the point.
  *
  * First run on a new machine needs the browser: npx playwright install chromium
  */
@@ -31,7 +36,10 @@ const arg = (flag, fallback) => {
 
 const DIST = resolve(arg("--dist", "dist"))
 const OUT = resolve(arg("--out", "screenshots"))
-const BASE = arg("--base-path", "")
+// Trailing slash stripped so both spellings of the flag behave the same and
+// both spellings of the request resolve: a host serving a project site
+// answers /snake-ladders and /snake-ladders/ with the same page.
+const BASE = arg("--base-path", "").replace(/\/+$/, "")
 const [WIDTH, HEIGHT] = arg("--viewport", "390x844").split("x").map(Number)
 const PORT = Number(arg("--port", 8910))
 
@@ -49,7 +57,18 @@ const serve = () =>
   new Promise((ready) => {
     const server = createServer(async (req, res) => {
       let path = decodeURIComponent((req.url ?? "/").split("?")[0])
-      if (BASE && path.startsWith(BASE)) path = path.slice(BASE.length)
+      if (BASE) {
+        // Outside the base nothing exists, exactly as on a host serving a
+        // project site from a subdirectory. Falling back to dist/ instead
+        // would serve a root-absolute URL — the manifest, an icon, the
+        // service worker — happily here and 404 only once deployed, which
+        // is the one failure this flag exists to catch.
+        if (!path.startsWith(BASE)) {
+          res.writeHead(404).end("not found")
+          return
+        }
+        path = path.slice(BASE.length)
+      }
       path = normalize(path).replace(/^\/+/, "")
       // normalize("") is "." — reading that is a directory, not the page.
       const file = join(DIST, path === "" || path === "." ? "index.html" : path)
@@ -142,12 +161,37 @@ const run = async () => {
   console.log("lobby route:", new URL(page.url()).hash || new URL(page.url()).pathname)
   await shot("2-lobby")
 
+  // Refreshing off the home route is where a subdirectory deployment breaks:
+  // the host has no file at that path, so a router reading anything but the
+  // fragment asks for a page that was never built and renders not-found.
+  // Landing back on home is a pass — lobby.tsx sends you there deliberately
+  // when a reload leaves it with no match client — but not-found is not.
+  const deepRoute = new URL(page.url()).hash
+  await page.reload({ waitUntil: "networkidle" })
+  await page.waitForTimeout(1000)
+  const reloaded = await page.$("#root")
+  const markup = reloaded ? await reloaded.innerHTML() : ""
+  if (markup.length < 200) {
+    problems.push(`refreshing at ${deepRoute} rendered ${markup.length} chars — the app did not come back`)
+  }
+  // Scoped to #root, not the whole document: the router's fallback is the
+  // thing being tested, and page copy is free to use the words elsewhere.
+  if (/not found/i.test(markup)) {
+    problems.push(`refreshing at ${deepRoute} rendered the router's not-found page`)
+  }
+  console.log(`refresh at ${deepRoute} ->`, new URL(page.url()).hash || "/")
+  await shot("3-refreshed")
+
+  // Back through the lobby, since the refresh above dropped the match client.
+  await page.getByRole("button", { name: /pass and play/i }).click()
+  await page.waitForTimeout(800)
+
   const start = page.getByRole("button", { name: /^start/i })
   if (await start.count()) {
     await start.click()
     await page.waitForTimeout(2500)
   }
-  await shot("3-match")
+  await shot("4-match")
 
   const canvas = await page.evaluate(() => {
     const c = document.querySelector("canvas")
@@ -171,7 +215,7 @@ const run = async () => {
       .catch(() => problems.push("nothing was narrated after rolling"))
     await page.waitForTimeout(1800) // let the token finish moving before the shot
     console.log("log:", await page.$$eval(".log li", (n) => n.map((x) => x.textContent)))
-    await shot("4-rolled")
+    await shot("5-rolled")
   }
 
   // A phone viewport must never scroll sideways.

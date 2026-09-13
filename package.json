@@ -15,6 +15,7 @@
     "ios": "tauri ios dev",
     "icons": "node scripts/make-pwa-icons.mjs",
     "verify:ui": "node scripts/drive-app.mjs",
+    "verify:ui:pages": "node scripts/drive-app.mjs --base-path /snake-ladders",
     "relay": "node scripts/lan-relay.mjs",
     "delegate": "node scripts/delegate.mjs",
     "provision": "bash scripts/provision.sh"

@@ -72,9 +72,26 @@ npm run dev -- --host
 
 and open the LAN address it prints.
 
-**Install to the home screen** — needs an HTTPS origin, so build and host the
-`dist/` folder somewhere with a certificate, then use Add to Home Screen. It
-then runs fully offline, including the board, the 3D view and the rules.
+**Install to the home screen** — open
+
+```
+https://enchyrn.github.io/snake-ladders/
+```
+
+and use Add to Home Screen. A home-screen install needs an HTTPS origin, which
+is the whole reason this deployment exists; `npm run dev -- --host` serves over
+plain HTTP and cannot be installed. Once installed it runs fully offline —
+board, 3D view, rules and all — because the service worker precaches the entire
+app shell rather than a subset.
+
+The `Pages` workflow publishes that URL from `main`. The site is the app only;
+the relay is a socket, and a static host cannot run one, so several devices in
+a browser still need a computer running `npm run relay`.
+
+It updates by asking rather than reloading underneath you: a new version
+precaches in the background and the app offers it between matches, because
+swapping the bundle mid-match would leave one device folding the log by
+different rules than the rest.
 
 **Android, native** — download the `android-debug-apk` artifact from the latest
 successful Android run in GitHub Actions, unzip, and install. Enable "install

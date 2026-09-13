@@ -1,9 +1,5 @@
 /// <reference types="vite-plugin-pwa/client" />
 
-// Not wired into main.tsx yet — that file is owned by another work stream
-// mid-edit. This module is safe to import unconditionally once it lands;
-// call registerServiceWorker() from wherever app startup settles.
-
 import { registerSW } from "virtual:pwa-register"
 
 export interface ServiceWorkerHandlers {

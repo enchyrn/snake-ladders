@@ -25,6 +25,9 @@ node_modules
 dist
 *.log
 
+# What `npm run verify:ui` draws — evidence for a single run, not source
+screenshots
+
 # Tauri
 src-tauri/gen
 
