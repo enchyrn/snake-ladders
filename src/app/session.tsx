@@ -2,25 +2,30 @@ import { createContext, useContext, useMemo, useRef, useState, type ReactNode } 
 import { RegistryContext } from "@effect-atom/atom-react"
 import { Effect } from "effect"
 import { MatchClient } from "@/store/match-client"
-import { isTauri, makeLanTransport } from "@/net/lan"
-import { makeLocalTransport } from "@/net/local"
+import { isTauri } from "@/net/lan"
+import { makeTransport, type TransportKind } from "@/net/factory"
 import type { TransportService } from "@/net/transport"
 import { loadIdentity, saveIdentity, type LocalIdentity } from "@/net/identity"
 import { defaultConfig, type MatchConfig } from "@/engine/types"
 import type { Role } from "@/store/match-client"
 
+export type { TransportKind }
+
 interface SessionValue {
   readonly identity: LocalIdentity
   readonly rename: (name: string) => void
   readonly client: MatchClient | null
-  /** True when running inside Tauri, where LAN play is available. */
-  readonly networked: boolean
+  /** True when this build can host a room: only the installed app can. */
+  readonly canHost: boolean
+  /** True when this build can reach other devices at all. */
+  readonly canJoin: boolean
   readonly open: (opts: {
     role: Role
     seed: number
+    kind: TransportKind
     config?: Partial<MatchConfig>
   }) => MatchClient
-  readonly transport: () => TransportService
+  readonly transport: (kind: TransportKind) => TransportService
   readonly close: () => void
 }
 
@@ -36,23 +41,25 @@ const SessionContext = createContext<SessionValue | null>(null)
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [identity, setIdentity] = useState<LocalIdentity>(() => loadIdentity())
   const [client, setClient] = useState<MatchClient | null>(null)
-  const transportRef = useRef<TransportService | null>(null)
-  const networked = useMemo(() => isTauri(), [])
+  const transports = useRef(new Map<TransportKind, TransportService>())
+  const native = useMemo(() => isTauri(), [])
   // The one registry every `useAtomValue` in the tree reads through — a
   // client built with any other registry would fold in a state room nobody
   // is watching.
   const registry = useContext(RegistryContext)
 
-  const transport = (): TransportService => {
-    if (!transportRef.current) {
-      transportRef.current = networked ? makeLanTransport() : makeLocalTransport()
-    }
-    return transportRef.current
+  const transport = (kind: TransportKind): TransportService => {
+    const existing = transports.current.get(kind)
+    if (existing) return existing
+    const made = makeTransport(kind, native)
+    transports.current.set(kind, made)
+    return made
   }
 
   const value: SessionValue = {
     identity,
-    networked,
+    canHost: native,
+    canJoin: true,
     client,
     rename: (name) => {
       const next = { ...identity, name }
@@ -60,10 +67,10 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       saveIdentity(next)
     },
     transport,
-    open: ({ role, seed, config }) => {
+    open: ({ role, seed, kind, config }) => {
       client?.dispose()
       const fresh = new MatchClient(
-        transport(),
+        transport(kind),
         { ...defaultConfig(seed), ...config },
         role,
         identity.playerId,
@@ -75,9 +82,10 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     close: () => {
       client?.dispose()
       setClient(null)
-      const active = transportRef.current
-      if (active) Effect.runPromise(active.leave).catch(() => undefined)
-      transportRef.current = null
+      for (const active of transports.current.values()) {
+        Effect.runPromise(active.leave).catch(() => undefined)
+      }
+      transports.current.clear()
     },
   }
 

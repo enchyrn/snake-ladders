@@ -11,20 +11,27 @@ export const HomeScreen = () => {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const startHosting = async (networked: boolean) => {
-    setBusy(networked ? "hosting" : "local")
+  /**
+   * Pass-and-play and Wi-Fi hosting differ in the transport they need, not
+   * just in whether a room is opened. Sending pass-and-play through the LAN
+   * transport left every action submitted to a room that was never opened.
+   */
+  const startMatch = async (kind: "local" | "network") => {
+    setBusy(kind)
     setError(null)
     const seed = randomSeed()
     try {
-      if (networked) {
+      if (kind === "network") {
         const room = await Effect.runPromise(
-          session.transport().host({ seed, name: session.identity.name, capacity: 6 }),
+          session
+            .transport("network")
+            .host({ seed, name: session.identity.name, capacity: 6 }),
         )
         // The client is created after hosting resolves, so the room it is
         // stamped with always matches the seed it was actually opened with.
-        session.open({ role: "host", seed }).setRoom(room)
+        session.open({ role: "host", seed, kind }).setRoom(room)
       } else {
-        session.open({ role: "local", seed })
+        session.open({ role: "local", seed, kind })
       }
       await navigate({ to: "/lobby" })
     } catch (cause) {
@@ -60,14 +67,14 @@ export const HomeScreen = () => {
         <button
           type="button"
           className="primary"
-          disabled={busy !== null || !session.networked}
-          onClick={() => void startHosting(true)}
+          disabled={busy !== null || !session.canHost}
+          onClick={() => void startMatch("network")}
         >
-          {busy === "hosting" ? "Opening…" : "Host on Wi-Fi"}
+          {busy === "network" ? "Opening…" : "Host on Wi-Fi"}
         </button>
         <button
           type="button"
-          disabled={busy !== null || !session.networked}
+          disabled={busy !== null || !session.canJoin}
           onClick={() => void navigate({ to: "/join" })}
         >
           Join a game
@@ -75,17 +82,17 @@ export const HomeScreen = () => {
         <button
           type="button"
           disabled={busy !== null}
-          onClick={() => void startHosting(false)}
+          onClick={() => void startMatch("local")}
         >
           {busy === "local" ? "Starting…" : "Pass and play on this device"}
         </button>
       </div>
 
-      {!session.networked && (
+      {!session.canHost && (
         <p className="hint">
-          Wi-Fi play needs the installed app. In a browser tab only pass-and-play
-          is available, because a web page cannot open the sockets other devices
-          connect to.
+          Hosting needs the installed app, because a web page cannot open the
+          socket other devices connect to. You can still join a match from here:
+          run the relay on a computer and paste the address it prints.
         </p>
       )}
       {error && <p className="error">{error}</p>}

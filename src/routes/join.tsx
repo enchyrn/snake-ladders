@@ -14,14 +14,14 @@ export const JoinScreen = () => {
 
   // Kick discovery off once; the query below just reads what it has found.
   useEffect(() => {
-    Effect.runPromise(session.transport().browse).catch((cause) =>
+    Effect.runPromise(session.transport("network").browse).catch((cause) =>
       setError(String(cause)),
     )
   }, [session])
 
   const rooms = useQuery({
     queryKey: ["lan-rooms"],
-    queryFn: () => Effect.runPromise(session.transport().rooms),
+    queryFn: () => Effect.runPromise(session.transport("network").rooms),
     // Beacons land about once a second; matching that keeps the list live
     // without spinning the radio harder than the host is already using it.
     refetchInterval: 1000,
@@ -32,12 +32,12 @@ export const JoinScreen = () => {
     setError(null)
     try {
       await Effect.runPromise(
-        session.transport().join(addr, {
+        session.transport("network").join(addr, {
           player_id: session.identity.playerId,
           name: session.identity.name,
         }),
       )
-      session.open({ role: "peer", seed })
+      session.open({ role: "peer", seed, kind: "network" })
       await navigate({ to: "/lobby" })
     } catch (cause) {
       setError(String(cause))
