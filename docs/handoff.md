@@ -4,6 +4,10 @@ State of the branch `claude/snake-ladders-cross-device-3uu177` as of
 2026-09-13, written so another session — or the same person on a different
 machine — can pick it up without re-deriving anything.
 
+Task 1 of the Nx/Nub/PWA plan is complete: the PWA is deployed and was opened
+on a real device. That deployment also settled a question the plan had left
+open, and not in the direction anyone hoped — see open thread 1.
+
 ## What works, and how it was verified
 
 - **Engine** — pure deterministic reducer, four rule modules. 94 TypeScript
@@ -18,7 +22,17 @@ machine — can pick it up without re-deriving anything.
   instead of hanging, and a deliberate two-socket race still leaves both
   devices agreeing.
 - **Android APK** — CI green, artifact produced and installed on a real phone.
-- **PWA** — builds, precaches, installs from an HTTPS origin.
+- **PWA** — deployed to GitHub Pages at
+  `https://enchyrn.github.io/snake-ladders/` by `.github/workflows/pages.yml`,
+  from Actions run `34758473488`. Opened on a real device: the app renders, the
+  hashed asset bundle loads, hash routes work. Everything below `/snake-ladders/`
+  — manifest, icons, service worker, all nine precache entries — resolves under
+  the subpath, and `npm run build` emits no root-absolute URL that would 404
+  there. The service worker was watched registering at
+  `https://localhost:8910/snake-ladders/sw.js` under
+  `node scripts/drive-app.mjs --https --base-path /snake-ladders`, which is the
+  first evidence the offline shell actually installs under the subpath rather
+  than merely looking right in `dist/`.
 - **Provisioning** — `scripts/provision.sh` was run end to end in a Claude Code
   web container, which is the hostile case: it fell back to npm for both mise
   and OpenCode, reported the toolchain as partial, and exited 0. The
@@ -44,8 +58,12 @@ machine — can pick it up without re-deriving anything.
 - **iOS has never been built or run.** Everything said about it is inference
   from Apple's constraints, not observation.
 - **Cross-device play has not actually been played.** The transports are
-  tested; three phones in a room have not been. This is the single most
-  valuable next thing to do, and it needs hardware this container does not have.
+  tested; three phones in a room have not been. One real attempt has now been
+  made — the deployed PWA, joining an Android native host — and it established
+  that this particular pairing cannot work at all rather than that it is
+  untested (open thread 1). A relay-based browser-to-browser match, and a
+  native-to-native match, remain genuinely untried and still need hardware this
+  container does not have.
 - **Pinch-zoom on the board** is code-reviewed, not driven — Playwright's mouse
   harness cannot simulate a second pointer.
 - **`.devcontainer/devcontainer.json` has never been built.** It is the same
@@ -56,9 +74,19 @@ machine — can pick it up without re-deriving anything.
 
 ## Open threads, roughly in priority order
 
-1. **Deploy the PWA to GitHub Pages.** Make the `/snake-ladders/` base path,
-  manifest, service worker, hash routes, installation, and offline pass-and-
-  play work before QR/transport changes.
+1. **A relay the deployed PWA can reach at all.** This was thread 6 and is now
+  the top of the list, because deploying the site is what made it blocking
+  rather than desirable. A page served over HTTPS — which is precisely what
+  makes it installable — may not open a `ws://` socket, and the browser refuses
+  it before the connection leaves the tab, so it fails identically whether or
+  not a relay is running. `scripts/lan-relay.mjs` serves plain `ws` with no TLS,
+  and the native host is a raw TCP listener no browser can dial under any
+  scheme. So on the deployed site pass-and-play works and joining another device
+  cannot, and no amount of fixing the client changes that. Closing it needs a
+  relay reachable over `wss://`, which is an architecture decision before it is
+  code: a certificate means a public host, which cuts against the promise that
+  the game never touches the internet. ADR 0012 and 0013 are the prior art and
+  this deserves its own ADR. Plan Tasks 8 and 9 cover the work.
 2. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
@@ -69,19 +97,56 @@ machine — can pick it up without re-deriving anything.
   implementation plan and preserve Cargo/Tauri as native authorities.
 5. **Audit Effect TS and Rust.** Measure correctness, ownership, concurrency,
   allocation, and release performance before changing implementations.
-6. **Implement QR and shared relay transport.** Mixed Android/PWA rooms use a
-  shared TLS WebSocket relay; direct browser-to-Android raw TCP is not the
-  target architecture.
-7. **Add Rust-side logging and improve error messages.** A failure in
-  `net_host`/`net_submit` is currently difficult to diagnose, and transport
-  banners can expose raw minified stack traces.
-8. **The RPG layer.** Designed and approved, not built. See
+6. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
+  difficult to diagnose. The TypeScript half of this thread is done: no banner
+  renders a raw stack trace any more. Four call sites took `String(cause)` on a
+  rejected `Effect.runPromise`, which renders Effect's FiberFailure dump — a
+  minified bundle offset in a production build, and a player saw exactly that.
+  They now take the `TransportError`'s own `reason` through `Effect.either`.
+7. **The RPG layer.** Designed and approved, not built. See
   `docs/superpowers/specs/2026-09-13-rpg-layer-design.md`. Extend the fuzz
   driver before writing any class.
-9. **iOS and pinch-zoom validation.** Both require hardware or interaction
+8. **iOS and pinch-zoom validation.** Both require hardware or interaction
   tooling unavailable in this Codespace.
 
 ## Things that would otherwise have to be rediscovered
+
+- **A secure origin is not cosmetic, and `--https` is how you get one.**
+  `node scripts/drive-app.mjs --https` serves over TLS with a certificate minted
+  for the run (needs `openssl`). A service worker will not register without a
+  secure origin and a page will not refuse an insecure `ws://` without one, so
+  neither the offline shell installing nor the LAN-join refusal can be
+  reproduced on plain http, however carefully the page is driven. Three things
+  only appeared once it ran, and all three fail quietly:
+  - **A context's `ignoreHTTPSErrors` does not cover the service worker.**
+    Chrome fetches that script outside the context and refuses a certificate it
+    cannot verify, so registration fails with an SSL error while every other
+    request on the page succeeds. The browser needs `--ignore-certificate-errors`
+    as well.
+  - **`navigator.serviceWorker.ready` never settles when nothing registers.** It
+    does not reject, so a `.catch()` cannot rescue it and the obvious check hangs
+    instead of reporting the failure it exists to catch. Ask the context, not the
+    page — a page being claimed by a newly activated worker can also lose its
+    execution context mid-`evaluate`.
+  - **A throw used to leave the harness's server listening**, and an open handle
+    keeps node alive, so a failing run hung rather than printing what it had just
+    found. `run()` now closes both in a `finally`.
+
+- **Two GitHub settings gate a first Pages deployment, and neither is in the
+  workflow file.** `workflow_dispatch` cannot fire a workflow that is not yet on
+  the default branch — GitHub has not registered it, and the dispatch API 404s —
+  so a Pages workflow cannot be exercised from the branch that adds it without
+  either merging it unverified or temporarily adding that branch to the `push`
+  trigger. Then the `github-pages` environment refuses a deployment from a
+  non-default branch until its deployment-branch policy is widened; the job
+  fails in about two seconds having run **zero** steps, and its log download
+  404s, which is the signature of an environment gate rather than a build fault.
+  Neither is readable or fixable through the GitHub tools available in a session.
+
+- **This container cannot reach `github.io`.** The egress proxy answers 403 to
+  `CONNECT` for it, so the deployed site cannot be verified from a session at
+  all — only the Actions logs can be read. Confirming a deployment actually
+  serves needs someone with a browser.
 
 - **`npm run verify:ui` drives the built app in a real browser and
   screenshots it.** Three bugs were found this way and none were visible in the
@@ -92,6 +157,14 @@ machine — can pick it up without re-deriving anything.
 - **The board's camera must fit both fields of view.** On an upright phone the
   horizontal one is narrower and binds first. Sizing from the vertical alone
   silently clips two columns.
+- **The base path must match at build time and at serve time.** `--base-path`
+  now 404s anything outside the prefix, exactly as a static host does; falling
+  back to `dist/` let a root-absolute URL pass locally and fail only once
+  deployed, which is the one failure the flag exists to catch. Both spellings of
+  the flag and of the request resolve, because the plan's own step said
+  `--base-path /snake-ladders/` while the npm script says `/snake-ladders`, and
+  the trailing slash used to decide whether the page was found.
+
 - **Transport is chosen by what the player picked, then by platform.** The
   reverse order handed pass-and-play the LAN transport with no room open, and
   broke the app on a real phone. `src/net/__tests__/factory.test.ts` pins it.
@@ -120,10 +193,19 @@ Each agent framework reads its own configuration to follow the same rules:
 All three share one contract: read the repo docs before editing, get design
 approval before writing code, and verify before claiming completion.
 
-**Next checkpoint:** execute Task 1 in
-`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` from an isolated
-worktree. Review the Pages build and subpath verification before starting the
-Nx/Nub migration.
+**Next checkpoint:** Task 1 is complete and its steps are ticked in
+`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
+
+Task 2 is next in the plan's order but is **hardware-blocked for a container
+session**: it is host-local Android capture and needs a device, wireless ADB and
+Chrome on the operator's own machine. `docs/android-debugging.md` is the written
+procedure and has not yet been executed against hardware — whoever runs it first
+should correct whatever turns out to be wrong.
+
+Task 3 (Nub and Node 24 bootstrap) is the next task a container can actually
+do, and does not depend on Task 2. Node 24 is known good here: the Pages
+workflow builds on it, and `mise exec node@24 -- npm ci && npm run build` runs
+clean locally.
 
 ## Resuming From This Checkpoint
 
@@ -131,7 +213,7 @@ The approved design is committed as `f773bf5` in
 `docs/superpowers/specs/2026-09-13-wholesale-nx-nub-and-pwa-design.md`.
 The implementation plan is
 `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
-No implementation task from that plan has started.
+Task 1 of that plan is done; Tasks 2 through 10 have not started.
 
 Verified on 2026-09-13:
 

@@ -42,13 +42,22 @@
   wireless ADB.
 - Preserves existing hash routes and prompt-based service-worker updates.
 
-- [ ] Confirm the repository name and Pages Actions permissions, then add a workflow using `actions/upload-pages-artifact` and `actions/deploy-pages` with Node 24 and the currently supported package bootstrap until Task 3 replaces it.
-- [ ] Parameterize Vite `base` from the Pages deployment environment and make manifest, icon, service-worker, and precache URLs resolve below `/snake-ladders/` without changing native/Tauri paths.
-- [ ] Run `npm run build` and inspect `dist/manifest.webmanifest`, `dist/sw.js`, generated HTML, and icon URLs for root-absolute paths that would 404 on Pages.
-- [ ] Extend `scripts/drive-app.mjs` or its invocation so the built app is exercised under `/snake-ladders/` and hash routes survive refresh.
-- [ ] Document host-local capture: `adb pair`, `adb connect`, `adb install -r`, `adb logcat`, `chrome://inspect`, evidence directory contents, and the Codespace limitation.
-- [ ] Run `npm run build` and `node scripts/drive-app.mjs --base-path /snake-ladders/`; expected result is a successful build and no page errors, console errors, or horizontal overflow.
-- [ ] Commit: `feat: deploy pwa to github pages`.
+- [x] Confirm the repository name and Pages Actions permissions, then add a workflow using `actions/upload-pages-artifact` and `actions/deploy-pages` with Node 24 and the currently supported package bootstrap until Task 3 replaces it.
+- [x] Parameterize Vite `base` from the Pages deployment environment and make manifest, icon, service-worker, and precache URLs resolve below `/snake-ladders/` without changing native/Tauri paths.
+- [x] Run `npm run build` and inspect `dist/manifest.webmanifest`, `dist/sw.js`, generated HTML, and icon URLs for root-absolute paths that would 404 on Pages.
+- [x] Extend `scripts/drive-app.mjs` or its invocation so the built app is exercised under `/snake-ladders/` and hash routes survive refresh.
+- [x] Document host-local capture: `adb pair`, `adb connect`, `adb install -r`, `adb logcat`, `chrome://inspect`, evidence directory contents, and the Codespace limitation.
+- [x] Run `npm run build` and `node scripts/drive-app.mjs --base-path /snake-ladders/`; expected result is a successful build and no page errors, console errors, or horizontal overflow.
+- [x] Commit: `feat: deploy pwa to github pages`.
+
+> **Task 1 done, 2026-09-13.** Live at `https://enchyrn.github.io/snake-ladders/`
+> from Actions run `34758473488`. Two things the plan did not anticipate, both
+> recorded in `docs/handoff.md`: `workflow_dispatch` cannot fire a workflow that
+> is not yet on the default branch, and the `github-pages` environment refuses a
+> non-default branch until its deployment-branch policy is widened. Serving the
+> deployed site over HTTPS also turned Task 8/9's shared TLS relay from an
+> improvement into a hard blocker for network play in the browser — see the
+> handoff's open threads.
 
 ## Task 2: Complete Phase 1 Device Verification
 
