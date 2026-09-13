@@ -425,11 +425,32 @@ export class BoardScene {
     const height = this.canvas.clientHeight || 1
     this.renderer.setSize(width, height, false)
     this.camera.aspect = width / height
-    // Pull back on tall, narrow phone screens so the board still fits.
-    const portrait = height / width
-    this.camera.position.set(0, 11 + portrait * 2.2, 9.5 + portrait * 3.2)
-    this.camera.lookAt(0, 0, 0.4)
+
+    // Fit the board in BOTH axes. On a tall phone the binding constraint is
+    // the *horizontal* field of view, which is the narrow one; sizing from the
+    // vertical axis alone sliced the left and right columns off the board.
+    const span = this.size + 1.2 // board plus its plinth and a little air
+    const tilt = THREE.MathUtils.degToRad(56)
+    const vFov = THREE.MathUtils.degToRad(this.camera.fov)
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect)
+
+    // Viewed from above at `tilt`, the board's depth foreshortens by sin(tilt)
+    // while its width is unaffected.
+    const forWidth = span / 2 / Math.tan(hFov / 2)
+    const forDepth = (span * Math.sin(tilt)) / 2 / Math.tan(vFov / 2)
+    const distance = Math.max(forWidth, forDepth)
+
+    this.camera.position.set(0, Math.sin(tilt) * distance, Math.cos(tilt) * distance)
+    this.camera.lookAt(0, 0, 0)
     this.camera.updateProjectionMatrix()
+
+    // Fog has to track the camera: fixed distances tuned for one viewport
+    // swallow the whole board on another.
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = distance * 0.75
+      this.scene.fog.far = distance * 2.1
+    }
+    this.camera.far = distance * 3
   }
 
   dispose(): void {
