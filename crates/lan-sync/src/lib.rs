@@ -15,11 +15,13 @@ pub mod discovery;
 pub mod host;
 pub mod peer;
 pub mod protocol;
+pub mod session;
 
 pub use discovery::{Advertiser, Browser, FoundRoom, DISCOVERY_PORT};
 pub use host::Host;
 pub use peer::{Peer, PeerEvent};
 pub use protocol::{Beacon, Downstream, PeerInfo, Sequenced, Upstream, PROTOCOL_VERSION};
+pub use session::{RecordingSink, Session, SessionEvent, SessionSink, SessionStatus};
 
 /// Room codes avoid characters people mistype when reading them off a screen
 /// (no 0/O, no 1/I/L).

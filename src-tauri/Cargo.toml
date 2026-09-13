@@ -1,0 +1,30 @@
+[package]
+name = "snakes-ladders-mutation"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Snakes & Ladders: Mutation"
+rust-version = "1.77.2"
+
+# Its own workspace: the networking crate next door stays buildable without
+# the platform webview toolchain that Tauri needs.
+[workspace]
+
+[lib]
+# Required for the mobile targets: Tauri builds the app as a library and
+# generates a thin platform entry point around it.
+name = "snakes_ladders_mutation_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+lan-sync = { path = "../crates/lan-sync" }
+
+[features]
+# Used by `tauri dev` to enable the custom protocol on desktop.
+custom-protocol = ["tauri/custom-protocol"]
