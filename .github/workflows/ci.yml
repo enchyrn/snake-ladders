@@ -25,10 +25,10 @@ jobs:
       # scoped like the rest.
       - run: nub run lint
 
-      # Not scoped to game-web: its tsconfig includes only main.tsx and
-      # vite.config.ts, so a scoped typecheck covers no test file at all and a
-      # type error in a test reaches nobody — vitest transpiles without
-      # checking. Every project's typecheck runs, and the whole suite with it.
+      # Every project's typecheck runs, and the whole suite with it: vitest
+      # transpiles without checking, so a test file left out of the tsconfig
+      # that covers it has no typechecker at all and an error in it reaches
+      # nobody. Scoping this to one project reintroduces that hole.
       - run: nubx nx run-many -t typecheck,test,build
 
   rust:
