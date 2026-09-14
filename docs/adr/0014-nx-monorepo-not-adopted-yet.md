@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed — requested by the user, deliberately not done. Recorded so the
-decision is not silently dropped.
+Superseded by [ADR 0018](0018-nx-monorepo-adopted.md). This records why the
+split was deferred at the time; it was carried out later under that ADR.
 
 ## Context
 
