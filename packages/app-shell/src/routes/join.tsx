@@ -46,16 +46,18 @@ export const JoinScreen = () => {
         ),
       )
     } catch {
-      session.closeIf(mine)
-      setError(unexpected)
+      // `closeIf` reports whether this join still owned the session: a
+      // second tap can start another join before this one settles, and once
+      // that one has torn this client down and moved on, this continuation
+      // must not write its failure into a screen the player has left.
+      if (session.closeIf(mine)) setError(unexpected)
       return
     }
     // The reason, not the failure: a refused join says why — the room is
     // full, the code is wrong, the page may not open an insecure socket —
     // and every one of those is something the player can act on.
     if (Either.isLeft(joined)) {
-      session.closeIf(mine)
-      setError(joined.left.reason)
+      if (session.closeIf(mine)) setError(joined.left.reason)
       return
     }
     await navigate({ to: "/lobby" })

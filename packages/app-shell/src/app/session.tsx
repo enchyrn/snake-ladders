@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useRef, useState, type ReactNode } 
 import { RegistryContext } from "@effect-atom/atom-react"
 import { Effect } from "effect"
 import { MatchClient } from "../store/match-client"
-import { makeClientSlot } from "./client-slot"
+import { makeClientSlot, closeIfOwned } from "./client-slot"
 import { isTauri } from "@mutation/net/lan"
 import { makeTransport, type TransportKind } from "@mutation/net/factory"
 import type { TransportService } from "@mutation/net/transport"
@@ -29,11 +29,13 @@ interface SessionValue {
   readonly transport: (kind: TransportKind) => TransportService
   readonly close: () => void
   /**
-   * Tears the session down only if `client` is still the live one. A join that
-   * settles after the player has already joined elsewhere reaches this with a
-   * client that has been replaced, and must leave the live match alone.
+   * Tears the session down only if `client` is still the live one, and
+   * reports whether it was. A join that settles after the player has already
+   * joined elsewhere reaches this with a client that has been replaced, and
+   * must leave the live match alone — the return value lets the caller also
+   * skip reporting a failure into a screen the player has already left.
    */
-  readonly closeIf: (client: MatchClient) => void
+  readonly closeIf: (client: MatchClient) => boolean
 }
 
 const SessionContext = createContext<SessionValue | null>(null)
@@ -104,10 +106,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       slot.current.clear()
       teardown()
     },
-    closeIf: (owned) => {
-      if (!slot.current.clearIf(owned)) return
-      teardown()
-    },
+    closeIf: (owned) => closeIfOwned(slot.current, owned, teardown),
   }
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
