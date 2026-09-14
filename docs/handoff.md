@@ -282,20 +282,6 @@ Small, real, and none of them blocking. Recorded here because the scratch
 workspace that held them is deleted — a note in a gitignored directory is not
 a record.
 
-- **`session.closeIf` is untested.** `packages/app-shell/src/app/client-slot.ts`
-  has tests; the provider's `closeIf` in `app/session.tsx` does not. The gap is
-  specific: a `closeIf` written as `clearIf(owned); teardown()` would pass the
-  whole suite while still running `teardown()`, whose `Effect.runPromise(leave)`
-  closes the one shared `network` transport — killing the live session. That is
-  precisely the bug `closeIf` exists to prevent. There is no session-level test
-  file and no React renderer here (`@testing-library/react` is not a dependency,
-  vitest runs in `node`), so the way in is to test the slot-plus-teardown
-  composition rather than the component.
-- **A losing join still calls `setError`.** `routes/join.tsx`'s `enter()` has no
-  pending guard, so a second tap starts a second join. Since the `closeIf` fix
-  the loser can no longer tear down the winner, but it still writes its failure
-  reason into a screen the player has already left. Gate it on the same
-  ownership test `enter()` already holds as `mine`.
 - **CI never runs a whole-tree `tsc --noEmit`.** `nub run typecheck` does; CI
   runs only per-project `nx run-many -t typecheck`. Adding `"__tests__"` to
   `apps/game-web/tsconfig.json` closed this for that one file, not the general
@@ -311,19 +297,11 @@ either as a real failure.
 - **`verify:ui` and `verify:ui:pages` can miss the narration on a cold start** —
   `log: []` and then a 30s timeout on "nothing was narrated after rolling". It
   is the narration timing, not the roll: the retry shows the entry present.
-- **`net:test` can hit `EADDRINUSE`** — `packages/net/src/__tests__/relay.test.ts`
-  and `harness.ts` bind fixed, incrementing ports, and `websocket.test.ts` adds
-  two hard-coded ones. This one now reddens CI: `nx run-many` covers
-  `net:test`, which the old `--projects=game-web` scope did not.
-
-  It is **not** only a slow-release race. Observed directly: two `nub run test`
-  invocations overlapping in the same container collide every time, with all
-  109 tests still passing and the run exiting 1 on unhandled teardown errors
-  (ports 46204 and 46311). Fixed ports cannot tolerate concurrency at all, so
-  any parallel runner hits this deterministically rather than occasionally. The
-  fix is to bind port 0 and read back what the OS assigns, in all three files —
-  a retry loop would only narrow the sequential case and would not help a
-  parallel one.
+(The `EADDRINUSE` flake that used to live here is fixed: the relay and every
+test that starts one now bind port 0 and read back what the OS assigns, so
+`startRelay` reports the real port through a getter. Verified by running two
+`nub run test` invocations concurrently — both exit 0 with 111 tests and no
+collision, where the fixed-port version failed every time.)
 
 ## Things that would otherwise have to be rediscovered
 
