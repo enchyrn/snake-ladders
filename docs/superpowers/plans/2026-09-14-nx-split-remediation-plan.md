@@ -244,18 +244,22 @@ Add to `packages/net/src/__tests__/websocket.test.ts`, inside the
     // rather than leave the player on a spinner forever.
     const { WebSocketServer } = await import("ws")
     const wss = new WebSocketServer({ port: 46_310 })
-    servers.push({ wss: { close: (cb?: () => void) => wss.close(cb) } })
     wss.on("connection", () => {})
+    try {
+      const transport = track(makeWebSocketTransport())
+      const started = Date.now()
+      const result = await Effect.runPromise(
+        Effect.either(transport.join("127.0.0.1:46310", { player_id: "x", name: "X" })),
+      )
 
-    const transport = track(makeWebSocketTransport())
-    const started = Date.now()
-    const result = await Effect.runPromise(
-      Effect.either(transport.join("127.0.0.1:46310", { player_id: "x", name: "X" })),
-    )
-
-    expect(Either.isLeft(result)).toBe(true)
-    if (Either.isLeft(result)) expect(result.left.reason).toMatch(/never answered/)
-    expect(Date.now() - started).toBeLessThan(20_000)
+      expect(Either.isLeft(result)).toBe(true)
+      if (Either.isLeft(result)) expect(result.left.reason).toMatch(/never answered/)
+      expect(Date.now() - started).toBeLessThan(20_000)
+    } finally {
+      // `makeRelayHarness` keeps its `servers` array private and only tracks
+      // relays it started itself, so this one closes its own listener.
+      await new Promise<void>((r) => wss.close(() => r()))
+    }
   }, 30_000)
 ```
 
@@ -603,16 +607,17 @@ Add to `crates/lan-sync/tests/session.rs`:
 /// until its own read timeout.
 #[test]
 fn host_shutdown_closes_a_socket_accepted_during_the_drain() {
+    // `session.rs` already imports TcpStream, Duration and the `local(port)`
+    // helper at file scope, and reaches Host as `lan_sync::Host` rather than
+    // importing it — match that rather than adding a second import style.
     use std::io::Read;
-    use std::net::TcpStream;
-    use std::time::Duration;
 
-    let mut host = Host::bind("RACE", 0, 6).expect("bind");
-    let port = host.local_port();
+    let mut host = lan_sync::Host::bind("RACE", 0, 6).expect("bind");
+    let port = host.port();
 
     let mut peers = Vec::new();
     for _ in 0..64 {
-        if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)) {
+        if let Ok(stream) = TcpStream::connect(local(port)) {
             stream
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .expect("timeout");
@@ -934,18 +939,31 @@ grep -rn "relay:relay" . --include=*.json --include=*.yml --include=*.md --inclu
 
 - [ ] **Step 2: Close the tsconfig alias asymmetry**
 
-`tsconfig.json` declares only wildcard `@mutation/engine/*`, while Vite and
-Vitest map the bare prefix too — so `import x from "@mutation/engine"` resolves
-at runtime and in tests but has no tsconfig path, and typechecks only because
-nobody has written it. Either add the bare specifiers to `paths`, or delete the
-bare aliases from `vitest.config.ts` and `apps/game-web/vite.config.ts` so all
-three tables agree. Prefer deleting: nothing imports the bare form.
+`tsconfig.json` declares only the wildcard `@mutation/engine/*`, while Vite and
+Vitest key on the bare `@mutation/engine` — so `import x from "@mutation/engine"`
+resolves at runtime and in tests but has no tsconfig path, and typechecks only
+because nobody has written it.
 
-```bash
-grep -rn '"@mutation/[a-z-]*"' packages apps --include=*.ts --include=*.tsx | grep -v node_modules || echo "no bare-specifier imports — safe to drop the bare aliases"
+**Close it by adding the bare specifiers to `paths`, not by deleting the Vite
+aliases.** A Vite alias key is a *prefix* match: `"@mutation/engine"` is exactly
+what resolves `@mutation/engine/types`. Deleting those keys breaks every
+cross-package import in the repo. Add to `tsconfig.json`:
+
+```json
+      "@mutation/engine": ["./packages/engine/src/index.ts"],
 ```
 
-Keep `@mutation/relay`, which is deliberately a bare specifier for a single
+only for packages that actually have a bare entry point. Check first:
+
+```bash
+for p in engine net render ui app-shell; do
+  printf "%-10s " "$p"; ls packages/$p/src/index.ts 2>/dev/null || echo "(no index.ts — leave the wildcard alone)"
+done
+```
+
+If no package has an `index.ts`, there is nothing to add and the asymmetry is
+inert — record that in the handoff and move on rather than inventing entry
+points. Keep `@mutation/relay` as it is: deliberately a bare specifier for one
 file.
 
 - [ ] **Step 3: Define each command once**
