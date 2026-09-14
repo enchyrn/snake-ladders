@@ -287,6 +287,40 @@ a record.
   `apps/game-web/tsconfig.json` closed this for that one file, not the general
   case: the next test file added to a project whose tsconfig omits it reopens
   the same hole silently.
+- **`packages/net/src/__tests__/harness.ts` hand-writes `startRelay`'s return
+  shape** as a cast rather than importing a type. Typecheck is clean, but the
+  shape is now duplicated in two files and `startRelay` has already changed
+  once (gaining the `port` getter and `listening`). It will drift.
+
+## Follow-ups, in the order worth doing them
+
+Everything outstanding, in one place, so a fresh session does not have to
+assemble it from the sections above. Two are real work, one is a decision only
+the project owner can make, and two are small.
+
+1. **Decide the `wss://` relay architecture.** Not codeable — see open thread 1.
+   A page served over HTTPS may not open a `ws://` socket, and the browser
+   refuses before the connection leaves the tab, so on the deployed PWA
+   pass-and-play works and joining another device cannot, whether or not a
+   relay is running. Closing it needs a relay reachable over `wss://`, which
+   means a certificate, which means a public host — cutting against the promise
+   that the game never touches the internet. ADR 0012 and 0013 are the prior
+   art and this deserves its own. **It blocks Task 8** of
+   `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`, which is
+   otherwise the next task.
+2. **Close the `peer_addr()` hole in `host.rs`** — open thread 2, which records
+   the mechanism in full. A connection whose `peer_addr()` or `try_clone()`
+   fails is spawned into `serve_client` without ever entering `pending`, so
+   `shutdown`'s drain could never reach it, race or no race. Needs the accept
+   loop restructured so every accepted stream is tracked before any spawn.
+3. **Give CI a whole-tree typecheck**, per the first bullet above. Cheapest
+   shape is a `tsc --noEmit` step beside the existing `run-many`, since the
+   per-project configs are what leave the gaps.
+4. **Import `startRelay`'s type in `harness.ts`** instead of re-declaring it.
+5. **Add a pending guard to `JoinScreen`'s buttons.** The losing join can no
+   longer tear down the winner's session or report into a screen it has left,
+   so this is now ergonomics rather than correctness — but a second tap still
+   opens a second session for no reason.
 
 ## Known flakes
 
