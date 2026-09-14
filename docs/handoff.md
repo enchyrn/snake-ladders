@@ -1,7 +1,7 @@
 # Handoff
 
 State of the branch `claude/snake-ladders-cross-device-3uu177` as of
-2026-09-13, written so another session — or the same person on a different
+2026-09-14, written so another session — or the same person on a different
 machine — can pick it up without re-deriving anything.
 
 Tasks 1, 3, 4, 5, 6 and 7 of the Nx/Nub/PWA plan are complete. Task 1 deployed
@@ -9,9 +9,61 @@ the PWA and it was opened on a real device; that deployment also settled a
 question the plan had left open, and not in the direction anyone hoped — see
 open thread 1. Task 3 moved the toolchain to Nub and Node 24, which is the base
 Task 4's Nx migration sits on. Tasks 4 and 5 split the tree into `apps/` and
-`packages/` and wrapped the native and deployment commands in Nx targets; the
-review of that split is open thread 3. Tasks 6 and 7 audited the Effect and
-Rust layers. Task 2 remains untouched and hardware-blocked.
+`packages/` and wrapped the native and deployment commands in Nx targets. Tasks
+6 and 7 audited the Effect and Rust layers. Task 2 remains untouched and
+hardware-blocked.
+
+The Nx split (Tasks 4 and 5) shipped with real defects; a separate remediation
+plan (`.superpowers/sdd/2026-09-14-nx-split-remediation-plan/`) fixed all of
+them across eight tasks, each independently committed and reviewed:
+
+- **Restored the type gate.** `build` and `pages-build` had been reduced to a
+  bare `vite build` by the split; `tsc --noEmit &&` is back in front of both,
+  so Pages deploys and Tauri's `beforeBuildCommand` no longer ship with no
+  typecheck (`1b498ec`).
+- **CI typechecks the whole tree again.** `nx run-many` was scoped to
+  `--projects=game-web`, which typechecked 39 production files and zero
+  tests; that scope is gone (`1dbf238`).
+- **The websocket handshake no longer hangs forever.** `connect` settles on
+  the relay's `welcome` frame, and a relay that accepts the socket then says
+  nothing left the Effect pending with no timeout. Bounded at 10s (`09d7f4c`),
+  then hardened with a socket-identity guard after review found that an
+  abandoned attempt's timer could otherwise silently close its *replacement*
+  and kill a live match's transport with nothing emitted on `statuses`
+  (`8b5b477`).
+- **A failed join no longer disposes the wrong client.** `SessionProvider.close`
+  read the `client` state value captured by the render that built the
+  handler, so a failed join tore down the *previous* client while the new one
+  kept writing into the shared atom. Lifecycle moved into a `ClientSlot` held
+  in a ref (`5b0181d`).
+- **A narrower version of the host-shutdown race is closed.** `serve_client`
+  now observes `running` before it does anything else, and shuts its own
+  socket down if the host is already stopping. Measured by looping the test
+  binary directly (`cargo test` alone proves nothing about a race): 5 failures
+  in 2000 runs before, 0 after; the strengthened regression test now detects a
+  reintroduced regression about 20% of the time per run, up from roughly 0.8%
+  (`6b7ccfd`, fixed in `9a1a519`). See open thread 2 for what this did *not*
+  close.
+- **ADR 0018** records the Nx adoption and its costs; ADR 0014, which still
+  called the migration "Proposed — deliberately not done" while this branch
+  had already done it, is superseded (`982a9f2`).
+- **Stale doc paths fixed and Tasks 4–7 ticked** with honest completion notes
+  in `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`
+  (`6753a55`).
+- **Config hygiene** (this task, `HEAD`): the byte-identical duplicate
+  `relay`/`serve` targets in `apps/relay/project.json` collapsed to one;
+  `verify:ui`/`verify:ui:pages` now delegate to the `tooling:verify-ui{,-pages}`
+  Nx targets instead of duplicating the `drive-app.mjs` invocation;
+  `.gitignore`'s stray blank lines and missing trailing newline are fixed;
+  and three stale paths left over from the split
+  (`scripts/lan-relay.mjs` → `apps/relay/lan-relay.mjs` in
+  `docs/playing-together.md`, `src/engine/` → `packages/engine/src/` in
+  `docs/rules.md`) are corrected. The tsconfig alias asymmetry
+  (`@mutation/engine/*` wildcard with no bare `@mutation/engine` path) turned
+  out to be inert: none of `engine`, `net`, `render`, `ui` or `app-shell` has
+  an `src/index.ts`, so there is no bare-specifier import for a missing path
+  to break and nothing to add — inventing an entry point just to close the
+  asymmetry would have been backwards.
 
 ## What works, and how it was verified
 
@@ -25,18 +77,23 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
   and linked in 8.9s, so `nub.lock` is self-sufficient and CI's first run has
   nothing else to resolve. `scripts/provision.sh` ran end to end in this
   container and exited 0.
-- **Engine** — pure deterministic reducer, four rule modules. 102 TypeScript
-  tests including a fuzz driver that plays whole random matches and asserts two
-  independent peers fold to byte-identical state, for every combination of
-  modules.
-- **Rust relay** — 20 tests over real TCP and UDP sockets: ordering agreement,
+- **Engine** — pure deterministic reducer, four rule modules. 62 TypeScript
+  tests in `packages/engine`, including a fuzz driver that plays whole random
+  matches and asserts two independent peers fold to byte-identical state, for
+  every combination of modules.
+- **Rust relay** — 21 tests over real TCP and UDP sockets: ordering agreement,
   gapless sequencing under load, mid-match catch-up, readmitting a device that
-  dropped off Wi-Fi, locked and full rooms, junk frames. **All of them pass.**
-  `a_peer_notices_the_host_going_away` was failing about 3 in 25 locally; Task 7
-  found the `host.rs` defect behind it and fixed it in `1d36bde`, which also
-  added the regression test that makes 20. Measured over 310 consecutive runs
-  of the test binary, zero failures. One narrower race survives — see open
-  thread 2.
+  dropped off Wi-Fi, locked and full rooms, junk frames. **All of them pass**
+  (`cargo test -p lan-sync`: 12 in `relay.rs`, 9 in `session.rs`), and so do
+  `cargo clippy -p lan-sync --all-targets -- -D warnings` and
+  `cargo fmt --all -- --check`. `a_peer_notices_the_host_going_away` was
+  failing about 3 in 25 locally; the remediation plan's Task 7 found the
+  `host.rs` defect behind it and fixed it, adding a regression test. Its own
+  Task 5 then closed a second, narrower accept-loop race the same way —
+  `serve_client` now observes `running` before doing anything else — verified
+  by looping the test binary directly rather than trusting a single
+  `cargo test` pass: 5 failures in 2000 runs before the fix, 0 after. A
+  further residual gap in `host.rs` remains — see open thread 2.
 - **WebSocket relay + browser transport** — tested against a live relay: two
   clients fold identically, a late joiner catches up, a refusal surfaces
   instead of hanging, and a deliberate two-socket race still leaves both
@@ -63,12 +120,23 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
   and OpenCode, reported the toolchain as partial, and exited 0. The
   `SessionStart` hook was run the same way and is idempotent.
 - **The whole CI command set runs in a cloud session**, despite `mise install`
-  reporting three tools failed: `tsc --noEmit`, `vitest` (101), `vite build`,
-  `cargo fmt --check`, `cargo clippy -D warnings` and `cargo test -p lan-sync`
-  (20, all passing) all run. Sessions ship `node`, `npm`, `cargo`, `rustc` and a JDK
-  already, so mise failing to *download* them costs nothing — and nub, which
-  mise resolves through `npm:@nubjs/nub`, is one of the tools it *can* fetch
-  here.
+  reporting three tools failed: `tsc --noEmit`, `vitest` (107, after the
+  remediation plan), `vite build`, `cargo fmt --check`, `cargo clippy -D
+  warnings` and `cargo test -p lan-sync` (21, all passing) all run. Sessions
+  ship `node`, `npm`, `cargo`, `rustc` and a JDK already, so mise failing to
+  *download* them costs nothing — and nub, which mise resolves through
+  `npm:@nubjs/nub`, is one of the tools it *can* fetch here.
+- **The full verification set, after the config hygiene pass** — every command
+  in the remediation plan's Task 8 exits 0: `nub run lint`, `nub run
+  typecheck`, `nub run test` (107 tests), `nub run build`, `nub run verify:ui`
+  (clean on the first run), a `PUBLIC_BASE_PATH=/snake-ladders` build followed
+  by `nub run verify:ui:pages` (needed one retry — see the known flake below),
+  a root-base rebuild to leave a normal `dist`, the three Rust checks, and
+  `nubx nx run-many -t lint,typecheck,test,build --skip-nx-cache` (needed one
+  retry — `net:test` hit a `EADDRINUSE` from a fixed port not yet released by
+  the OS from the previous test in the same file; reproduces standalone and is
+  unrelated to anything this task touched). `nub run relay &` printed a join
+  string and shut down cleanly on `kill`.
 - **OpenCode delegation** — verified end to end from a web session once
   `opencode.ai` was added to the environment's Custom allowlist. Both agents
   answer on their own models (`explore` on `mimo-v2.5-free`, `review` on
@@ -106,148 +174,66 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
   rather than desirable. A page served over HTTPS — which is precisely what
   makes it installable — may not open a `ws://` socket, and the browser refuses
   it before the connection leaves the tab, so it fails identically whether or
-  not a relay is running. `scripts/lan-relay.mjs` serves plain `ws` with no TLS,
-  and the native host is a raw TCP listener no browser can dial under any
+  not a relay is running. `apps/relay/lan-relay.mjs` serves plain `ws` with no
+  TLS, and the native host is a raw TCP listener no browser can dial under any
   scheme. So on the deployed site pass-and-play works and joining another device
   cannot, and no amount of fixing the client changes that. Closing it needs a
   relay reachable over `wss://`, which is an architecture decision before it is
   code: a certificate means a public host, which cuts against the promise that
   the game never touches the internet. ADR 0012 and 0013 are the prior art and
   this deserves its own ADR. Plan Tasks 8 and 9 cover the work.
-2. **A narrower version of the host-shutdown race survives.** The original
-  defect — `Host::shutdown` iterating `state.clients`, which `serve_client`
-  only populates *after* reading the peer's hello, so an accepted-but-
-  unregistered connection was never shut down — was fixed in `1d36bde` by
-  tracking accepted streams in a `pending` map that the accept loop fills
-  immediately and an RAII guard drains. `a_peer_notices_the_host_going_away`
-  went from 10 failures in 60 runs to **0 in 310**, measured by looping the
-  test binary directly rather than through `cargo test`, which is what masked
-  it originally.
+2. **A structural hole in `host.rs`'s accept loop, deliberately left open.**
+  This is distinct from the timing race the remediation plan's Task 5 closed
+  (see the "Rust relay" bullet above) — that fix cannot reach this one,
+  because it isn't a timing window at all.
 
-  What remains: the accept loop reads `running`, *then* takes the state lock to
-  insert into `pending`. A connection accepted in that window is still missed by
-  a concurrent `shutdown`, and because the accept loop now blocks on the very
-  mutex `shutdown` holds, it tends to insert just after the drain. Probed with
-  ~8000 sockets hammered at the shutdown instant: **777 sockets left without a
-  FIN before the fix, 19 after** — a ~40x reduction, not elimination. The
-  handoff's original second suggestion (have `serve_client` observe `running`
-  and close its own stream) would close it. Rare enough not to block a release;
-  recorded because the Rust audit's residual-limits section does not mention it
-  and its "accepted sockets are now tracked before handshake" reads stronger
-  than the code delivers.
+  When `stream.peer_addr()` or the subsequent `stream.try_clone()` fails, the
+  accept loop (`host.rs`, around the `for incoming in listener.incoming()`
+  block) still spawns the connection into `serve_client` — it just never
+  inserts it into the `pending` map first. `shutdown`'s drain only walks
+  `pending`, so a connection that took this path is unreachable to it
+  regardless of timing: there is no race to lose, because it was never in the
+  set being raced over. Closing it means restructuring the accept loop so a
+  registration failure either retries, is itself tracked, or the connection is
+  refused outright — any of which is more than a config-hygiene task should
+  take on, so it stays open. `peer_addr()`/`try_clone()` failing at all should
+  be rare (the socket was just accepted), which is presumably why it survived
+  the Task 5 review, but "rare" is not "impossible" and the drain's contract —
+  every accepted socket gets shut down — is currently false for this path.
 
-  Smaller Rust notes from the same review: `pending` is keyed by `SocketAddr`,
-  so a reused peer port could let one connection's guard evict another's entry;
-  a failed `peer_addr()` silently skips registration; and the accept path now
-  takes the state mutex on every accept, coupling new joins to client writes.
-
-  The `pump_until(&peer, &mut sink, 0)` no-ops at `session.rs:32` and `:109` are
-  still there, deliberately — the fix went into `host.rs` with its own new
-  regression test, and the original test kept its race.
-3. **Defects left by the Nx split (Tasks 4 and 5).** The move is mechanically
-  tidy and the determinism contract came through intact — `packages/engine/src`
-  has zero `@mutation/*` imports, no `Math.random`/`Date.now`/`crypto.*`, and
-  every engine file moved with a 0-line diff — but it shipped four outright
-  breaks and left several architectural gaps. The breaks and both cycles are
-  fixed on this branch. Fixed: the PWA had lost all four icons
-  (`root` moved without a matching `publicDir`, so the repo-root `public/` was
-  orphaned; precache 13 → 5 and the manifest's own icon URLs 404'd, invisible
-  to `verify:ui` because a manifest icon is only fetched at install time), and
-  the Rust CI job called `nubx` on a runner with no nub setup step, so all
-  three cargo checks would have failed with command-not-found.
-
-  Also fixed: `app-shell:test` used to fail without running its 9 tests, and
-  `engine:test`/`net:test` passed only by accident. Every one was
-  `vitest run <pkg>/src/**/*.test.ts`, and `run-commands` shells out with
-  globstar off, so `**` collapsed to one level; engine's and net's tests happen
-  to sit at exactly that depth and app-shell's sit one deeper. The dangerous
-  half was the silence — a partial glob match still exits 0, so adding
-  `packages/engine/src/rules/__tests__/*.test.ts` would have stopped running the
-  determinism guard without failing. All four targets now take a bare directory
-  path, which vitest treats as a path filter rather than a glob and which does
-  not depend on the shell. Verified by planting a test three levels down:
-  63 tests under the fix, `No test files found` under the old glob.
-
-  And `nx run-many` no longer recurses. The repo root was both the workspace
-  root and an inferred Nx project (`"nx": {}` in `package.json`) whose `test`
-  script was `nx run game-web:test`, so `run-many` reentered the graph it was
-  already inside. The root is no longer a project; `game-web:test` is scoped to
-  `apps/game-web` instead of running the whole suite, and `nub run test` is
-  plain `vitest run` again, which is what CLAUDE.md documents. The four project
-  test targets sum to exactly the 102 the whole suite runs (62 + 28 + 9 + 3),
-  and no test file sits outside them. `nx run-many -t typecheck,test,build` —
-  the plan's own Task 5 verification step — now exits 0.
-
-  The two cycles are also gone, and the `layer:*` tags now mean something.
-  `app-shell ⇄ ui` was production code — `ui/Banners.tsx` reached up for the
-  store's atoms and `ui/PwaPrompt.tsx` for `pwa/register`. Both are inverted:
-  `ui` exports `NoticeBannerView`/`DesyncBannerView` as pure views and declares
-  a `RegisterServiceWorker` port, and `app-shell` owns the subscriptions (in
-  leaves of its own, so a notice still never re-renders the 3D scene) and
-  supplies the implementation. `app-shell ⇄ net` was one test importing
-  `MatchClient`; those two `MatchClient` cases moved to
-  `packages/app-shell/src/store/__tests__/relay-fold.test.ts`, which is the side
-  allowed to depend on the other, sharing the relay harness from `net`.
-  `nx graph` is acyclic: engine ← {render, net, ui} ← app-shell ← game-web.
-
-  ESLint now exists solely to run `@nx/enforce-module-boundaries`
-  (`eslint.config.js`), with one `depConstraints` entry per layer naming what it
-  may reach down to. Parsing only — no stylistic rules, since tsc owns the rest.
-  Verified by planting each violation: `engine` importing `@mutation/ui/HUD`
-  fails with *Circular dependency between "engine" and "ui"*, and `ui` importing
-  the store fails with *Circular dependency between "ui" and "app-shell"*.
-  `nub run lint` runs it, every project has a `lint` target, and CI runs it
-  before the scoped `run-many`. Two raw cross-project paths became declared
-  aliases (`@mutation/relay`, `@mutation/tooling/*`) so the rule can see those
-  edges rather than have them reach past it. One declared exception:
-  `allow: ["@mutation/relay"]`, because Nx forbids importing an application at
-  all and `lan-relay.mjs` is both the runnable relay and the sequencer the
-  websocket tests run against — testing it against a fake would defeat the
-  point, since the risk being guarded is the two implementations drifting.
-  Splitting the sequencer out of the executable would retire the exception.
-
-  Still open:
-
-  - `build` **silently stopped typechecking**: it was `tsc --noEmit && vite
-    build`, it is now `nx run game-web:build` → plain `vite build`. Pages
-    deploys and Tauri's `beforeBuildCommand` now ship with no type gate, and
-    CLAUDE.md still documents it as "typecheck + production bundle".
-  - **CI typechecks zero test files.** `ci.yml` runs `--projects=game-web`,
-    whose tsconfig `include` is `["main.tsx","vite.config.ts"]` — 39 production
-    files, no tests. Vitest transpiles without typechecking, so a type error in
-    a test is now invisible everywhere.
-  - **No ADR, and ADR 0014 contradicts the tree.**
-    `docs/adr/0014-nx-monorepo-not-adopted-yet.md` still reads *"Proposed —
-    requested by the user, deliberately not done"* while this branch does
-    exactly that. The largest architectural change in the repo has no ADR
-    recording its costs.
-  - **Two stale comments that matter more than they look.**
-    `opencode.json:28` — the delegated review agent's own prompt says
-    "`src/engine/**` must be pure", a path that no longer exists, so the ADR
-    0016 reviewer is aimed at nothing. `crates/lan-sync/tests/relay.rs:271` —
-    the comment pinning the room-code encoding names `src/app/hooks.ts` and
-    `scripts/lan-relay.mjs`, both moved; CLAUDE.md calls this the invariant that
-    desyncs two devices on the first roll.
-  - **Tasks 4–7 checkboxes are all unticked** and neither audit commit added the
-    completion note CLAUDE.md asks for. Honest by omission — they claim nothing
-    false — but the record is absent, so trust the git log over the boxes.
-4. **Run host-local Android capture.** The Codespace cannot see the device.
+  For anyone tempted to close it by adding a regression test that asserts
+  `state.pending` ends up empty: the obvious objection is that this needs a
+  public accessor for private state, since `tests/session.rs` is a separate
+  crate. That objection is correct as far as it goes but doesn't end the
+  question — a public accessor would indeed not help `tests/session.rs`, but a
+  `#[cfg(test)] mod tests` written *inside* `host.rs` itself can read
+  `state.pending` directly, no new API required, because it compiles as part
+  of the same crate. Task 5's review considered this and still advised against
+  writing the test: it would have to reproduce the same failure-injection
+  problem (making `peer_addr()`/`try_clone()` fail on demand) and would then be
+  fighting the same sub-1%-per-run detection odds as the race it was modeled
+  on. Recorded so nobody re-derives either half of this from scratch.
+3. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
-5. **Complete the available Phase 1 device checks.** With one Android device,
+4. **Complete the available Phase 1 device checks.** With one Android device,
   test native behavior separately and use the laptop relay for the PWA. Do
   not claim Android-native-host to PWA interoperability yet.
-6. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
+5. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
   difficult to diagnose. The TypeScript half of this thread is done: no banner
   renders a raw stack trace any more. Four call sites took `String(cause)` on a
   rejected `Effect.runPromise`, which renders Effect's FiberFailure dump — a
   minified bundle offset in a production build, and a player saw exactly that.
   They now take the `TransportError`'s own `reason` through `Effect.either`.
-7. **The RPG layer.** Designed and approved, not built. See
+6. **The RPG layer.** Designed and approved, not built. See
   `docs/superpowers/specs/2026-09-13-rpg-layer-design.md`. Extend the fuzz
   driver before writing any class.
-8. **iOS and pinch-zoom validation.** Both require hardware or interaction
+7. **iOS and pinch-zoom validation.** Both require hardware or interaction
   tooling unavailable in this Codespace.
+
+Thread 3, the defects the Nx split (Tasks 4 and 5) shipped, is now closed —
+every item is fixed and recorded in the intro section above rather than
+re-described here.
 
 ## Things that would otherwise have to be rediscovered
 
@@ -307,7 +293,8 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
 
 - **Transport is chosen by what the player picked, then by platform.** The
   reverse order handed pass-and-play the LAN transport with no room open, and
-  broke the app on a real phone. `src/net/__tests__/factory.test.ts` pins it.
+  broke the app on a real phone.
+  `packages/net/src/__tests__/factory.test.ts` pins it.
 - **An action the host sequenced but a device refuses is not a desync.** Every
   device rejects it identically. It happens legitimately when two players act
   at once, because the relay orders by arrival and their sockets race.
@@ -333,9 +320,16 @@ Each agent framework reads its own configuration to follow the same rules:
 All three share one contract: read the repo docs before editing, get design
 approval before writing code, and verify before claiming completion.
 
-**Next checkpoint:** Tasks 1 and 3 are complete and their steps are ticked in
-`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`. Task 4 is
-next.
+**Next checkpoint:** Tasks 1, 3, 4, 5, 6 and 7 of
+`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` are done. The
+Task 4/5 Nx split shipped with defects, and a separate remediation plan
+(`.superpowers/sdd/2026-09-14-nx-split-remediation-plan/`, eight tasks, all
+committed and reviewed) fixed every one of them — see the intro section above
+for the list and open thread 2 for the one Rust gap that plan left open on
+purpose. **Task 8 of the Nx/Nub/PWA plan — the shared relay descriptor and QR
+transport phase — is next**, and it is blocked on open thread 1: the deployed
+PWA cannot reach any relay over `wss://` yet, which is an architecture decision
+(a certificate implies a public host) before it is code.
 
 Task 2 is next in the plan's order but is **hardware-blocked for a container
 session**: it is host-local Android capture and needs a device, wireless ADB and
@@ -348,17 +342,15 @@ plan, and ADR 0017. Nub `0.9.1` is the package manager, `nub.lock` is the
 lockfile, `package-lock.json` is gone, and every workflow bootstraps through
 `nubjs/setup-nub@v0`.
 
-Two things from it that Task 4 should expect. First, the isolated
-`node_modules` layout turns a phantom dependency into a build failure rather
-than a silent success — it caught `workbox-window`, which reaches the client
-bundle through `virtual:pwa-register` and had never been declared — so a
-cross-project import that only resolves today because everything is one flat
-tree will fail loudly the moment files move into `packages/`. That is the
-desired behaviour; the fix is always to declare the dependency, never to switch
-the linker back to hoisted. Second, `nx@23.2.1` is already a dependency and
-installs cleanly under nub, so Task 4 starts from a working `nx` binary.
-
-**Task 4 (the Nx workspace split) is the next task a container can do.**
+Two things from it that mattered for the Nx split (Tasks 4 and 5). First, the
+isolated `node_modules` layout turns a phantom dependency into a build failure
+rather than a silent success — it caught `workbox-window`, which reaches the
+client bundle through `virtual:pwa-register` and had never been declared — so a
+cross-project import that only resolved because everything was one flat tree
+failed loudly the moment files moved into `packages/`. That is the desired
+behaviour; the fix is always to declare the dependency, never to switch the
+linker back to hoisted. Second, `nx@23.2.1` was already a dependency and
+installed cleanly under nub, so the split started from a working `nx` binary.
 
 **The Tauri CLI is launched with `npx`, not `nubx`, and that is the one npm
 command left in the repository.** It is not an oversight — Actions run
@@ -380,9 +372,10 @@ The approved design is committed as `f773bf5` in
 `docs/superpowers/specs/2026-09-13-wholesale-nx-nub-and-pwa-design.md`.
 The implementation plan is
 `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
-Tasks 1, 3, 4, 5, 6 and 7 of that plan are done. Task 2 is hardware-blocked and
-Tasks 8 through 10 have not started. The Task 4/5 split landed with defects that
-are not yet fixed — read open thread 3 before building on it.
+Tasks 1, 3, 4, 5, 6 and 7 of that plan are done, and their checkboxes are
+ticked with completion notes. Task 2 is hardware-blocked and Tasks 8 through 10
+have not started. The Task 4/5 split's defects (open thread 3) were fixed by a
+separate remediation plan, which is itself complete — thread 3 is closed.
 
 ### The order to pick this up in
 
@@ -394,10 +387,13 @@ are not yet fixed — read open thread 3 before building on it.
    alone.
 3. Read this file and the design before touching code. The design is committed
    as `f773bf5`.
-4. **Start at open thread 3, then Task 8.** Tasks 1 and 3 are done and ticked;
-   Tasks 4 through 7 are done but their checkboxes were never ticked, so trust
-   the git log over the plan's boxes there. Task 2 is hardware-blocked and
-   cannot be done from a container, and Task 8 does not depend on it.
+4. **Start at open thread 1, then Task 8 of the Nx/Nub/PWA plan.** Threads 2
+   (partially — see its entry above for what remains) and 3 are closed. Task 2
+   is hardware-blocked and cannot be done from a container. Task 8 — the shared
+   relay descriptor and QR transport phase — needs open thread 1 resolved
+   first: a relay the deployed PWA can reach at all is an architecture decision
+   (ADR 0012 and 0013 are the prior art), not a coding task, so expect to write
+   an ADR before touching Task 8's code.
 5. Review each task's diff and test output before moving to the next. Keep
    `--auto` restricted to trusted, explicitly scoped prompts.
 

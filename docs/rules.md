@@ -1,7 +1,7 @@
 # Rules
 
 The authoritative description of what the engine actually does. Where this
-document and `src/engine/` disagree, the engine is right and this is a bug.
+document and `packages/engine/src/` disagree, the engine is right and this is a bug.
 
 ## The board
 

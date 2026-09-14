@@ -15,8 +15,8 @@
     "android": "tauri android dev",
     "ios": "tauri ios dev",
     "icons": "nx run tooling:icons",
-    "verify:ui": "node scripts/drive-app.mjs",
-    "verify:ui:pages": "node scripts/drive-app.mjs --base-path /snake-ladders",
+    "verify:ui": "nx run tooling:verify-ui",
+    "verify:ui:pages": "nx run tooling:verify-ui-pages",
     "relay": "nx run relay:serve",
     "delegate": "node scripts/delegate.mjs",
     "provision": "bash scripts/provision.sh"
