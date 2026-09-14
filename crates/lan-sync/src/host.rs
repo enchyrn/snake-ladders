@@ -216,22 +216,25 @@ fn send(stream: &mut TcpStream, frame: &Downstream) -> std::io::Result<()> {
 }
 
 fn serve_client(shared: Arc<Shared>, stream: TcpStream, peer_addr: Option<SocketAddr>) {
+    let mut pending = PendingClient {
+        shared: Arc::clone(&shared),
+        peer_addr,
+    };
+
     // The accept loop inserts into `pending` and only then spawns this, so a
     // connection that `shutdown`'s drain missed is necessarily one whose
-    // thread starts after `running` was cleared -- `shutdown` stores it before
+    // thread starts after `running` was cleared — `shutdown` stores it before
     // taking the lock. Checking here is what closes that window: otherwise
     // this thread parks in `read_line` on a socket nobody will ever shut down,
     // and the peer waits out its own timeout instead of being told the host
-    // went away.
+    // went away. The check sits after the guard so that returning still
+    // retires this connection's `pending` entry, which a `Host` kept alive
+    // past `shutdown` would otherwise hold forever.
     if !shared.running.load(Ordering::SeqCst) {
         let _ = stream.shutdown(Shutdown::Both);
         return;
     }
 
-    let mut pending = PendingClient {
-        shared: Arc::clone(&shared),
-        peer_addr,
-    };
     let Ok(read_half) = stream.try_clone() else {
         return;
     };

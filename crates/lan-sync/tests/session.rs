@@ -139,31 +139,52 @@ fn host_shutdown_closes_a_peer_still_in_handshake() {
 /// Hammering the accept path at the shutdown instant makes the window
 /// reachable; every peer must still see the socket close rather than block
 /// until its own read timeout.
+///
+/// Read a pass here as weak evidence, and a green `cargo test` as almost none.
+/// Each shutdown gets exactly one chance at the window — the single
+/// accept-loop iteration straddling the store — so sockets per round are not a
+/// lever and rounds are. Measured against the unfixed host, the forty rounds
+/// below fail 98 runs in 500, about one in five; at one round it was 5 in
+/// 2000, which is why the round count is deliberately high. What detects a
+/// regression is looping the built binary, where forty runs at this power miss
+/// it about once in ten thousand:
+///
+/// ```text
+/// BIN=$(cargo test -p lan-sync --test session --no-run --message-format=json \
+///   | sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' | tail -1)
+/// fails=0; for _ in $(seq 1 40); do "$BIN" \
+///   host_shutdown_closes_a_socket_accepted_during_the_drain --exact \
+///   >/dev/null 2>&1 || fails=$((fails+1)); done; echo "$fails / 40"
+/// ```
 #[test]
 fn host_shutdown_closes_a_socket_accepted_during_the_drain() {
-    let mut host = lan_sync::Host::bind("RACE", 0, 6).expect("bind");
-    let port = host.port();
-
-    let mut peers = Vec::new();
-    for _ in 0..64 {
-        if let Ok(stream) = TcpStream::connect(local(port)) {
-            stream
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .expect("timeout");
-            peers.push(stream);
-        }
-    }
-
-    host.shutdown();
-
     let mut wedged = 0;
-    for mut peer in peers {
-        let mut buf = [0u8; 1];
-        match peer.read(&mut buf) {
-            Ok(0) => {} // clean EOF: the host closed it
-            Ok(_) => {} // sent something, then closed
-            Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
-            Err(_) => wedged += 1, // WouldBlock: never closed at all
+    // Rounds, not sockets, are what press on the window; each is a few
+    // milliseconds, so the whole test still costs well under a second.
+    for _ in 0..40 {
+        let mut host = lan_sync::Host::bind("RACE", 0, 6).expect("bind");
+        let port = host.port();
+
+        let mut peers = Vec::new();
+        for _ in 0..64 {
+            if let Ok(stream) = TcpStream::connect(local(port)) {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .expect("timeout");
+                peers.push(stream);
+            }
+        }
+
+        host.shutdown();
+
+        for mut peer in peers {
+            let mut buf = [0u8; 1];
+            match peer.read(&mut buf) {
+                Ok(0) => {} // clean EOF: the host closed it
+                Ok(_) => {} // sent something, then closed
+                Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
+                Err(_) => wedged += 1, // WouldBlock: never closed at all
+            }
         }
     }
 
