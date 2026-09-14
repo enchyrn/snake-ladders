@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useRef, useState, type ReactNode } 
 import { RegistryContext } from "@effect-atom/atom-react"
 import { Effect } from "effect"
 import { MatchClient } from "../store/match-client"
+import { makeClientSlot } from "./client-slot"
 import { isTauri } from "@mutation/net/lan"
 import { makeTransport, type TransportKind } from "@mutation/net/factory"
 import type { TransportService } from "@mutation/net/transport"
@@ -41,6 +42,11 @@ const SessionContext = createContext<SessionValue | null>(null)
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [identity, setIdentity] = useState<LocalIdentity>(() => loadIdentity())
   const [client, setClient] = useState<MatchClient | null>(null)
+  // The slot is the live value; the state is only what the tree renders from.
+  // `open` and `close` are rebuilt every render, so reading `client` in them
+  // disposes whatever was current when that render ran, not what is current
+  // when they are called.
+  const slot = useRef(makeClientSlot<MatchClient>())
   const transports = useRef(new Map<TransportKind, TransportService>())
   const native = useMemo(() => isTauri(), [])
   // The one registry every `useAtomValue` in the tree reads through — a
@@ -68,19 +74,20 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     },
     transport,
     open: ({ role, seed, kind, config }) => {
-      client?.dispose()
-      const fresh = new MatchClient(
-        transport(kind),
-        { ...defaultConfig(seed), ...config },
-        role,
-        identity.playerId,
-        registry,
+      const fresh = slot.current.put(
+        new MatchClient(
+          transport(kind),
+          { ...defaultConfig(seed), ...config },
+          role,
+          identity.playerId,
+          registry,
+        ),
       )
       setClient(fresh)
       return fresh
     },
     close: () => {
-      client?.dispose()
+      slot.current.clear()
       setClient(null)
       for (const active of transports.current.values()) {
         Effect.runPromise(active.leave).catch(() => undefined)
