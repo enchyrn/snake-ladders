@@ -125,16 +125,29 @@ export const makeWebSocketTransport = (): TransportService => {
       }
       socket = ws
       let settled = false
+      let handshakeTimer: ReturnType<typeof setTimeout> | undefined
       const succeed = () => {
         if (settled) return
         settled = true
+        clearTimeout(handshakeTimer)
         resume(Effect.void)
       }
       const fail = (reason: string) => {
         if (settled) return
         settled = true
+        clearTimeout(handshakeTimer)
         resume(Effect.fail(new TransportError({ reason })))
       }
+
+      // `connect` settles on the relay's `welcome`, not on the socket
+      // opening, so a relay that completes the upgrade and then says nothing
+      // would leave this pending forever — a player stuck on a spinner with
+      // nothing to act on. Ten seconds is far past a LAN handshake and well
+      // inside a player's patience.
+      handshakeTimer = setTimeout(() => {
+        fail("the relay accepted the connection but never answered")
+        close()
+      }, 10_000)
 
       // The open event only means the socket connected; the relay may still
       // refuse the handshake, which arrives as a `rejected` frame.

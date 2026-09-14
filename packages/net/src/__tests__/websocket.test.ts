@@ -128,4 +128,29 @@ describe("WebSocket transport against a live relay", () => {
     expect(Either.isLeft(result)).toBe(true)
     if (Either.isLeft(result)) expect(result.left.reason).toMatch(/cannot host/)
   })
+
+  it("gives up on a relay that accepts the socket and never answers", async () => {
+    // A bare WebSocket server that completes the upgrade and then says
+    // nothing: the shape of a wedged or mismatched relay. Before `connect`
+    // waited for `welcome` this resolved on open; now it must time out
+    // rather than leave the player on a spinner forever.
+    const { WebSocketServer } = await import("ws")
+    const wss = new WebSocketServer({ port: 46_310 })
+    wss.on("connection", () => {})
+    try {
+      const transport = track(makeWebSocketTransport())
+      const started = Date.now()
+      const result = await Effect.runPromise(
+        Effect.either(transport.join("127.0.0.1:46310", { player_id: "x", name: "X" })),
+      )
+
+      expect(Either.isLeft(result)).toBe(true)
+      if (Either.isLeft(result)) expect(result.left.reason).toMatch(/never answered/)
+      expect(Date.now() - started).toBeLessThan(20_000)
+    } finally {
+      // `makeRelayHarness` keeps its `servers` array private and only tracks
+      // relays it started itself, so this one closes its own listener.
+      await new Promise<void>((r) => wss.close(() => r()))
+    }
+  }, 30_000)
 })
