@@ -20,6 +20,29 @@ export interface ClientSlot<T extends { dispose: () => void }> {
   clearIf: (expected: T) => boolean
 }
 
+/**
+ * The `closeIf` contract every session-like owner needs, factored out of
+ * `SessionProvider` so it can be exercised without rendering a React
+ * component: run `teardown` only when `clearIf` shows this caller still owns
+ * the slot. A version that calls `clearIf` and `teardown` unconditionally
+ * would pass every `ClientSlot` test (it never touches `held` itself) while
+ * still tearing down a live session out from under a caller that lost the
+ * race — the bug this composition exists to rule out.
+ *
+ * Returns whether `owned` still held the slot, so a caller that lost the
+ * race can also skip whatever it would otherwise have done after tearing
+ * down — reporting an error into a screen the player has already left, say.
+ */
+export const closeIfOwned = <T extends { dispose: () => void }>(
+  clientSlot: ClientSlot<T>,
+  owned: T,
+  teardown: () => void,
+): boolean => {
+  const owns = clientSlot.clearIf(owned)
+  if (owns) teardown()
+  return owns
+}
+
 export const makeClientSlot = <T extends { dispose: () => void }>(): ClientSlot<T> => {
   let held: T | null = null
   return {
