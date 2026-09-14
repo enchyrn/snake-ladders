@@ -189,7 +189,26 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
     })
   })
 
-  return { wss, sequencer, port }
+  // `port: 0` hands the bind to the OS; the real number only exists once the
+  // socket has actually bound, one tick after `listen()` returns, so a caller
+  // that needs it (tests, mainly, to dodge picking colliding fixed ports)
+  // awaits `listening` before reading `.port`.
+  const listening = new Promise((resolve, reject) => {
+    if (wss.address()) resolve()
+    else {
+      wss.once("listening", resolve)
+      wss.once("error", reject)
+    }
+  })
+
+  return {
+    wss,
+    sequencer,
+    listening,
+    get port() {
+      return wss.address()?.port ?? port
+    },
+  }
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())

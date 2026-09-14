@@ -11,19 +11,24 @@ import type { Committed, ConnectionStatus, TransportService } from "../transport
  * Not a `.test.ts`, so vitest collects the files that import it and not this.
  * It lives in `net` because that is where the transport is, and `app-shell`
  * may depend on `net` — the reverse is the cycle the layer tags forbid.
- *
- * Every caller passes its own `basePort`: vitest runs test files in separate
- * workers, so two files sharing one counter would race for the same port.
  */
-export const makeRelayHarness = (basePort: number) => {
+export const makeRelayHarness = () => {
   const servers: Array<{ wss: { close: (cb?: () => void) => void } }> = []
   const transports: TransportService[] = []
-  let nextPort = basePort
 
-  const relay = (opts: Record<string, unknown> = {}) => {
-    const started = startRelay({ port: nextPort++, room: "TEST", ...opts })
+  // `port: 0` asks the OS for a free port, so two relays never fight over one
+  // a previous test hasn't released yet — the fixed, incrementing ports this
+  // replaced flaked under exactly that race.
+  const relay = async (opts: Record<string, unknown> = {}) => {
+    const started = startRelay({ port: 0, room: "TEST", ...opts }) as {
+      wss: { close: (cb?: () => void) => void }
+      port: number
+      sequencer: { lock: () => void }
+      listening: Promise<void>
+    }
+    await started.listening
     servers.push(started)
-    return started as { port: number; sequencer: { lock: () => void } }
+    return started
   }
 
   const until = async (predicate: () => boolean, ms = 4000) => {

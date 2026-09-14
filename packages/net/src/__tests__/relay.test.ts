@@ -24,9 +24,11 @@ afterEach(async () => {
   )
 })
 
-let nextPort = 45_500
-const relay = (opts: Record<string, unknown> = {}) => {
-  const started = startRelay({ port: nextPort++, ...opts })
+// `port: 0` asks the OS for a free port, so two relays never fight over one
+// a previous test hasn't released yet.
+const relay = async (opts: Record<string, unknown> = {}) => {
+  const started = startRelay({ port: 0, ...opts })
+  await started.listening
   servers.push(started)
   return started
 }
@@ -145,7 +147,7 @@ describe("Sequencer", () => {
 
 describe("relay over a real socket", () => {
   it("gives every client the same ordered log", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await connect(port)
     const b = await connect(port)
     hello(a.socket, "a")
@@ -163,7 +165,7 @@ describe("relay over a real socket", () => {
   })
 
   it("announces the roster as players arrive", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await connect(port)
     hello(a.socket, "a")
     await until(() => a.frames.some((f) => f.t === "welcome"))
@@ -178,7 +180,7 @@ describe("relay over a real socket", () => {
   })
 
   it("tells a refused client why before closing", async () => {
-    const { port, sequencer } = relay()
+    const { port, sequencer } = await relay()
     const a = await connect(port)
     hello(a.socket, "a")
     await until(() => a.frames.some((f) => f.t === "welcome"))
@@ -191,7 +193,7 @@ describe("relay over a real socket", () => {
   })
 
   it("ignores junk and unauthenticated submits", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await connect(port)
     hello(a.socket, "a")
     await until(() => a.frames.some((f) => f.t === "welcome"))
@@ -209,7 +211,7 @@ describe("relay over a real socket", () => {
   })
 
   it("marks a peer disconnected when its socket drops", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await connect(port)
     hello(a.socket, "a")
     const b = await connect(port)

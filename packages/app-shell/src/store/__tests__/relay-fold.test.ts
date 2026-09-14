@@ -12,16 +12,14 @@ import { MatchClient } from "../match-client"
  * test that needs both belongs on the side that is allowed to depend on the
  * other. The harness comes from `net`, which that direction permits.
  *
- * Its own port range, because vitest runs test files in separate workers and
- * the websocket suite is already using 46_200 upward.
  */
-const { relay, joined, until, teardown } = makeRelayHarness(46_400)
+const { relay, joined, until, teardown } = makeRelayHarness()
 
 afterEach(teardown)
 
 describe("two devices folding one relay log", () => {
   it("gives two independent clients the identical fold", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await joined(port, "a")
     const b = await joined(port, "b")
 
@@ -53,7 +51,7 @@ describe("two devices folding one relay log", () => {
   })
 
   it("leaves both devices agreeing even when two sockets race", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await joined(port, "a")
     const b = await joined(port, "b")
     const clientA = new MatchClient(a.transport, defaultConfig(7), "peer", "a")

@@ -4,7 +4,7 @@ import { makeWebSocketTransport, refuseInsecure, relayUrl } from "../websocket"
 import type { Committed, ConnectionStatus } from "../transport"
 import { makeRelayHarness } from "./harness"
 
-const { relay, joined, until, track, teardown } = makeRelayHarness(46_200)
+const { relay, joined, until, track, teardown } = makeRelayHarness()
 
 afterEach(teardown)
 
@@ -55,7 +55,7 @@ describe("refuseInsecure", () => {
 
 describe("WebSocket transport against a live relay", () => {
   it("reports connected and delivers commits in order", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await joined(port, "a")
 
     await Effect.runPromise(a.transport.submit({ _tag: "Join", playerId: "a", name: "A" }))
@@ -66,7 +66,7 @@ describe("WebSocket transport against a live relay", () => {
   })
 
   it("hands a late joiner the history so it catches up", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await joined(port, "a")
     await Effect.runPromise(a.transport.submit({ _tag: "Join", playerId: "a", name: "A" }))
     await until(() => a.commits.length === 1)
@@ -77,7 +77,7 @@ describe("WebSocket transport against a live relay", () => {
   })
 
   it("does not resolve join before the late joiner history is delivered", async () => {
-    const { port } = relay()
+    const { port } = await relay()
     const a = await joined(port, "a")
     await Effect.runPromise(a.transport.submit({ _tag: "Join", playerId: "a", name: "A" }))
     await until(() => a.commits.length === 1)
@@ -94,7 +94,7 @@ describe("WebSocket transport against a live relay", () => {
   })
 
   it("surfaces the relay's refusal rather than hanging", async () => {
-    const { port, sequencer } = relay()
+    const { port, sequencer } = await relay()
     const a = await joined(port, "a")
     expect(a.statuses.at(-1)!.connected).toBe(true)
     sequencer.lock()
@@ -135,13 +135,20 @@ describe("WebSocket transport against a live relay", () => {
     // waited for `welcome` this resolved on open; now it must time out
     // rather than leave the player on a spinner forever.
     const { WebSocketServer } = await import("ws")
-    const wss = new WebSocketServer({ port: 46_310 })
+    const wss: InstanceType<typeof WebSocketServer> = await new Promise((resolve, reject) => {
+      const server: InstanceType<typeof WebSocketServer> = new WebSocketServer(
+        { port: 0 },
+        () => resolve(server),
+      )
+      server.once("error", reject)
+    })
     wss.on("connection", () => {})
     try {
+      const port = (wss.address() as { port: number }).port
       const transport = track(makeWebSocketTransport())
       const started = Date.now()
       const result = await Effect.runPromise(
-        Effect.either(transport.join("127.0.0.1:46310", { player_id: "x", name: "X" })),
+        Effect.either(transport.join(`127.0.0.1:${port}`, { player_id: "x", name: "X" })),
       )
 
       expect(Either.isLeft(result)).toBe(true)
@@ -163,10 +170,19 @@ describe("WebSocket transport against a live relay", () => {
     // only on the connection it was armed for, not on whatever `socket` now
     // points at.
     const { WebSocketServer } = await import("ws")
-    const wss = new WebSocketServer({ port: 46_311 })
-    wss.on("connection", () => {})
+    const deadWss: InstanceType<typeof WebSocketServer> = await new Promise(
+      (resolve, reject) => {
+        const server: InstanceType<typeof WebSocketServer> = new WebSocketServer(
+          { port: 0 },
+          () => resolve(server),
+        )
+        server.once("error", reject)
+      },
+    )
+    deadWss.on("connection", () => {})
+    const deadPort = (deadWss.address() as { port: number }).port
 
-    const { port } = relay()
+    const { port } = await relay()
     const transport = track(makeWebSocketTransport())
     const statuses: ConnectionStatus[] = []
     const commits: Committed[] = []
@@ -177,7 +193,7 @@ describe("WebSocket transport against a live relay", () => {
       // Deliberately not awaited: it only settles when its own 10s timer
       // fires, which happens later, while the second join below is live.
       const abandoned = Effect.runPromise(
-        Effect.either(transport.join("127.0.0.1:46311", { player_id: "x", name: "X" })),
+        Effect.either(transport.join(`127.0.0.1:${deadPort}`, { player_id: "x", name: "X" })),
       )
 
       await Effect.runPromise(
@@ -194,7 +210,7 @@ describe("WebSocket transport against a live relay", () => {
       await Effect.runPromise(transport.submit({ _tag: "Start" }))
       await until(() => commits.length === 1)
     } finally {
-      await new Promise<void>((r) => wss.close(() => r()))
+      await new Promise<void>((r) => deadWss.close(() => r()))
     }
   }, 20_000)
 })
