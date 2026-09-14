@@ -153,4 +153,48 @@ describe("WebSocket transport against a live relay", () => {
       await new Promise<void>((r) => wss.close(() => r()))
     }
   }, 30_000)
+
+  it("does not let an abandoned join's timer close the connection that replaced it", async () => {
+    // Reproduces a double-tap on a join row (join.tsx has no pending/disabled
+    // guard): a first join is left pending against a relay that never
+    // answers, and a second join on the same transport replaces it before
+    // the first join's own handshake timer fires. `socket` is shared across
+    // every `connect()` call on a transport, so the abandoned timer must act
+    // only on the connection it was armed for, not on whatever `socket` now
+    // points at.
+    const { WebSocketServer } = await import("ws")
+    const wss = new WebSocketServer({ port: 46_311 })
+    wss.on("connection", () => {})
+
+    const { port } = relay()
+    const transport = track(makeWebSocketTransport())
+    const statuses: ConnectionStatus[] = []
+    const commits: Committed[] = []
+    transport.onStatus((s) => statuses.push(s))
+    transport.onCommit((c) => commits.push(c))
+
+    try {
+      // Deliberately not awaited: it only settles when its own 10s timer
+      // fires, which happens later, while the second join below is live.
+      const abandoned = Effect.runPromise(
+        Effect.either(transport.join("127.0.0.1:46311", { player_id: "x", name: "X" })),
+      )
+
+      await Effect.runPromise(
+        transport.join(`127.0.0.1:${port}`, { player_id: "y", name: "Y" }),
+      )
+      await until(() => statuses.some((s) => s.connected))
+
+      // Waits out the abandoned attempt's timer -- the moment the bug fired.
+      const result = await abandoned
+      expect(Either.isLeft(result)).toBe(true)
+
+      // If the timer closed the live socket out from under it, this either
+      // throws (submit refuses a closed socket) or the commit never arrives.
+      await Effect.runPromise(transport.submit({ _tag: "Start" }))
+      await until(() => commits.length === 1)
+    } finally {
+      await new Promise<void>((r) => wss.close(() => r()))
+    }
+  }, 20_000)
 })

@@ -146,7 +146,11 @@ export const makeWebSocketTransport = (): TransportService => {
       // inside a player's patience.
       handshakeTimer = setTimeout(() => {
         fail("the relay accepted the connection but never answered")
-        close()
+        // `socket` is shared across every `connect()` call, so a second join
+        // started before this one settled has already replaced it — closing
+        // unconditionally here would tear down that live connection instead
+        // of the abandoned one this timer was armed for.
+        if (socket === ws) close()
       }, 10_000)
 
       // The open event only means the socket connected; the relay may still
