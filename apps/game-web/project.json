@@ -6,7 +6,7 @@
   "tags": ["layer:app"],
   "targets": {
     "lint": { "executor": "nx:run-commands", "options": { "command": "eslint apps/game-web" } },
-    "build": { "executor": "nx:run-commands", "options": { "command": "vite build --config apps/game-web/vite.config.ts" } },
+    "build": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p apps/game-web/tsconfig.json && vite build --config apps/game-web/vite.config.ts" } },
     "serve": { "executor": "nx:run-commands", "options": { "command": "vite --config apps/game-web/vite.config.ts" } },
     "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p apps/game-web/tsconfig.json" } },
     "test": { "executor": "nx:run-commands", "options": { "command": "vitest run apps/game-web" } }
