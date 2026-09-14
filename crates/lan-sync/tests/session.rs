@@ -147,7 +147,7 @@ fn host_shutdown_closes_a_peer_still_in_handshake() {
 /// below fail 98 runs in 500, about one in five; at one round it was 5 in
 /// 2000, which is why the round count is deliberately high. What detects a
 /// regression is looping the built binary, where forty runs at this power miss
-/// it about once in ten thousand:
+/// it about once in six thousand:
 ///
 /// ```text
 /// BIN=$(cargo test -p lan-sync --test session --no-run --message-format=json \

@@ -168,6 +168,12 @@ them across eight tasks, each independently committed and reviewed:
 
 ## Open threads, roughly in priority order
 
+These are numbered by position, so closing one renumbers the rest. Prose
+elsewhere in this file names a thread rather than citing its number, because a
+number that was right when it was written silently points at something else
+after the next closure.
+
+
 1. **A relay the deployed PWA can reach at all.** This was thread 6 and is now
   the top of the list, because deploying the site is what made it blocking
   rather than desirable. A page served over HTTPS — which is precisely what
@@ -230,7 +236,7 @@ them across eight tasks, each independently committed and reviewed:
 7. **iOS and pinch-zoom validation.** Both require hardware or interaction
   tooling unavailable in this Codespace.
 
-Thread 3, the defects the Nx split (Tasks 4 and 5) shipped, is now closed —
+The Nx split's own defects (Tasks 4 and 5) are now closed —
 every item is fixed and recorded in the intro section above rather than
 re-described here.
 
@@ -388,8 +394,8 @@ The implementation plan is
 `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
 Tasks 1, 3, 4, 5, 6 and 7 of that plan are done, and their checkboxes are
 ticked with completion notes. Task 2 is hardware-blocked and Tasks 8 through 10
-have not started. The Task 4/5 split's defects (open thread 3) were fixed by a
-separate remediation plan, which is itself complete — thread 3 is closed.
+have not started. The Task 4/5 split's defects were fixed by a separate
+remediation plan, which is itself complete, and that thread is retired.
 
 ### The order to pick this up in
 
@@ -405,7 +411,7 @@ separate remediation plan, which is itself complete — thread 3 is closed.
    2 stays open: the remediation plan closed the timing race in `host.rs` but
    left a structural hole in the accept loop on purpose, and its entry above
    says why and what closing it would cost — read it before touching that loop.
-   Thread 3, the Nx split's own defects, is closed. Task 2 is
+   The Nx split's own defects are closed and that thread is retired. Task 2 is
    hardware-blocked and cannot be done from a container. Task 8 — the shared
    relay descriptor and QR transport phase — needs open thread 1 resolved
    first: a relay the deployed PWA can reach at all is an architecture decision
