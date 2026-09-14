@@ -6,6 +6,6 @@
   "tags": ["layer:engine"],
   "targets": {
     "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p packages/engine/tsconfig.json" } },
-    "test": { "executor": "nx:run-commands", "options": { "command": "vitest run packages/engine/src/**/*.test.ts" } }
+    "test": { "executor": "nx:run-commands", "options": { "command": "vitest run packages/engine" } }
   }
 }

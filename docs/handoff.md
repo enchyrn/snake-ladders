@@ -147,28 +147,39 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
 3. **Defects left by the Nx split (Tasks 4 and 5).** The move is mechanically
   tidy and the determinism contract came through intact — `packages/engine/src`
   has zero `@mutation/*` imports, no `Math.random`/`Date.now`/`crypto.*`, and
-  every engine file moved with a 0-line diff — but four things are broken and
-  two are architectural. Fixed on this branch: the PWA had lost all four icons
+  every engine file moved with a 0-line diff — but it shipped four outright
+  breaks and left several architectural gaps. The four breaks are fixed on this
+  branch; the gaps are not. Fixed: the PWA had lost all four icons
   (`root` moved without a matching `publicDir`, so the repo-root `public/` was
   orphaned; precache 13 → 5 and the manifest's own icon URLs 404'd, invisible
   to `verify:ui` because a manifest icon is only fetched at install time), and
   the Rust CI job called `nubx` on a runner with no nub setup step, so all
   three cargo checks would have failed with command-not-found.
 
+  Also fixed: `app-shell:test` used to fail without running its 9 tests, and
+  `engine:test`/`net:test` passed only by accident. Every one was
+  `vitest run <pkg>/src/**/*.test.ts`, and `run-commands` shells out with
+  globstar off, so `**` collapsed to one level; engine's and net's tests happen
+  to sit at exactly that depth and app-shell's sit one deeper. The dangerous
+  half was the silence — a partial glob match still exits 0, so adding
+  `packages/engine/src/rules/__tests__/*.test.ts` would have stopped running the
+  determinism guard without failing. All four targets now take a bare directory
+  path, which vitest treats as a path filter rather than a glob and which does
+  not depend on the shell. Verified by planting a test three levels down:
+  63 tests under the fix, `No test files found` under the old glob.
+
+  And `nx run-many` no longer recurses. The repo root was both the workspace
+  root and an inferred Nx project (`"nx": {}` in `package.json`) whose `test`
+  script was `nx run game-web:test`, so `run-many` reentered the graph it was
+  already inside. The root is no longer a project; `game-web:test` is scoped to
+  `apps/game-web` instead of running the whole suite, and `nub run test` is
+  plain `vitest run` again, which is what CLAUDE.md documents. The four project
+  test targets sum to exactly the 102 the whole suite runs (62 + 28 + 9 + 3),
+  and no test file sits outside them. `nx run-many -t typecheck,test,build` —
+  the plan's own Task 5 verification step — now exits 0.
+
   Still open:
 
-  - `nx run app-shell:test` **fails and its 9 tests never run.** The target is
-    `vitest run packages/app-shell/src/**/*.test.ts`; `run-commands` shells out
-    with globstar off, so `**` collapses to one level and the literal string
-    reaches vitest as a filename filter. `engine:test` and `net:test` pass only
-    by accident — their tests sit at exactly two levels. Add
-    `packages/engine/src/rules/__tests__/*.test.ts` and the determinism guard
-    stops running **without failing loudly**, because a partial match still
-    exits 0.
-  - `nx run-many -t test` and `-t build` **exit 1**. Root `package.json` carries
-    `"nx": {}` while its scripts are `"test": "nx run game-web:test"`, so Nx
-    infers a project that recurses into itself. This is the plan's own Task 5
-    verification step.
   - **The project graph has two cycles**: `app-shell ⇄ ui` and
     `app-shell ⇄ net`. The ui side is production code, not test wiring —
     `packages/ui/src/Banners.tsx:2` imports `@mutation/app-shell/store/atoms`
