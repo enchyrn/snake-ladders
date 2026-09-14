@@ -30,7 +30,7 @@ turns "the engine may import nothing internal" from a comment into something
 
 **Cost:** there are three hand-maintained alias tables —
 `tsconfig.json:20-26`, `vitest.config.ts:7-16`, and
-`apps/game-web/vite.config.ts:90-94` — that must be edited in lockstep
+`apps/game-web/vite.config.ts:95-99` — that must be edited in lockstep
 whenever a project moves or a new one is added. No project has its own
 `package.json` and there is no workspace protocol, so nothing catches the
 three drifting apart except a build failing at whichever one was missed.

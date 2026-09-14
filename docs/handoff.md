@@ -87,9 +87,10 @@ them across eight tasks, each independently committed and reviewed:
   (`cargo test -p lan-sync`: 12 in `relay.rs`, 9 in `session.rs`), and so do
   `cargo clippy -p lan-sync --all-targets -- -D warnings` and
   `cargo fmt --all -- --check`. `a_peer_notices_the_host_going_away` was
-  failing about 3 in 25 locally; the remediation plan's Task 7 found the
-  `host.rs` defect behind it and fixed it, adding a regression test. Its own
-  Task 5 then closed a second, narrower accept-loop race the same way —
+  failing about 3 in 25 locally; the Rust audit (Task 7 of the Nx/Nub/PWA
+  plan) found the `host.rs` defect behind it and fixed it, adding a regression
+  test. The remediation plan's Task 5 then closed a second, narrower
+  accept-loop race the same way —
   `serve_client` now observes `running` before doing anything else — verified
   by looping the test binary directly rather than trusting a single
   `cargo test` pass: 5 failures in 2000 runs before the fix, 0 after. A
@@ -130,13 +131,11 @@ them across eight tasks, each independently committed and reviewed:
   in the remediation plan's Task 8 exits 0: `nub run lint`, `nub run
   typecheck`, `nub run test` (107 tests), `nub run build`, `nub run verify:ui`
   (clean on the first run), a `PUBLIC_BASE_PATH=/snake-ladders` build followed
-  by `nub run verify:ui:pages` (needed one retry — see the known flake below),
+  by `nub run verify:ui:pages` (needed one retry — see the known flakes below),
   a root-base rebuild to leave a normal `dist`, the three Rust checks, and
   `nubx nx run-many -t lint,typecheck,test,build --skip-nx-cache` (needed one
-  retry — `net:test` hit a `EADDRINUSE` from a fixed port not yet released by
-  the OS from the previous test in the same file; reproduces standalone and is
-  unrelated to anything this task touched). `nub run relay &` printed a join
-  string and shut down cleanly on `kill`.
+  retry — see the known flakes below). `nub run relay &` printed a join string
+  and shut down cleanly on `kill`.
 - **OpenCode delegation** — verified end to end from a web session once
   `opencode.ai` was added to the environment's Custom allowlist. Both agents
   answer on their own models (`explore` on `mimo-v2.5-free`, `review` on
@@ -234,6 +233,21 @@ them across eight tasks, each independently committed and reviewed:
 Thread 3, the defects the Nx split (Tasks 4 and 5) shipped, is now closed —
 every item is fixed and recorded in the intro section above rather than
 re-described here.
+
+## Known flakes
+
+Both reproduce standalone, both pass on a second run, and neither has ever
+been traced to a change in the diff that hit it. Re-run once before treating
+either as a real failure.
+
+- **`verify:ui` and `verify:ui:pages` can miss the narration on a cold start** —
+  `log: []` and then a 30s timeout on "nothing was narrated after rolling". It
+  is the narration timing, not the roll: the retry shows the entry present.
+- **`net:test` can hit `EADDRINUSE`** — `packages/net/src/__tests__/relay.test.ts`
+  binds fixed, incrementing ports, and the OS has not always released the
+  previous test's before the next test in the same file asks for it. This one
+  now reddens CI: `nx run-many` covers `net:test`, which the old
+  `--projects=game-web` scope did not.
 
 ## Things that would otherwise have to be rediscovered
 
@@ -387,9 +401,12 @@ separate remediation plan, which is itself complete — thread 3 is closed.
    alone.
 3. Read this file and the design before touching code. The design is committed
    as `f773bf5`.
-4. **Start at open thread 1, then Task 8 of the Nx/Nub/PWA plan.** Threads 2
-   (partially — see its entry above for what remains) and 3 are closed. Task 2
-   is hardware-blocked and cannot be done from a container. Task 8 — the shared
+4. **Start at open thread 1, then Task 8 of the Nx/Nub/PWA plan.** Open thread
+   2 stays open: the remediation plan closed the timing race in `host.rs` but
+   left a structural hole in the accept loop on purpose, and its entry above
+   says why and what closing it would cost — read it before touching that loop.
+   Thread 3, the Nx split's own defects, is closed. Task 2 is
+   hardware-blocked and cannot be done from a container. Task 8 — the shared
    relay descriptor and QR transport phase — needs open thread 1 resolved
    first: a relay the deployed PWA can reach at all is an architecture decision
    (ADR 0012 and 0013 are the prior art), not a coding task, so expect to write
