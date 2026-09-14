@@ -24,6 +24,11 @@ function withTrailingSlash(value: string): string {
 // must bind to the LAN address Tauri hands us rather than localhost.
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
+  // `root` moved to this app directory, and Vite derives `publicDir` from it.
+  // The PWA icons never moved, so without this they stop being copied and the
+  // manifest's own icon URLs 404 — which no gate catches, because a manifest
+  // icon is only fetched at install time.
+  publicDir: fileURLToPath(new URL("../../public", import.meta.url)),
   base,
   plugins: [
     react(),

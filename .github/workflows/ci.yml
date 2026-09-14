@@ -30,7 +30,7 @@ jobs:
     # requires the platform webview toolchain (webkit2gtk, etc.) plus, for
     # mobile targets, the Android NDK/SDK — that's handled by android.yml
     # instead, which builds the full app. Keeping this job to lan-sync means
-    # fast, toolchain-free feedback on every push/PR.
+    # feedback on every push/PR without the platform webview toolchain.
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +42,15 @@ jobs:
         with:
           # Root Cargo.toml's workspace is "." (members = ["crates/*"]).
           workspaces: "."
+
+      # The cargo checks are invoked through Nx targets, so this job needs the
+      # JS toolchain even though it compiles no JavaScript: nubx ships with
+      # nub, and nx resolves out of node_modules.
+      - uses: nubjs/setup-nub@v0
+        with:
+          nub-version: 0.9.1
+
+      - run: nub ci
 
       - run: nubx nx run native:cargo-fmt
 

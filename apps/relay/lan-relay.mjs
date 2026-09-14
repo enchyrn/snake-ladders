@@ -8,7 +8,7 @@
  * deliberately identical to the Rust host's, so a peer cannot tell which kind
  * of host it joined and the two remain interchangeable.
  *
- *   node scripts/lan-relay.mjs [--port 4455] [--room ABCD] [--capacity 6]
+ *   node apps/relay/lan-relay.mjs [--port 4455] [--room ABCD] [--capacity 6]
  */
 import { WebSocketServer } from "ws"
 import { networkInterfaces } from "node:os"

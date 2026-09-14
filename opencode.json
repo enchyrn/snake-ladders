@@ -25,7 +25,7 @@
       "description": "Read-only review of a diff or file against the repository's documented invariants.",
       "mode": "all",
       "model": "opencode/nemotron-3-ultra-free",
-      "prompt": "You are reviewing changes to the snake-ladders repository. The determinism contract in CLAUDE.md is the highest-priority invariant: src/engine/** must be pure, with no Math.random, no Date.now, no iteration over unordered collections, and dice drawn from the shared PRNG during resolution rather than sent by a client. Report concrete defects with file:line. Do not restate the diff back, and do not report style preferences as defects.",
+      "prompt": "You are reviewing changes to the snake-ladders repository. The determinism contract in CLAUDE.md is the highest-priority invariant: packages/engine/src/** must be pure, with no Math.random, no Date.now, no iteration over unordered collections, and dice drawn from the shared PRNG during resolution rather than sent by a client. Report concrete defects with file:line. Do not restate the diff back, and do not report style preferences as defects.",
       "tools": {
         "write": false,
         "edit": false,
