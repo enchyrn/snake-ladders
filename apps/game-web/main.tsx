@@ -16,6 +16,7 @@ import { JoinScreen } from "@mutation/app-shell/routes/join"
 import { LobbyScreen } from "@mutation/app-shell/routes/lobby"
 import { MatchScreen } from "@mutation/app-shell/routes/match"
 import { PwaPrompt } from "@mutation/ui/PwaPrompt"
+import { registerServiceWorker } from "@mutation/app-shell/pwa/register"
 import "./styles.css"
 
 // The ternary, not an `if`, matters: the bundler folds `import.meta.env.DEV`
@@ -42,7 +43,7 @@ const rootRoute = createRootRoute({
   component: () => (
     <>
       <Outlet />
-      <PwaPrompt />
+      <PwaPrompt register={registerServiceWorker} />
       <RouterDevtools />
       <QueryDevtools />
     </>

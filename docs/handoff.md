@@ -148,8 +148,8 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
   tidy and the determinism contract came through intact — `packages/engine/src`
   has zero `@mutation/*` imports, no `Math.random`/`Date.now`/`crypto.*`, and
   every engine file moved with a 0-line diff — but it shipped four outright
-  breaks and left several architectural gaps. The four breaks are fixed on this
-  branch; the gaps are not. Fixed: the PWA had lost all four icons
+  breaks and left several architectural gaps. The breaks and both cycles are
+  fixed on this branch. Fixed: the PWA had lost all four icons
   (`root` moved without a matching `publicDir`, so the repo-root `public/` was
   orphaned; precache 13 → 5 and the manifest's own icon URLs 404'd, invisible
   to `verify:ui` because a manifest icon is only fetched at install time), and
@@ -178,21 +178,36 @@ Rust layers. Task 2 remains untouched and hardware-blocked.
   and no test file sits outside them. `nx run-many -t typecheck,test,build` —
   the plan's own Task 5 verification step — now exits 0.
 
+  The two cycles are also gone, and the `layer:*` tags now mean something.
+  `app-shell ⇄ ui` was production code — `ui/Banners.tsx` reached up for the
+  store's atoms and `ui/PwaPrompt.tsx` for `pwa/register`. Both are inverted:
+  `ui` exports `NoticeBannerView`/`DesyncBannerView` as pure views and declares
+  a `RegisterServiceWorker` port, and `app-shell` owns the subscriptions (in
+  leaves of its own, so a notice still never re-renders the 3D scene) and
+  supplies the implementation. `app-shell ⇄ net` was one test importing
+  `MatchClient`; those two `MatchClient` cases moved to
+  `packages/app-shell/src/store/__tests__/relay-fold.test.ts`, which is the side
+  allowed to depend on the other, sharing the relay harness from `net`.
+  `nx graph` is acyclic: engine ← {render, net, ui} ← app-shell ← game-web.
+
+  ESLint now exists solely to run `@nx/enforce-module-boundaries`
+  (`eslint.config.js`), with one `depConstraints` entry per layer naming what it
+  may reach down to. Parsing only — no stylistic rules, since tsc owns the rest.
+  Verified by planting each violation: `engine` importing `@mutation/ui/HUD`
+  fails with *Circular dependency between "engine" and "ui"*, and `ui` importing
+  the store fails with *Circular dependency between "ui" and "app-shell"*.
+  `nub run lint` runs it, every project has a `lint` target, and CI runs it
+  before the scoped `run-many`. Two raw cross-project paths became declared
+  aliases (`@mutation/relay`, `@mutation/tooling/*`) so the rule can see those
+  edges rather than have them reach past it. One declared exception:
+  `allow: ["@mutation/relay"]`, because Nx forbids importing an application at
+  all and `lan-relay.mjs` is both the runnable relay and the sequencer the
+  websocket tests run against — testing it against a fake would defeat the
+  point, since the risk being guarded is the two implementations drifting.
+  Splitting the sequencer out of the executable would retire the exception.
+
   Still open:
 
-  - **The project graph has two cycles**: `app-shell ⇄ ui` and
-    `app-shell ⇄ net`. The ui side is production code, not test wiring —
-    `packages/ui/src/Banners.tsx:2` imports `@mutation/app-shell/store/atoms`
-    and `PwaPrompt.tsx:2` imports `@mutation/app-shell/pwa/register`. Task 4
-    said "reject cycles instead of hiding them with aliases"; aliases made them
-    resolve, so they became invisible instead of blocking. Latent only because
-    no library defines a real `build` target, and `nx.json:73` already sets
-    `dependsOn: ["^build"]`.
-  - **Nothing enforces the layer boundaries.** Every `project.json` carries
-    `layer:*` tags, but there is no ESLint in this repo at all — no config file,
-    zero occurrences in `package.json` — so `@nx/enforce-module-boundaries`, the
-    rule those tags exist to feed, is not installed. Nothing would stop
-    `packages/engine` importing `@mutation/ui/HUD` tomorrow.
   - `build` **silently stopped typechecking**: it was `tsc --noEmit && vite
     build`, it is now `nx run game-web:build` → plain `vite build`. Pages
     deploys and Tauri's `beforeBuildCommand` now ship with no type gate, and

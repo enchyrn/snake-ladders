@@ -62,6 +62,10 @@
       "cache": false,
       "inputs": ["default"]
     },
+    "lint": {
+      "cache": false,
+      "inputs": ["default", "^default"]
+    },
     "typecheck": {
       "inputs": ["default", "^default"]
     },

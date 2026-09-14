@@ -5,6 +5,7 @@
   "projectType": "library",
   "tags": ["layer:render"],
   "targets": {
+    "lint": { "executor": "nx:run-commands", "options": { "command": "eslint packages/render" } },
     "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p packages/render/tsconfig.json" } }
   }
 }

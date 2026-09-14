@@ -2,8 +2,8 @@ import { useNavigate } from "@tanstack/react-router"
 import { Effect, Either } from "effect"
 import { useState } from "react"
 import { unexpected } from "@mutation/net/transport"
-import { useSession } from "@mutation/app-shell/app/session"
-import { randomSeed } from "@mutation/app-shell/app/hooks"
+import { useSession } from "../app/session"
+import { randomSeed } from "../app/hooks"
 import { allModules, moduleBlurbs, moduleLabels } from "@mutation/engine/primitives"
 
 export const HomeScreen = () => {

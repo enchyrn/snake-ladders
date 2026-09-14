@@ -20,6 +20,11 @@ jobs:
 
       - run: nub ci
 
+      # `lint` is the boundary rule, and it reads the whole graph rather than
+      # one project's files, so it runs across every project rather than being
+      # scoped like the rest.
+      - run: nub run lint
+
       - run: nubx nx run-many -t typecheck,test,build --projects=game-web
 
   rust:

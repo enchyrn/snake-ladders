@@ -1,12 +1,12 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef } from "react"
-import { roomCode } from "@mutation/app-shell/app/hooks"
-import { useSession } from "@mutation/app-shell/app/session"
+import { roomCode } from "../app/hooks"
+import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
 import { seatColour } from "@mutation/render/palette"
-import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "@mutation/app-shell/store/atoms"
-import { DesyncBanner, NoticeBanner } from "@mutation/ui/Banners"
+import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "../store/atoms"
+import { DesyncBanner, NoticeBanner } from "../app/banners"
 
 export const LobbyScreen = () => {
   const session = useSession()

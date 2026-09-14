@@ -5,6 +5,7 @@
   "projectType": "application",
   "tags": ["layer:relay"],
   "targets": {
+    "lint": { "executor": "nx:run-commands", "options": { "command": "eslint apps/relay" } },
     "serve": { "executor": "nx:run-commands", "options": { "command": "node apps/relay/lan-relay.mjs" } },
     "relay": { "executor": "nx:run-commands", "options": { "command": "node apps/relay/lan-relay.mjs" } }
   }

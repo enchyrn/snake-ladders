@@ -1,13 +1,13 @@
 import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from "react"
 import { RegistryContext } from "@effect-atom/atom-react"
 import { Effect } from "effect"
-import { MatchClient } from "@mutation/app-shell/store/match-client"
+import { MatchClient } from "../store/match-client"
 import { isTauri } from "@mutation/net/lan"
 import { makeTransport, type TransportKind } from "@mutation/net/factory"
 import type { TransportService } from "@mutation/net/transport"
 import { loadIdentity, saveIdentity, type LocalIdentity } from "@mutation/net/identity"
 import { defaultConfig, type MatchConfig } from "@mutation/engine/types"
-import type { Role } from "@mutation/app-shell/store/match-client"
+import type { Role } from "../store/match-client"
 
 export type { TransportKind }
 

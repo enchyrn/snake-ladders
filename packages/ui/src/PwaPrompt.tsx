@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState } from "react"
-import { registerServiceWorker, type ApplyUpdate } from "@mutation/app-shell/pwa/register"
+
+/** Swaps in a waiting service worker and reloads to run under it. */
+export type ApplyUpdate = () => Promise<void>
+
+/**
+ * What this component needs from whoever owns service-worker registration.
+ *
+ * Declared here rather than imported from `app-shell` because `ui` sits below
+ * it: the component states the shape it depends on and the layer above
+ * supplies something matching, which is what keeps the dependency pointing
+ * downward. `app-shell`'s `registerServiceWorker` is the implementation, and
+ * tsc checks the two against each other at the call site.
+ */
+export interface RegisterServiceWorker {
+  (handlers: {
+    readonly onUpdateAvailable?: () => void
+    readonly onOfflineReady?: () => void
+  }): ApplyUpdate
+}
 
 /**
  * Registers the service worker and surfaces its two moments to the player.
@@ -10,17 +28,17 @@ import { registerServiceWorker, type ApplyUpdate } from "@mutation/app-shell/pwa
  * design exists to prevent. So the player chooses when to take it, and the
  * natural moment is between matches.
  */
-export const PwaPrompt = () => {
+export const PwaPrompt = ({ register }: { register: RegisterServiceWorker }) => {
   const [updateReady, setUpdateReady] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
   const applyRef = useRef<ApplyUpdate | null>(null)
 
   useEffect(() => {
-    applyRef.current = registerServiceWorker({
+    applyRef.current = register({
       onUpdateAvailable: () => setUpdateReady(true),
       onOfflineReady: () => setOfflineReady(true),
     })
-  }, [])
+  }, [register])
 
   // "Ready offline" is reassurance, not a decision — it retires on its own.
   useEffect(() => {

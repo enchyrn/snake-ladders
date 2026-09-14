@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import WebSocket from "ws"
 // @ts-expect-error -- a plain .mjs script with no type declarations; the
 // shapes it produces are asserted below rather than typed.
-import { Sequencer, startRelay } from "../../../../apps/relay/lan-relay.mjs"
+import { Sequencer, startRelay } from "@mutation/relay"
 
 interface Frame {
   t: string

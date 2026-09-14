@@ -10,6 +10,7 @@ nub run dev              # Vite dev server on :1420
 nub run dev -- --host    # also serve on the LAN, so phones can open it
 nub run test             # vitest, all suites
 nub run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
+nub run lint             # the layer boundaries, and nothing else
 nub run build            # typecheck + production bundle
 
 cargo test -p lan-sync   # Rust networking crate (real TCP/UDP sockets)
@@ -29,6 +30,15 @@ PUBLIC_BASE_PATH=/snake-ladders nub run build   # what the Pages workflow builds
 `nub install` reuses an existing `node_modules`; `nub ci` is the clean,
 lockfile-strict install CI runs. Node 24 is the floor, pinned in
 `.node-version` and `mise.toml`.
+
+`nub run lint` exists for one rule: `@nx/enforce-module-boundaries`, reading
+the `layer:*` tag on each project against the `depConstraints` in
+`eslint.config.js`. Each layer lists what it may reach *down* to and nothing
+lists a layer above itself, so `engine` importing the HUD, or `ui` importing
+the store, fails as a circular dependency rather than resolving quietly through
+an alias. There are no stylistic rules — tsc owns everything else. Both cycles
+this replaced were invisible until the rule existed, so run it after moving code
+between packages.
 
 nub links `node_modules` in an isolated layout with no hoisting, so a package
 imported but never declared in `package.json` fails to resolve instead of

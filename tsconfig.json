@@ -21,7 +21,9 @@
       "@mutation/net/*": ["./packages/net/src/*"],
       "@mutation/render/*": ["./packages/render/src/*"],
       "@mutation/ui/*": ["./packages/ui/src/*"],
-      "@mutation/app-shell/*": ["./packages/app-shell/src/*"]
+      "@mutation/app-shell/*": ["./packages/app-shell/src/*"],
+      "@mutation/relay": ["./apps/relay/lan-relay.mjs"],
+      "@mutation/tooling/*": ["./scripts/*"]
     }
   },
   "include": ["apps", "packages", "vite.config.ts"]

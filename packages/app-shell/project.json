@@ -5,6 +5,7 @@
   "projectType": "library",
   "tags": ["layer:app-shell"],
   "targets": {
+    "lint": { "executor": "nx:run-commands", "options": { "command": "eslint packages/app-shell" } },
     "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p packages/app-shell/tsconfig.json" } },
     "test": { "executor": "nx:run-commands", "options": { "command": "vitest run packages/app-shell" } }
   }

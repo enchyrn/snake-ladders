@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Effect, Either } from "effect"
 import { useEffect, useState } from "react"
-import { seedFromRoom } from "@mutation/app-shell/app/hooks"
-import { useSession } from "@mutation/app-shell/app/session"
+import { seedFromRoom } from "../app/hooks"
+import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
 
 export const JoinScreen = () => {
