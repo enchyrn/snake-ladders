@@ -14,8 +14,9 @@ Task 4's Nx migration sits on. Tasks 4 and 5 split the tree into `apps/` and
 hardware-blocked.
 
 The Nx split (Tasks 4 and 5) shipped with real defects; a separate remediation
-plan (`.superpowers/sdd/2026-09-14-nx-split-remediation-plan/`) fixed all of
-them across eight tasks, each independently committed and reviewed:
+plan (`docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`, commits
+`1b498ec`..`4bfb495`) fixed all of them across eight tasks plus a final fix
+wave, each independently committed and reviewed:
 
 - **Restored the type gate.** `build` and `pages-build` had been reduced to a
   bare `vite build` by the split; `tsc --noEmit &&` is back in front of both,
@@ -240,6 +241,67 @@ The Nx split's own defects (Tasks 4 and 5) are now closed —
 every item is fixed and recorded in the intro section above rather than
 re-described here.
 
+## Decisions taken during the remediation, and what they cost
+
+Nine judgment calls were made without a human in the loop while the remediation
+plan ran. Each is recorded with what it costs if it turns out wrong, so any of
+them can be reversed on purpose rather than rediscovered by accident.
+
+- **Bare Vite aliases kept, not deleted.** The plan said to delete them,
+  reasoning nothing imports the bare form. Wrong: a Vite alias key is a *prefix*
+  match, so `"@mutation/engine"` is what resolves `@mutation/engine/types`.
+  Deleting them breaks every cross-package import. Cost if wrong: a few unused
+  `paths` entries.
+- **The websocket timeout guards on socket identity.** The plan's literal
+  timeout body was `fail(...); close()`, but `close()` acts on whichever socket
+  is current, so an abandoned attempt could silently close its replacement.
+  Cost if wrong: a timed-out socket occasionally left to GC rather than closed.
+- **`peer_addr()` hole left open** (see open thread 2). Closing it means
+  restructuring the accept loop, well beyond bounding one window. Cost: a rare
+  wedged socket until someone takes it.
+- **Thread 2 stays open** even though the remediation plan's own brief said to
+  close it — the brief was written before the hole above was found. Cost: a
+  follow-up stays visible one cycle longer, which is the safe direction.
+- **The final whole-branch review was scoped** to the remediation's ten commits
+  rather than the branch's thirty-seven, which run to 1 MB because the branch
+  also carries the Nx split. Cost: this is what let two cross-task findings
+  through the package — the reviewer caught them anyway by reading the tree
+  directly rather than only the diff.
+- **The race test's power was raised** from ~0.8% to ~20% per run by increasing
+  rounds, after measurement showed sockets-per-round is not a lever: one
+  shutdown gets one chance at the window.
+- **Three plan defects were corrected before execution** (a test referencing a
+  private array, a Rust test using the wrong `Host` idiom, and the alias
+  deletion above), and a fourth during it — a prescribed assertion that was
+  unreachable. Written-down tests are not verified tests until someone runs
+  them against the implementation they specify.
+
+## Deferred, and why
+
+Small, real, and none of them blocking. Recorded here because the scratch
+workspace that held them is deleted — a note in a gitignored directory is not
+a record.
+
+- **`session.closeIf` is untested.** `packages/app-shell/src/app/client-slot.ts`
+  has tests; the provider's `closeIf` in `app/session.tsx` does not. The gap is
+  specific: a `closeIf` written as `clearIf(owned); teardown()` would pass the
+  whole suite while still running `teardown()`, whose `Effect.runPromise(leave)`
+  closes the one shared `network` transport — killing the live session. That is
+  precisely the bug `closeIf` exists to prevent. There is no session-level test
+  file and no React renderer here (`@testing-library/react` is not a dependency,
+  vitest runs in `node`), so the way in is to test the slot-plus-teardown
+  composition rather than the component.
+- **A losing join still calls `setError`.** `routes/join.tsx`'s `enter()` has no
+  pending guard, so a second tap starts a second join. Since the `closeIf` fix
+  the loser can no longer tear down the winner, but it still writes its failure
+  reason into a screen the player has already left. Gate it on the same
+  ownership test `enter()` already holds as `mine`.
+- **CI never runs a whole-tree `tsc --noEmit`.** `nub run typecheck` does; CI
+  runs only per-project `nx run-many -t typecheck`. Adding `"__tests__"` to
+  `apps/game-web/tsconfig.json` closed this for that one file, not the general
+  case: the next test file added to a project whose tsconfig omits it reopens
+  the same hole silently.
+
 ## Known flakes
 
 Both reproduce standalone, both pass on a second run, and neither has ever
@@ -343,8 +405,8 @@ approval before writing code, and verify before claiming completion.
 **Next checkpoint:** Tasks 1, 3, 4, 5, 6 and 7 of
 `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` are done. The
 Task 4/5 Nx split shipped with defects, and a separate remediation plan
-(`.superpowers/sdd/2026-09-14-nx-split-remediation-plan/`, eight tasks, all
-committed and reviewed) fixed every one of them — see the intro section above
+(`docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`, eight tasks
+plus a final fix wave, all committed and reviewed) fixed every one of them — see the intro section above
 for the list and open thread 2 for the one Rust gap that plan left open on
 purpose. **Task 8 of the Nx/Nub/PWA plan — the shared relay descriptor and QR
 transport phase — is next**, and it is blocked on open thread 1: the deployed
