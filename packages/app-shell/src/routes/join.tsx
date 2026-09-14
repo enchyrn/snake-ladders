@@ -32,7 +32,9 @@ export const JoinScreen = () => {
 
   const enter = async (addr: string, seed: number) => {
     setError(null)
-    session.open({ role: "peer", seed, kind: "network" })
+    // Held so the teardown paths below can only reach *this* join's client: a
+    // slow handshake can settle long after the player has tapped another room.
+    const mine = session.open({ role: "peer", seed, kind: "network" })
     let joined
     try {
       joined = await Effect.runPromise(
@@ -44,7 +46,7 @@ export const JoinScreen = () => {
         ),
       )
     } catch {
-      session.close()
+      session.closeIf(mine)
       setError(unexpected)
       return
     }
@@ -52,7 +54,7 @@ export const JoinScreen = () => {
     // full, the code is wrong, the page may not open an insecure socket —
     // and every one of those is something the player can act on.
     if (Either.isLeft(joined)) {
-      session.close()
+      session.closeIf(mine)
       setError(joined.left.reason)
       return
     }

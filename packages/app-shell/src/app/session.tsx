@@ -28,6 +28,12 @@ interface SessionValue {
   }) => MatchClient
   readonly transport: (kind: TransportKind) => TransportService
   readonly close: () => void
+  /**
+   * Tears the session down only if `client` is still the live one. A join that
+   * settles after the player has already joined elsewhere reaches this with a
+   * client that has been replaced, and must leave the live match alone.
+   */
+  readonly closeIf: (client: MatchClient) => void
 }
 
 const SessionContext = createContext<SessionValue | null>(null)
@@ -53,6 +59,14 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   // client built with any other registry would fold in a state room nobody
   // is watching.
   const registry = useContext(RegistryContext)
+
+  const teardown = () => {
+    setClient(null)
+    for (const active of transports.current.values()) {
+      Effect.runPromise(active.leave).catch(() => undefined)
+    }
+    transports.current.clear()
+  }
 
   const transport = (kind: TransportKind): TransportService => {
     const existing = transports.current.get(kind)
@@ -88,11 +102,11 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     },
     close: () => {
       slot.current.clear()
-      setClient(null)
-      for (const active of transports.current.values()) {
-        Effect.runPromise(active.leave).catch(() => undefined)
-      }
-      transports.current.clear()
+      teardown()
+    },
+    closeIf: (owned) => {
+      if (!slot.current.clearIf(owned)) return
+      teardown()
     },
   }
 

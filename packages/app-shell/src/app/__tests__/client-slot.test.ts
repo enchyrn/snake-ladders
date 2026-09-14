@@ -42,4 +42,32 @@ describe("makeClientSlot", () => {
     slot.clear()
     expect(log).toEqual(["only"])
   })
+
+  // Two joins overlap: the first stalls behind a handshake timer, the player
+  // taps a second room, and the first's continuation finally runs and tries to
+  // tear its session down. It no longer owns the slot, so tearing down would
+  // kill the match the player is actually in.
+  it("ignores a clear from a caller that no longer holds the slot", () => {
+    const log: string[] = []
+    const slot = makeClientSlot<{ id: string; dispose: () => void }>()
+    const first = slot.put(spy("first", log))
+    const second = slot.put(spy("second", log))
+    log.length = 0
+
+    expect(slot.clearIf(first)).toBe(false)
+
+    expect(log).toEqual([])
+    expect(slot.current).toBe(second)
+  })
+
+  it("clears when the caller still holds the slot", () => {
+    const log: string[] = []
+    const slot = makeClientSlot<{ id: string; dispose: () => void }>()
+    const only = slot.put(spy("only", log))
+
+    expect(slot.clearIf(only)).toBe(true)
+
+    expect(log).toEqual(["only"])
+    expect(slot.current).toBeNull()
+  })
 })
