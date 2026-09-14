@@ -45,7 +45,7 @@ fails. `nubx` replaces `npx`. Node 24 is the floor, pinned in `.node-version`.
 
 ## Determinism
 
-The engine (`src/engine/`) is pure: no `Math.random`, no `Date.now`, no
+The engine (`packages/engine/src/`) is pure: no `Math.random`, no `Date.now`, no
 iteration over unordered collections. Dice are drawn from the shared PRNG
 stream during resolution, never sent by a client. Break this and two phones
 silently play different games.

@@ -170,15 +170,35 @@
   installed Nx plugins support them; explicit targets are used only for relay,
   browser driving, icon generation, Cargo, Tauri, and deployment commands.
 
-- [ ] Install one compatible version set of `nx`, `@nx/workspace`, `@nx/react`, `@nx/vite`, and `@nx/js` through Nub.
-- [ ] Generate the workspace and projects with official Nx plugins; inspect inferred targets with `nx show project <name>` before adding handwritten configuration.
-- [ ] Move the engine first and repair imports until `engine` has no UI, renderer, transport, wall-clock, or random ambient dependency.
-- [ ] Move `net`, `render`, `ui`, and `app-shell` in dependency order; reject cycles instead of hiding them with aliases.
-- [ ] Move the Vite entrypoint into `apps/game-web` and preserve the Tauri `frontendDist` output contract.
-- [ ] Configure project tags and dependency constraints so engine cannot depend on higher-level projects and renderer cannot feed state back into engine.
-- [ ] Run `nx graph`, `nx show projects`, project-level typechecks, tests, and build; expected result is the same application and test behavior as baseline.
-- [ ] Run the determinism fuzz suite after every engine move and after the complete move.
-- [ ] Commit: `refactor: migrate typescript code to nx projects`.
+- [x] Install one compatible version set of `nx`, `@nx/workspace`, `@nx/react`, `@nx/vite`, and `@nx/js` through Nub.
+- [x] Generate the workspace and projects with official Nx plugins; inspect inferred targets with `nx show project <name>` before adding handwritten configuration.
+- [x] Move the engine first and repair imports until `engine` has no UI, renderer, transport, wall-clock, or random ambient dependency.
+- [x] Move `net`, `render`, `ui`, and `app-shell` in dependency order; reject cycles instead of hiding them with aliases.
+- [x] Move the Vite entrypoint into `apps/game-web` and preserve the Tauri `frontendDist` output contract.
+- [x] Configure project tags and dependency constraints so engine cannot depend on higher-level projects and renderer cannot feed state back into engine.
+- [x] Run `nx graph`, `nx show projects`, project-level typechecks, tests, and build; expected result is the same application and test behavior as baseline.
+- [x] Run the determinism fuzz suite after every engine move and after the complete move.
+- [x] Commit: `refactor: migrate typescript code to nx projects`.
+
+> **Task 4 done** (commit `33089bf`). Also shipped, undetected at the time:
+> the PWA lost all four icons — `root` moved to `apps/game-web` without a
+> matching `publicDir`, orphaning the repo-root `public/`, dropping precache
+> from 13 entries to 5, invisible to `verify:ui` because a manifest icon is
+> only fetched at install time — fixed in `37ef141`. The dependency-order move
+> was supposed to "reject cycles instead of hiding them with aliases", but
+> `app-shell ⇄ ui` and `app-shell ⇄ net` went in hidden: aliases resolve in
+> every direction and no boundary lint existed yet to reject either, so both
+> cycles shipped as production code and a test import; broken by inverting the
+> dependency (`ui` now exports pure views and a `RegisterServiceWorker` port,
+> `app-shell` owns the subscriptions) in `6c971b3`. And this task's own
+> verification step — project-level tests — was never actually run to a real
+> result: three of four `*:test` targets shelled out `src/**/*.test.ts`
+> through `nx:run-commands`, which runs with globstar off, so `**` collapsed
+> to one directory level. `app-shell:test` matched zero of its 9 tests and
+> still exited 0; `engine:test` and `net:test` only happened to sit at the one
+> depth the collapsed glob still reached. Fixed in `50e8597` by giving all
+> four targets a bare directory path instead of a glob. Every defect here was
+> found and fixed on `docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`.
 
 ## Task 5: Add Explicit Native and Deployment Orchestration Targets
 
@@ -197,12 +217,23 @@
   clippy, lan-sync tests, Tauri Android initialization/build, and Pages deploy.
 - Cargo and Tauri remain the implementation authorities behind those targets.
 
-- [ ] Add non-cached relay, icon, browser-drive, and external-deployment targets with declared inputs only where Nx can safely model them.
-- [ ] Add Cargo targets that invoke `cargo fmt --all -- --check`, `cargo clippy -p lan-sync --all-targets -- -D warnings`, and `cargo test -p lan-sync` without moving Cargo ownership into Nx.
-- [ ] Add Tauri targets that preserve Android manifest patching after `tauri android init --ci` and retain the pinned Java/NDK/Rust CI sequence.
-- [ ] Change Tauri frontend commands from npm scripts to the final Nx/Nub command only after the web target is green.
-- [ ] Run `nx run-many -t typecheck,test,build`, native targets, and the existing Android workflow; expected result is no loss of artifact or permission patching.
-- [ ] Commit: `build: orchestrate native and deployment targets with nx`.
+- [x] Add non-cached relay, icon, browser-drive, and external-deployment targets with declared inputs only where Nx can safely model them.
+- [x] Add Cargo targets that invoke `cargo fmt --all -- --check`, `cargo clippy -p lan-sync --all-targets -- -D warnings`, and `cargo test -p lan-sync` without moving Cargo ownership into Nx.
+- [x] Add Tauri targets that preserve Android manifest patching after `tauri android init --ci` and retain the pinned Java/NDK/Rust CI sequence.
+- [x] Change Tauri frontend commands from npm scripts to the final Nx/Nub command only after the web target is green.
+- [x] Run `nx run-many -t typecheck,test,build`, native targets, and the existing Android workflow; expected result is no loss of artifact or permission patching.
+- [x] Commit: `build: orchestrate native and deployment targets with nx`.
+
+> **Task 5 done** (commit `ad75af3`). Its own verification step ran on a CI
+> job with no `nub` setup step for the Cargo targets it just added: routing
+> `cargo fmt`/`clippy`/`test` through Nx means every Rust check now goes
+> through `nubx`, and the runner that had never needed the JS toolchain for
+> Rust before didn't have it — all three cargo checks would have failed
+> command-not-found on the first push. Fixed alongside the `publicDir`
+> regression in `37ef141`, on
+> `docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`. ADR 0018
+> records the JS-toolchain-gates-Rust dependency this created as a standing
+> cost, not a one-time bug.
 
 ## Task 6: Audit Effect Usage and Preserve Deterministic Boundaries
 
@@ -216,12 +247,23 @@
   cancellation/concurrency, allocation, or no-change.
 - Does not introduce Effect runtime state into the pure engine.
 
-- [ ] Inventory Effect schemas, error channels, runtime boundaries, resource scopes, cancellation, and concurrent transport/session operations.
-- [ ] Add or extend failing tests for any identified error, cancellation, duplicate-frame, gap, or late-commit behavior before implementation changes.
-- [ ] Apply only measured or test-backed improvements; leave stylistic rewrites documented as no-change decisions.
-- [ ] Run engine determinism tests, transport tests, full TypeScript tests, typecheck, and production build.
-- [ ] Write the audit conclusion and any rejected optimizations with reasons.
-- [ ] Commit: `audit: review effect runtime boundaries`.
+- [x] Inventory Effect schemas, error channels, runtime boundaries, resource scopes, cancellation, and concurrent transport/session operations.
+- [x] Add or extend failing tests for any identified error, cancellation, duplicate-frame, gap, or late-commit behavior before implementation changes.
+- [x] Apply only measured or test-backed improvements; leave stylistic rewrites documented as no-change decisions.
+- [x] Run engine determinism tests, transport tests, full TypeScript tests, typecheck, and production build.
+- [x] Write the audit conclusion and any rejected optimizations with reasons.
+- [x] Commit: `audit: review effect runtime boundaries`.
+
+> **Task 6 done** (commit `9e8de06`, `docs/audits/2026-09-13-effect-audit.md`).
+> The audit's own accepted fix — resuming `join` on the relay's `welcome`
+> frame rather than the socket's `open` event, to close a real ordering bug —
+> left `connect` with no path out when a relay completes the WebSocket upgrade
+> and then answers nothing: the `Effect.async` stayed pending forever and the
+> player sat on a spinner with nothing to act on. This hang did not exist
+> before the audit's fix and the audit did not list it. Bounded at ten seconds
+> in `09d7f4c`, with a further fix in `8b5b477` for a timer that could
+> otherwise close a live, superseded socket after an abandoned attempt. Both
+> on `docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`.
 
 ## Task 7: Audit Rust Integrity and Release Performance
 
@@ -235,12 +277,27 @@
 - Preserves opaque action sequencing and `SessionSink` behavior.
 - Produces release-profile evidence for every performance change.
 
-- [ ] Measure socket lifecycle, buffering, allocations, lock scope, shutdown, backpressure, frame parsing, and error propagation against existing tests.
-- [ ] Add a focused failing test before each correctness fix; add a benchmark only when it answers a concrete performance question.
-- [ ] Compare debug and release behavior with `cargo test -p lan-sync`, `cargo clippy -p lan-sync --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
-- [ ] Preserve the Tauri-independent `lan-sync` workspace and document hardware-only native validation.
-- [ ] Record findings, measurements, accepted fixes, and residual risks in the audit.
-- [ ] Commit: `audit: review rust transport integrity and performance`.
+- [x] Measure socket lifecycle, buffering, allocations, lock scope, shutdown, backpressure, frame parsing, and error propagation against existing tests.
+- [x] Add a focused failing test before each correctness fix; add a benchmark only when it answers a concrete performance question.
+- [x] Compare debug and release behavior with `cargo test -p lan-sync`, `cargo clippy -p lan-sync --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+- [x] Preserve the Tauri-independent `lan-sync` workspace and document hardware-only native validation.
+- [x] Record findings, measurements, accepted fixes, and residual risks in the audit.
+- [x] Commit: `audit: review rust transport integrity and performance`.
+
+> **Task 7 done** (commit `1d36bde`, `docs/audits/2026-09-13-rust-audit.md`).
+> The audit's own fix — tracking every accepted stream in a `pending` map
+> before `shutdown` drains it — closed the wide race
+> (`a_peer_notices_the_host_going_away`: 10 failures in 60 runs down to 0 in
+> 310) but left a narrower one standing: the accept loop reads `running`, then
+> takes the state lock to insert, and a connection accepted in that window is
+> still missed by a concurrent `shutdown` — which now blocks on the very mutex
+> the accept loop needs, so it tends to insert just after the drain. Measured
+> at ~8000 sockets hammered at the shutdown instant: 777 left without a FIN
+> before, 19 after — a ~40x reduction the audit's own residual-limits section
+> does not mention, though "accepted sockets are now tracked before handshake"
+> reads stronger than the code delivers. Closed by having `serve_client`
+> observe `running` itself, in `6b7ccfd` and `9a1a519`, on
+> `docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`.
 
 ## Task 8: Implement Shared Relay Descriptor and QR Transport Phase
 

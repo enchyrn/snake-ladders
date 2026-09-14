@@ -214,7 +214,7 @@ whose correctness rests on byte-identical state across devices (ADR 0016).
 
 ```bash
 nub run delegate -- "where is the dice stream threaded through resolve?"
-nub run delegate -- --agent review --file src/engine/resolve.ts "review this"
+nub run delegate -- --agent review --file packages/engine/src/resolve.ts "review this"
 ```
 
 Two agents are defined in `opencode.json`:
@@ -289,18 +289,28 @@ nub node install      # fetch the project's pinned Node
 
 ## Command Reference
 
-This table maps mise tasks to their underlying commands if you're not using mise:
+This table maps mise tasks to what `mise.toml` literally runs, not to the
+per-project Nx targets of the same name — `mise run test` and `mise run
+typecheck` predate the Nx split and were never rewired to route through it:
 
 | Task       | Mise Command       | Raw Commands                              |
 |------------|--------------------|-------------------------------------------|
 | Install    | —                  | `nub install` (or `nub ci`, as CI does)   |
-| Test       | `mise run test`    | `nubx nx run game-web:test && nubx nx run native:cargo-test` |
-| Type Check | `mise run typecheck` | `nubx nx run game-web:typecheck`       |
-| Lint       | `mise run lint`    | `nubx nx run native:cargo-clippy`         |
-| Format     | `mise run fmt`     | `nubx nx run native:cargo-fmt`            |
-| Build      | `mise run build`   | `nubx nx run game-web:build`              |
+| Test       | `mise run test`    | `nub run test && cargo test -p lan-sync`  |
+| Type Check | `mise run typecheck` | `nubx tsc --noEmit`                     |
+| Lint       | `mise run lint`    | `cargo clippy -p lan-sync --all-targets`  |
+| Format     | `mise run fmt`     | `cargo fmt --all`                         |
+| Build      | `mise run build`   | `nub run build` (→ `nubx nx run game-web:build`) |
 | Provision  | `mise run provision` | `bash scripts/provision.sh`             |
-| Delegate   | `mise run delegate` | `nub run delegate -- "<prompt>"`         |
+| Delegate   | `mise run delegate` | `node scripts/delegate.mjs`              |
+
+The Type Check row is the one worth reading twice: `mise run typecheck` runs
+`tsc --noEmit` against the **root** `tsconfig.json`, which includes every
+project (`apps`, `packages`) in one pass. The Nx target of the same name,
+`nubx nx run game-web:typecheck`, checks only `apps/game-web/tsconfig.json` —
+the app project's own file set, not the libraries it depends on. The two are
+not interchangeable: a type error inside `packages/engine` fails the mise
+task and passes the Nx one.
 
 ## Summary
 

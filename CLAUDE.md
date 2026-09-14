@@ -57,7 +57,7 @@ secure origin is not cosmetic: a service worker will not register without one,
 and a page will not refuse an insecure `ws://` without one — so neither the
 offline shell installing nor the LAN-join refusal can be reproduced on plain
 http, however carefully the page is driven. The serving rules are unit-tested
-in `src/__tests__/drive-app.test.ts` via the exported `serveDist`. It needs `nubx playwright install chromium`
+in `apps/game-web/__tests__/drive-app.test.ts` via the exported `serveDist`. It needs `nubx playwright install chromium`
 once. Run it after any UI change: the clipped board, the not-found router and
 the mis-styled disabled button were all found this way and none of them were
 visible in the source.
@@ -65,7 +65,7 @@ visible in the source.
 One file, or one test by name:
 
 ```bash
-nubx vitest run src/engine/__tests__/rules.test.ts
+nubx vitest run packages/engine/src/__tests__/rules.test.ts
 nubx vitest run -t "collapses a ladder into a snake"
 cargo test -p lan-sync --test session
 cargo test -p lan-sync a_late_joiner_catches_up
@@ -105,7 +105,7 @@ different games.
 
 Consequences that constrain ordinary-looking changes:
 
-- `src/engine/**` must be **pure**. No `Math.random`, no `Date.now`, no
+- `packages/engine/src/**` must be **pure**. No `Math.random`, no `Date.now`, no
   iteration over unordered collections, no floating point where an integer
   will do. The PRNG (`rng.ts`, xoshiro128\*\*) is carried *inside* match state
   and threaded through explicitly.
@@ -117,13 +117,16 @@ Consequences that constrain ordinary-looking changes:
   player leaves.
 - The renderer and the UI never feed anything back into the engine.
 
-`src/engine/__tests__/determinism.test.ts` is the guard: it plays whole random
+`packages/engine/src/__tests__/determinism.test.ts` is the guard: it plays whole random
 matches, folds the log on two independent instances, and asserts identical
 results for every combination of rule modules. Run it after any engine change.
 
 ## Architecture
 
-### Engine (`src/engine/`)
+The tree below is the Nx project split; [ADR 0018](docs/adr/0018-nx-monorepo-adopted.md)
+records why it was adopted and what it cost.
+
+### Engine (`packages/engine/src/`)
 
 A pure reducer. `applyAction(state, action): Effect<MatchState, RuleError>` is
 the only way state changes. `resolve.ts` folds one round; the four twists are
@@ -139,7 +142,7 @@ rules, add a test per combination rather than per module.
 the leaf vocabulary, and Effect schemas are built at module-init time, so a
 cycle leaves one side holding `undefined`.
 
-### Transport (`src/net/`)
+### Transport (`packages/net/src/`)
 
 One interface, `TransportService`, with three implementations chosen by
 `factory.ts`:
@@ -153,7 +156,7 @@ One interface, `TransportService`, with three implementations chosen by
 alone once handed pass-and-play the LAN transport with no room open, and every
 action failed. `factory.test.ts` pins that.
 
-`store/match-client.ts` folds the numbered log: strict sequence order, early
+`packages/app-shell/src/store/match-client.ts` folds the numbered log: strict sequence order, early
 commits buffered, duplicates ignored. It **never applies a local action
 optimistically** — a player's own roll takes the same round trip as everyone
 else's, because applying out of order diverges the PRNG stream.
@@ -163,7 +166,7 @@ desync**: every device rejects it identically and stays consistent (it happens
 when two players act at once). `desync` is reserved for a frame that cannot be
 decoded, which means mismatched builds.
 
-### Networking (`crates/lan-sync/` and `scripts/lan-relay.mjs`)
+### Networking (`crates/lan-sync/` and `apps/relay/lan-relay.mjs`)
 
 Two implementations of one sequencer: Rust for the native app, Node for
 browsers. Both only assign sequence numbers and fan the log out — **no game
@@ -176,11 +179,12 @@ command layer over it; the interesting part (the session pump) is behind the
 `SessionSink` trait so it is testable without a webview.
 
 **The room code is the match seed** — same code, same board, nothing sent. It
-is derived in three places (`crates/lan-sync/src/lib.rs`, `src/app/hooks.ts`,
-`scripts/lan-relay.mjs`) and a test pins the encoding to literals. If they ever
+is derived in three places (`crates/lan-sync/src/lib.rs`,
+`packages/app-shell/src/app/hooks.ts`, `apps/relay/lan-relay.mjs`) and a test
+pins the encoding to literals. If they ever
 diverge, two devices build different boards and desync on the first roll.
 
-### Renderer (`src/render/`)
+### Renderer (`packages/render/src/`)
 
 A pure function of match state plus a replayed timeline the engine already
 produced. An animation that stutters or is skipped cannot change a result.
