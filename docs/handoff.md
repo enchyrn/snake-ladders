@@ -312,10 +312,18 @@ either as a real failure.
   `log: []` and then a 30s timeout on "nothing was narrated after rolling". It
   is the narration timing, not the roll: the retry shows the entry present.
 - **`net:test` can hit `EADDRINUSE`** — `packages/net/src/__tests__/relay.test.ts`
-  binds fixed, incrementing ports, and the OS has not always released the
-  previous test's before the next test in the same file asks for it. This one
-  now reddens CI: `nx run-many` covers `net:test`, which the old
-  `--projects=game-web` scope did not.
+  and `harness.ts` bind fixed, incrementing ports, and `websocket.test.ts` adds
+  two hard-coded ones. This one now reddens CI: `nx run-many` covers
+  `net:test`, which the old `--projects=game-web` scope did not.
+
+  It is **not** only a slow-release race. Observed directly: two `nub run test`
+  invocations overlapping in the same container collide every time, with all
+  109 tests still passing and the run exiting 1 on unhandled teardown errors
+  (ports 46204 and 46311). Fixed ports cannot tolerate concurrency at all, so
+  any parallel runner hits this deterministically rather than occasionally. The
+  fix is to bind port 0 and read back what the OS assigns, in all three files —
+  a retry loop would only narrow the sequential case and would not help a
+  parallel one.
 
 ## Things that would otherwise have to be rediscovered
 
