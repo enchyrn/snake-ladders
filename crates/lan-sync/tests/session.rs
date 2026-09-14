@@ -134,6 +134,42 @@ fn host_shutdown_closes_a_peer_still_in_handshake() {
     assert_eq!(read, 0, "shutdown must close an unregistered socket");
 }
 
+/// A connection accepted in the window between `shutdown` storing `running`
+/// and draining `pending` is not in that map, so the drain cannot reach it.
+/// Hammering the accept path at the shutdown instant makes the window
+/// reachable; every peer must still see the socket close rather than block
+/// until its own read timeout.
+#[test]
+fn host_shutdown_closes_a_socket_accepted_during_the_drain() {
+    let mut host = lan_sync::Host::bind("RACE", 0, 6).expect("bind");
+    let port = host.port();
+
+    let mut peers = Vec::new();
+    for _ in 0..64 {
+        if let Ok(stream) = TcpStream::connect(local(port)) {
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("timeout");
+            peers.push(stream);
+        }
+    }
+
+    host.shutdown();
+
+    let mut wedged = 0;
+    for mut peer in peers {
+        let mut buf = [0u8; 1];
+        match peer.read(&mut buf) {
+            Ok(0) => {} // clean EOF: the host closed it
+            Ok(_) => {} // sent something, then closed
+            Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
+            Err(_) => wedged += 1, // WouldBlock: never closed at all
+        }
+    }
+
+    assert_eq!(wedged, 0, "{wedged} sockets were never closed by shutdown");
+}
+
 #[test]
 fn an_idle_room_does_not_repeat_the_same_roster() {
     let host = Session::host(10, "Ana", 4, false).expect("host should open");
