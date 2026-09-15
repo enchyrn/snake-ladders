@@ -67,9 +67,10 @@ wave, each independently committed and reviewed:
   asymmetry would have been backwards.
 
 A second plan (`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`,
-commits `0d85c8e`..`ff07c79`) then closed four of the five items the
+commits `0d85c8e`..`bdc0de7`) then closed four of the five items the
 remediation plan's own follow-up list had left open, each independently
-committed and reviewed:
+committed and reviewed, with a final whole-branch review and one fix wave
+(`bdc0de7`) on top:
 
 - **The structural hole in `host.rs`'s accept loop is closed** — this was
   open thread 2, distinct from the timing race the remediation plan's Task 5
@@ -290,9 +291,10 @@ the intro section for the mechanism and what closed it.
 
 ## Decisions taken during the remediation, and what they cost
 
-Nine judgment calls were made without a human in the loop while the remediation
-plan ran. Each is recorded with what it costs if it turns out wrong, so any of
-them can be reversed on purpose rather than rediscovered by accident.
+These were made without a human in the loop while the remediation plan ran.
+Each is recorded with what it costs if it turns out wrong, so any of them can
+be reversed on purpose rather than rediscovered by accident. (The bullets do
+not map one-to-one onto decisions — the last bundles four.)
 
 - **Bare Vite aliases kept, not deleted.** The plan said to delete them,
   reasoning nothing imports the bare form. Wrong: a Vite alias key is a *prefix*
@@ -325,6 +327,51 @@ them can be reversed on purpose rather than rediscovered by accident.
   unreachable. Written-down tests are not verified tests until someone runs
   them against the implementation they specify.
 
+## Decisions taken during the follow-ups plan, and what they cost
+
+Same rule as the section above: six calls made without a human in the loop
+while the follow-ups plan ran, each with what it costs if it turns out wrong.
+Two of them corrected the plan against itself, which is the pattern worth
+noticing — a plan's *rules* are worth more than its literal text, because the
+text is where the mistakes are.
+
+- **The `wss://` decision was left out of the plan.** It is the one follow-up
+  that is not codeable, and writing an ADR for it is the project owner's call.
+  Cost if wrong: this work lands without the thing that would make joining
+  work on the deployed PWA — which is already true today, and is the single
+  open item above.
+- **A test that would have passed against its own bug was rewritten before it
+  shipped.** Task 1's draft asserted the same pending-count at both joiner
+  checkpoints, so it could not tell "joiner not accepted yet" from "joiner
+  accepted and retired". The committed sequence is 3 → 4 → 3. Cost if wrong:
+  none — it is strictly stronger than what it replaced.
+- **`relay.test.ts`'s local helper was retyped**, beyond what the follow-up
+  asked for. Declaring a module means all five of its call sites must
+  typecheck, and that helper spread `Record<string, unknown>` into
+  `startRelay`, which only compiled while the import was `any`. Cost if wrong:
+  a typecheck failure, caught immediately.
+- **`Sequencer.join`'s `send` is typed to a frame union, against the plan's own
+  literal text.** The plan specified `send: (frame: unknown) => void`, which
+  does not compile under `strictFunctionTypes`; the first fix switched to a
+  bivariant method signature, which compiles but checks *nothing* — a handler
+  typed `(n: number) => void` was accepted. The plan's *rule* — fix the
+  declaration to match the `.mjs`, never bend a test — outranked its text, and
+  the `.mjs` sends exactly three shapes. Cost if wrong: a union too narrow for
+  a future frame, caught by typecheck.
+- **Commit trailers read the same attribution across the branch**, whichever
+  agent authored a commit. One arrived with a different one, on the reasoning
+  that a standing session instruction overrides a plan constraint. That is a
+  real conflict; it was settled for branch consistency and because the rule
+  against model identifiers in pushed artifacts sanctions one exact string
+  rather than "whichever is accurate". Cost if wrong: the trailers under-credit
+  which agent wrote which commit — recoverable, and visible in `git log`.
+- **The plan file keeps the trailer strings inside its own commit-step
+  blocks.** They are the sanctioned string quoted as a template, not a claim
+  about who wrote the document, and a plan forbidden from printing its own
+  required trailer cannot state its own requirement. Prose that *named* which
+  model did which work was removed. Cost if wrong: a grep for model names hits
+  the plan file and finds templates.
+
 ## Deferred, and why
 
 Small, real, and none of them blocking. Recorded here because the scratch
@@ -338,6 +385,19 @@ a record.
   by driving the built app instead. A real component test needs that
   environment added first, which is a decision worth taking on its own
   rather than as a side effect of an ergonomic fix.
+- **`JoinScreen`'s guard wrapper is held in a `useMemo`.** React documents
+  `useMemo` as a performance hint it may discard, so `useRef` or a lazy
+  `useState` initializer is the guaranteed-stable spelling. Left as is because
+  the failure mode is bounded: a discarded memo reverts to the old behaviour
+  (one extra session), which `session.closeIf` and `websocket.ts`'s socket
+  identity guard already handle safely.
+- **`RelayHandle.wss` is narrower than the real value.** It is declared
+  `{ close: (cb?: () => void) => void }`; the runtime value is a `ws`
+  `WebSocketServer`, and `@types/ws` is already a root devDependency, so
+  `import("ws").WebSocketServer` would resolve. A narrowing rather than a lie,
+  and `.close()` is all the two test files use — but it is the one field in
+  those declarations still hand-shaped, which is mildly against the point of
+  having written them.
 - **`scripts/*.mjs` is still untypechecked.** The whole-tree `tsc --noEmit`
   now covers `apps`, `packages` and `vitest.config.ts`. The scripts are plain
   JavaScript and `allowJs` is off, so they are checked only where a `.d.ts`
