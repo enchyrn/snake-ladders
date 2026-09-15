@@ -117,6 +117,26 @@ describe("Sequencer", () => {
     expect(seq.roster()).toHaveLength(0)
   })
 
+  it("a reconnect is not disconnected by the old socket's close", () => {
+    const seq = new Sequencer()
+    const firstFrames: Frame[] = []
+    const secondFrames: Frame[] = []
+
+    const first = seq.join({ playerId: "p1", name: "Ada", send: (f: Frame) => firstFrames.push(f) })
+    expect(first).toMatchObject({ ok: true })
+
+    const second = seq.join({ playerId: "p1", name: "Ada", send: (f: Frame) => secondFrames.push(f) })
+    expect(second).toMatchObject({ ok: true })
+
+    // The old socket's close arrives after the reconnect has already taken
+    // the seat — it must not be able to disable an entry it no longer owns.
+    seq.leave("p1", first.ok ? first.token : undefined)
+
+    secondFrames.length = 0
+    seq.submit({ n: 0 })
+    expect(commits(secondFrames)).toHaveLength(1)
+  })
+
   it("keeps broadcasting when a client's socket dies later", () => {
     const seq = new Sequencer()
     const good: Frame[] = []

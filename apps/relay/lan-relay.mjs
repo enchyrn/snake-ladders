@@ -93,18 +93,25 @@ export class Sequencer {
       return { ok: false, reason: "room is full" }
     }
 
-    this.#clients.set(playerId, { name, send, connected: true })
+    // playerId is client-supplied and reused on reconnect, so it is not enough
+    // to tell "the socket I just registered" from "whatever is in the map by
+    // now" — a token identifies this registration so a later exit can check
+    // it still owns the seat before touching it.
+    const token = Symbol(playerId)
+    this.#clients.set(playerId, { name, send, connected: true, token })
     try {
       send({ t: "welcome", player_id: playerId, room: this.#room, log: this.log })
     } catch {
       // The socket died between connecting and being welcomed. Drop the seat
       // rather than leaving a client in the roster that can never be written
-      // to — and never let it take the rest of the room down with it.
-      this.#clients.delete(playerId)
+      // to — and never let it take the rest of the room down with it. But
+      // only if nothing has since reconnected onto this same playerId; a
+      // losing race here must not delete a live entry it no longer owns.
+      if (this.#clients.get(playerId)?.token === token) this.#clients.delete(playerId)
       return { ok: false, reason: "could not reach client" }
     }
     this.#broadcast({ t: "roster", peers: this.roster() })
-    return { ok: true }
+    return { ok: true, token }
   }
 
   /** Number an action, append it, and fan it out. */
@@ -115,9 +122,12 @@ export class Sequencer {
     return entry
   }
 
-  leave(playerId) {
+  leave(playerId, token) {
     const client = this.#clients.get(playerId)
     if (!client) return
+    // A reconnect has taken this seat; the socket closing now is the old one,
+    // and disabling the live client would cut it out of every broadcast.
+    if (token !== undefined && client.token !== token) return
     client.connected = false
     this.#broadcast({ t: "roster", peers: this.roster() })
   }
@@ -148,6 +158,7 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
 
   wss.on("connection", (socket) => {
     let playerId = null
+    let token
     const send = (frame) => socket.send(JSON.stringify(frame))
 
     socket.on("message", (raw) => {
@@ -171,6 +182,7 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
           return
         }
         playerId = frame.player_id
+        token = result.token
         return
       }
 
@@ -182,10 +194,10 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
     })
 
     socket.on("close", () => {
-      if (playerId !== null) sequencer.leave(playerId)
+      if (playerId !== null) sequencer.leave(playerId, token)
     })
     socket.on("error", () => {
-      if (playerId !== null) sequencer.leave(playerId)
+      if (playerId !== null) sequencer.leave(playerId, token)
     })
   })
 

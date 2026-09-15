@@ -27,7 +27,9 @@ export interface SequencedEntry {
   readonly action: unknown
 }
 
-export type JoinResult = { readonly ok: true } | { readonly ok: false; readonly reason: string }
+export type JoinResult =
+  | { readonly ok: true; readonly token: symbol }
+  | { readonly ok: false; readonly reason: string }
 
 /** Every frame `Sequencer` itself sends. `startRelay`'s own `rejected` and
  * `pong` frames go straight to the socket, not through here. */
@@ -49,7 +51,7 @@ export declare class Sequencer {
     send: (frame: SequencerFrame) => void
   }): JoinResult
   submit(action: unknown): SequencedEntry
-  leave(playerId: string): void
+  leave(playerId: string, token?: symbol): void
 }
 
 export declare const lanAddresses: () => string[]
