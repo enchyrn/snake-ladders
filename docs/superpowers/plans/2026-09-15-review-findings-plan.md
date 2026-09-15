@@ -12,17 +12,20 @@
 
 ## STATUS — read this before doing anything
 
-**Tasks 1-7 are DONE, committed and pushed.** Their steps are ticked and each
-carries a `DONE — commit <sha>` note recording what the plan did not anticipate.
-Do not redo them. Verify with `git log --oneline origin/main..HEAD`.
+**ALL ELEVEN TASKS ARE DONE, reviewed, committed and pushed.** Every task's steps
+are ticked and each carries a `DONE — commit <sha>` note recording what the plan
+did not anticipate. Verify with `git log --oneline origin/main..HEAD`.
 
-**Tasks 8-11 and Finishing remain.** Start at Task 8.
+**Only the Finishing section below remains** — and its gates have been run (see
+its own notes).
 
-**One caveat that is not visible from the checkboxes:** Task 7 (`4dbf1ff`) was
-pushed WITHOUT an independent task review — the model session limit hit mid-plan.
-It is the only commit from this plan in that state. Review it before merging.
+**The single most important thing to read here is Task 9's note.** It records a
+defect in THIS PLAN, not in the code: Task 8 gave the relay a `lock` wire frame
+gated on a host identity that no browser client can ever hold, so that frame has
+no reachable production caller. Task 9 does close a native-LAN room. Do not read
+"a browser room can actually close" in `2efdd8d`'s commit message as accomplished.
 
-**Three deferred minors** are recorded in the notes under Tasks 3, 6 and 7.
+**Deferred minors** are recorded in the notes under Tasks 3, 6, 7, 8 and 9.
 
 This status block exists because the SDD ledger at `.superpowers/sdd/` is
 gitignored and does not travel with the branch. The plan file and
@@ -937,7 +940,7 @@ The consequence is the one the host check in `host.rs` describes: `Beacon.locked
 
 **Who may lock.** The relay is a bare sequencer with no notion of authority, and a `lock` frame honoured from anyone lets any peer freeze the room. The cheapest defensible rule, and the one that matches how a browser-hosted room actually works: the first successful join is the host, and only that player's `lock` is honoured. Record this in the commit message — it is a decision, not an obvious fact.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `packages/net/src/__tests__/relay.test.ts`:
 
@@ -981,7 +984,7 @@ it("sends a lock frame rather than doing nothing", async () => {
 })
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -990,7 +993,7 @@ nubx vitest run packages/net
 
 Expected: all three fail — the relay ignores the unknown frame, and `transport.lock` sends nothing.
 
-- [ ] **Step 3: Add the frame at both ends**
+- [x] **Step 3: Add the frame at both ends**
 
 In `apps/relay/lan-relay.mjs`, record the host on the first successful join (a `#hostId` field on `Sequencer`, set in `join` when `#clients.size === 1` after the insert), then extend the handler:
 
@@ -1017,7 +1020,7 @@ Expose `hostId` as a getter. In `packages/net/src/websocket.ts`, replace the stu
 
 Read `submit`'s exact error construction at `:226-236` and mirror it rather than copying this sketch — the error type's field names must match.
 
-- [ ] **Step 4: Update the declaration and run the suites**
+- [x] **Step 4: Update the declaration and run the suites**
 
 Add `hostId` to `Sequencer` in `apps/relay/lan-relay.d.ts`, and `{ readonly t: "lock" }` to the upstream frame union if one is declared there.
 
@@ -1027,7 +1030,7 @@ nub run typecheck
 nubx vitest run packages/net
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/relay/lan-relay.mjs apps/relay/lan-relay.d.ts packages/net/src/websocket.ts packages/net/src/__tests__
@@ -1049,8 +1052,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `2efdd8d`.** Relay gets `#hostId` (set AFTER the welcome try/catch, so a join that dies before welcome cannot claim host); `websocket.ts`'s `lock` goes from `Effect.void` to an `Effect.suspend` mirroring `submit`. **FOURTH vacuous test in this plan:** the brief's "non-host lock is ignored" test would have PASSED against the fully unfixed relay, because with no lock frame handled at all every lock is ignored, the host's included — the implementer caught it and rewrote it to also prove the host's own lock succeeds. DEFERRED MINOR, now fixed in Task 10: `#hostId` is never reassigned, so a dropped host permanently disables locking. **SEE TASK 9'S NOTE — this wire frame has no reachable production caller.**
 
+---
 ## Task 9: nothing calls `lock` when the match starts
 
 **Files:**
@@ -1070,7 +1074,7 @@ MSG
           onClick={() => client.send({ _tag: "Start" })}
 ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("locks the room when the host starts the match", () => {
@@ -1087,7 +1091,7 @@ it("locks the room when the host starts the match", () => {
 
 Add a `locked` flag to the existing fake transport, set by its `lock` implementation.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1096,7 +1100,7 @@ nubx vitest run packages/app-shell/src/store
 
 Expected: FAIL — `client.lock is not a function`.
 
-- [ ] **Step 3: Add the method and call it**
+- [x] **Step 3: Add the method and call it**
 
 In `match-client.ts`:
 
@@ -1124,7 +1128,7 @@ In `lobby.tsx`, on the host's Start button only:
           }}
 ```
 
-- [ ] **Step 4: Run the suites and drive the app**
+- [x] **Step 4: Run the suites and drive the app**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1136,7 +1140,7 @@ nub run build && nub run verify:ui
 
 `verify:ui` fails on console errors, page errors and horizontal overflow. The lobby is a screen it drives, so a thrown error in the new handler shows up here and nowhere else.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/app-shell/src/store/match-client.ts packages/app-shell/src/routes/lobby.tsx packages/app-shell/src/store/__tests__/match-client.test.ts
@@ -1153,8 +1157,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `8dcded4`.** `MatchClient.lock()` plus the Start-button call site; `verify:ui` ran clean (no console errors, no page errors, no horizontal overflow). Also carried the reworded `retireDeparted` comment. **IMPORTANT ARCHITECTURAL FINDING, and a defect in this plan rather than the code:** `role === "host"` can never be true on the websocket transport — `websocket.ts:220` returns `unsupported("host a match")`, `factory.ts` gives browsers the websocket transport, `home.tsx:39` sets `role: "host"` only after a successful `host()`, and `join.tsx:39` opens every join as `role: "peer"`. So a browser is always a peer and this guard never passes for a relay client. Task 9 genuinely closes a NATIVE-LAN room (Rust `net_lock`, same device that opened the socket); Task 8's relay frame stays unreachable from the UI. Deciding who may lock a relay room is a design question — it belongs with the relay-architecture decision, not a fix-up task. DEFERRED MINOR: the Start/lock ordering window is real but inherent and degrades into the documented "notice, not desync" path.
 
+---
 ## Task 10: a failed bind prints the success banner and then crashes
 
 **Files:**
@@ -1187,7 +1192,7 @@ The CLI never awaits it:
 
 So on `EADDRINUSE` — the overwhelmingly common failure, because the default port is fixed at 4455 — the user is told the room is listening, reads a join string that will never work, and *then* the process dies on an unhandled rejection. Under Node 24 an unhandled rejection is fatal by default, so the banner and the crash arrive a tick apart with nothing connecting them.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("reports a bind failure instead of resolving", async () => {
@@ -1203,7 +1208,7 @@ it("reports a bind failure instead of resolving", async () => {
 
 This one pins the library half, which already behaves correctly — it is here so the CLI fix has something to lean on and so a later change cannot quietly drop the rejection.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1212,7 +1217,7 @@ nubx vitest run -t "reports a bind failure"
 
 Expected: PASS. If it fails, the promise wiring is also broken and that is the first thing to fix.
 
-- [ ] **Step 3: Await the bind before claiming success**
+- [x] **Step 3: Await the bind before claiming success**
 
 ```js
   const relay = startRelay({ port, room, capacity })
@@ -1235,7 +1240,7 @@ Expected: PASS. If it fails, the promise wiring is also broken and that is the f
 
 Top-level `await` is available — the file is an ES module and Node 24 is the floor. Note the banner now reads `relay.port` rather than the requested `port`, so `--port 0` prints the number the OS actually assigned instead of `0`.
 
-- [ ] **Step 4: Prove it by hand**
+- [x] **Step 4: Prove it by hand**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1247,7 +1252,7 @@ kill %1
 
 Expected: the second invocation prints the "already in use" line, exits 1, and never prints a join string. Paste the output into the commit message.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/relay/lan-relay.mjs packages/net/src/__tests__/relay.test.ts
@@ -1266,8 +1271,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `97b5426`.** CLI now awaits `relay.listening`, reports an EADDRINUSE clash plainly and exits 1, and prints `relay.port` so `--port 0` no longer advertises 0. Verified with two real node processes: before, the second printed the full banner AND a join string and then crashed on an unhandled rejection; after, just the clash message and exit 1. Also carried the `hostId` cost into its doc comment. Review found zero findings at any level.
 
+---
 ## Task 11: a replaced pump thread revives itself
 
 **Files:**
@@ -1302,7 +1308,7 @@ It holds its own `Arc<Session>`, so `slot.take()` does not drop that session: th
 
 Re-hosting or re-joining is not an edge case — it is what a player does after a failed connection.
 
-- [ ] **Step 1: Give each pump its own flag**
+- [x] **Step 1: Give each pump its own flag**
 
 ```rust
     /// One flag per pump. Sharing a single flag let a replaced pump observe
@@ -1311,7 +1317,7 @@ Re-hosting or re-joining is not an edge case — it is what a player does after 
     pumping: Mutex<Option<Arc<AtomicBool>>>,
 ```
 
-- [ ] **Step 2: Retire the old flag before installing the new one**
+- [x] **Step 2: Retire the old flag before installing the new one**
 
 ```rust
 fn start_pump(app: AppHandle, net: Net, session: Arc<Session>) {
@@ -1340,11 +1346,11 @@ fn teardown(net: &Net, app: &AppHandle) {
 
 Update the `Net` constructor to build `Mutex::new(None)`.
 
-- [ ] **Step 3: Check the lock order**
+- [x] **Step 3: Check the lock order**
 
 `start_pump` takes `net.pumping` while holding nothing else; `teardown` takes `net.pumping` and then `net.session`. Confirm no path takes them in the opposite order — read every `net.session.lock()` in the file and make sure none of them calls `start_pump` or `teardown` while holding the guard. If one does, drop the guard explicitly first, the way the `Rejected` paths in `host.rs` already do.
 
-- [ ] **Step 4: Verify without building**
+- [x] **Step 4: Verify without building**
 
 **Do not run `cargo build` or `cargo check` against `src-tauri`** — this container has no webkit2gtk and the failure will be the missing system library, not your code. Verification for this task is:
 
@@ -1352,7 +1358,7 @@ Update the `Net` constructor to build `Mutex::new(None)`.
 2. Push and let `.github/workflows/android.yml` compile it. That job is the only compiler this change will meet before review.
 3. Say plainly in the commit message that it has not been compiled locally and why.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/lib.rs
@@ -1380,7 +1386,7 @@ MSG
 
 ## Finishing
 
-- [ ] **Run every gate, on a clean `dist`**
+- [x] **Run every gate, on a clean `dist`**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1393,17 +1399,21 @@ cargo fmt --all -- --check
 
 A stale `dist/` makes workbox double-count four icon entries and report 14 precache entries; 13 is the number on a clean rebuild. Read the output — do not infer it.
 
-- [ ] **Update `docs/handoff.md`**
+- [x] **Update `docs/handoff.md`**
 
 Move each finding from open to resolved, and record two things the review established that are worth more than the fixes:
 
 1. **The same defect existed in both sequencer implementations** (Tasks 5 and 6). Two implementations of one protocol drift in exactly this way, and only a test written against both catches it.
 2. **`transport.lock` had four implementations and no caller.** An interface method that nothing calls is not covered by the type system; nothing in this toolchain would have reported it.
 
-- [ ] **Push**
+- [x] **Push**
 
 ```bash
 git push -u origin claude/snake-ladders-cross-device-3uu177
 ```
 
 PR #2 is already open against `main`. Do not open a second one.
+
+**DONE — commit `f913769`.** One `Arc<AtomicBool>` per pump, retiring its predecessor. **Not compiled locally** — no webkit2gtk here — so verification was compiler-eyes review plus an independent lock-order audit, which established a stronger property than claimed: neither lock is ever held while acquiring the other anywhere in the file, so no cycle is possible. **Android CI run 75 then compiled it green (~7.8 min).** Chasing down why the root `cargo fmt --all` was silent about this file produced a separate finding: it never covered `src-tauri` at all — fixed in `420908f`.
+
+---

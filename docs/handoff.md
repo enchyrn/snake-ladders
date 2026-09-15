@@ -456,6 +456,65 @@ rather than appearing unjoinable. Confirmed: it compiles (Android run 69).
   Concurrency tests here must be **causally ordered** — block on a frame the code
   under test actually broadcasts, under the same lock as the mutation.
 
+## The review-findings plan: what it closed, and the one thing it did not
+
+`docs/superpowers/plans/2026-09-15-review-findings-plan.md`, all eleven tasks
+done and reviewed. A whole-project review found eleven defects; ten pre-dated
+this branch and one (`c3ce936`, a path traversal in `drive-app.mjs`) it had
+introduced via the `--base-path` work.
+
+| Commit | What was actually wrong |
+|---|---|
+| `5f8f949` | a mine blast's `momentum: 0` was overwritten by the move's tail — a dead write since momentum was added |
+| `72b6ac0` | `breathe` left `partner` in `free`, so a relocated link's mouth could land on another link's endpoint |
+| `d01b730` | `playCard` spread the previous round's timeline forward; `BoardCanvas` replays on array identity, so a card re-animated the round just shown |
+| `97d5a3a` | **both** room-code decoders accepted a short code and returned a valid-but-wrong seed — a silently different board |
+| `61fe618` | a dying connection disabled the reconnect that replaced it; `broadcast` skips disconnected clients |
+| `f559ae7` | the Node sequencer had that identical defect |
+| `4dbf1ff` + `cf7bc5b` | `Leave` existed in the schema and the reducer and nothing had ever constructed one; one dead phone froze the round for the whole room |
+| `2efdd8d` | `Sequencer.lock()` existed and was tested and no frame could reach it |
+| `8dcded4` | `transport.lock` had four implementations and no production caller |
+| `97b5426` | the relay CLI printed a join string and then died on an unhandled `EADDRINUSE` |
+| `f913769` | a replaced pump thread revived itself and kept its old session alive |
+
+### The thing the plan got wrong
+
+Task 8 gave the relay a `lock` wire frame gated on "the first successful join is
+the host". **No browser client can ever hold that identity**, so the frame has no
+reachable production caller:
+
+- `packages/net/src/websocket.ts:220` — `host: () => unsupported("host a match")`
+- `packages/net/src/factory.ts` — browsers always get the websocket transport
+- `packages/app-shell/src/routes/home.tsx:39` — `role: "host"` only after a successful `host()`
+- `packages/app-shell/src/routes/join.tsx:39` — every join opens as `role: "peer"`
+
+So `MatchClient.lock()`'s host guard never passes on the relay path. Task 9 does
+close a **native-LAN** room (Rust `net_lock`, on the device that opened the
+socket). Read `2efdd8d`'s "so a browser room can actually close" as intent, not
+achievement.
+
+The irony is exact: Task 8 existed to fix *an interface method with four
+implementations and no caller*, and recreated that one layer up. The cause was
+the plan inventing an authority rule without checking whether anything could
+satisfy it. **Deciding who may lock a relay-hosted room is a design question**
+and belongs with the relay-architecture decision, not a fix-up task.
+
+### Two tooling facts that cost real time to establish
+
+- **`cargo fmt --all` from the root has never covered `src-tauri`.** The root
+  workspace is `members = ["crates/*"]` and `src-tauri/Cargo.toml` declares its
+  own `[workspace]`, so the root command is silent because it does not look, not
+  because the files are clean. Two spots had drifted. Fixed, and CLAUDE.md now
+  names both commands (`420908f`).
+- **Four of this plan's sketched tests asserted nothing.** Tasks 1, 5, 7 and 8
+  each produced a first draft that passed against the very bug it was written
+  for — one polled a counter before the buggy write landed, one never reached the
+  defect through the real dispatch path, one passed because *every* lock was
+  ignored in the unfixed relay. Every implementer caught its own. **Treat a test
+  sketched in a plan as a hypothesis: run it against the unfixed code first.**
+  For concurrency, block on something the code under test actually broadcasts,
+  under the same lock as the mutation — never poll.
+
 ## Deferred, and why
 
 Small, real, and none of them blocking. Recorded here because the scratch
