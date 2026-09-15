@@ -471,7 +471,7 @@ introduced via the `--base-path` work.
 | `97d5a3a` | **both** room-code decoders accepted a short code and returned a valid-but-wrong seed — a silently different board |
 | `61fe618` | a dying connection disabled the reconnect that replaced it; `broadcast` skips disconnected clients |
 | `f559ae7` | the Node sequencer had that identical defect |
-| `4dbf1ff` + `cf7bc5b` | `Leave` existed in the schema and the reducer and nothing had ever constructed one; one dead phone froze the round for the whole room |
+| `4dbf1ff` + `cf7bc5b` | `Leave` existed in the schema and the reducer and nothing had ever constructed one; one dead phone froze the round for the whole room (native LAN only — same host-only gate as `lock`, see "The thing the plan got wrong" below) |
 | `2efdd8d` | `Sequencer.lock()` existed and was tested and no frame could reach it |
 | `8dcded4` | `transport.lock` had four implementations and no production caller |
 | `97b5426` | the relay CLI printed a join string and then died on an unhandled `EADDRINUSE` |

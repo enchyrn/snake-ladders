@@ -178,14 +178,20 @@ export const applyAction = (
 ): Effect.Effect<MatchState, RuleError> => {
   switch (action._tag) {
     case "Join": {
-      if (state.phase !== "lobby") return fail("match already started", "Join")
-      if (findPlayer(state, action.playerId)) {
-        // Reconnect rather than duplicate: LAN peers drop and come back.
-        const { index, player } = findPlayer(state, action.playerId)!
+      const existing = findPlayer(state, action.playerId)
+      if (existing) {
+        // Reconnect rather than duplicate: LAN peers drop and come back, and
+        // both sequencers already readmit a returning client mid-match on
+        // this assumption. Checked ahead of the phase guard so `Leave` is
+        // not a one-way door once the match has started; a reconnected
+        // player falls back into `pendingCommitters` on their own, since
+        // `connected` is exactly what that filter reads.
+        const { index, player } = existing
         const players = state.players.slice()
         players[index] = { ...player, connected: true, name: action.name }
         return Effect.succeed({ ...state, players })
       }
+      if (state.phase !== "lobby") return fail("match already started", "Join")
       if (state.players.length >= 6) return fail("match is full", "Join")
       return Effect.succeed({
         ...state,
