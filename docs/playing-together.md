@@ -89,14 +89,43 @@ a static host cannot run the relay, which is a socket.
 
 **Joining another device from the deployed site does not work yet.** The page
 is served over HTTPS — which is exactly what makes it installable — and a
-browser refuses to open the plain `ws://` connection that both the relay
-(`apps/relay/lan-relay.mjs`) and the native host speak. It is refused before it
-reaches the network, so it fails the same way whether or not a relay is
-running. Closing that needs a relay reachable over `wss://`; until then, use
-the installed app on every device, or serve the game over plain HTTP from a
-computer on the same network with `nub run dev -- --host`, where `ws://` is
-allowed. Pass-and-play works on the deployed site regardless: it never opens a
-socket.
+browser refuses to open the plain `ws://` connection the relay
+(`apps/relay/lan-relay.mjs`) speaks. It is refused before it reaches the
+network, so it fails the same way whether or not a relay is running. Closing
+that needs a relay reachable over `wss://`; until then, serve the game over
+plain HTTP from a computer on the same network with `nub run dev -- --host`,
+where `ws://` is allowed. Pass-and-play works on the deployed site regardless:
+it never opens a socket.
+
+### A browser and an installed app cannot join each other
+
+This is a property of the architecture, not a bug or a missing flag, and no
+amount of `wss://` changes it.
+
+The two sequencers speak different wire protocols at the transport layer:
+
+| | speaks | can a browser open it? |
+|---|---|---|
+| `crates/lan-sync` (native host) | newline-delimited JSON over a raw `TcpListener` | **no** — a browser has no raw TCP |
+| `apps/relay/lan-relay.mjs` | WebSocket | yes |
+
+Point a browser at a natively hosted room and the host answers
+`{"t":"rejected","reason":"malformed handshake"}` — it reads the browser's
+`GET / HTTP/1.1 … Upgrade: websocket` request as a `Hello` frame, fails to
+parse it as JSON, and refuses. Verified directly against `Host::bind`, not
+inferred. The reverse fails too: the installed app joins through `net_join`,
+a Tauri command into the Rust TCP client, which has no WebSocket in it either
+(`crates/lan-sync` depends only on `serde` and `serde_json`).
+
+So a match is **either all-native or all-browser**:
+
+- every device on the installed app → native LAN, no relay, nothing to run;
+- every device in a browser → one relay on a computer, everyone joins that.
+
+Mixing them needs a bridge that does not exist yet: either the Rust host also
+answering a WebSocket upgrade, or the native app being able to join a relay as
+a WebSocket client. Both are real work and neither is what the `wss://`
+decision is about — that one only makes an HTTPS *page* able to reach a relay.
 
 It updates by asking rather than reloading underneath you: a new version
 precaches in the background and the app offers it between matches, because
