@@ -21,3 +21,5 @@ An ADR is a short document that records one significant architectural decision: 
 | [0015](0015-one-provisioning-path-for-every-environment.md) | One provisioning path for every environment | Accepted |
 | [0016](0016-delegate-read-only-work-to-free-zen-models.md) | Delegation to OpenCode runs free Zen models, and is read-only | Accepted |
 | [0017](0017-nub-is-the-package-manager-node-24-is-the-floor.md) | Nub is the package manager, and Node 24 is the floor | Accepted |
+| [0018](0018-nx-monorepo-adopted.md) | Nx monorepo adopted, superseding 0014 | Accepted |
+| [0019](0019-the-native-host-speaks-websocket-on-its-own-port.md) | The native host speaks WebSocket on the port it already listens on | Accepted |

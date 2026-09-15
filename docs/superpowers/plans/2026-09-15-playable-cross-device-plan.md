@@ -892,14 +892,14 @@ was probed directly, not inferred.
   - `pub fn write_text(w: &mut impl Write, text: &str) -> std::io::Result<()>`
     — one unmasked server text frame.
 
-- [ ] **Step 1: Add the dependencies**
+- [x] **Step 1: Add the dependencies**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 cargo add sha1@0.10 base64@0.22 -p lan-sync
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `crates/lan-sync/src/ws.rs` containing only the test module, so it
 compiles to a failure rather than a parse error:
@@ -957,7 +957,7 @@ mod tests {
 
 Add `mod ws;` to `crates/lan-sync/src/lib.rs`.
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -966,7 +966,7 @@ cargo test -p lan-sync ws::
 
 Expected: FAIL to compile — `accept_key` and the rest are not defined.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Write the four functions above the test module in `crates/lan-sync/src/ws.rs`.
 Requirements, all of which the tests or the RFC pin:
@@ -988,7 +988,7 @@ Requirements, all of which the tests or the RFC pin:
   sends approaches a fragment boundary. Return `ErrorKind::InvalidData`, do not
   silently mis-decode.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -999,7 +999,7 @@ cargo fmt --all
 
 Expected: PASS, clippy clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/lan-sync/src/ws.rs crates/lan-sync/src/lib.rs crates/lan-sync/Cargo.toml Cargo.toml Cargo.lock
@@ -1007,6 +1007,18 @@ git commit -m "feat: add an RFC 6455 codec to lan-sync"
 ```
 
 ---
+
+
+**DONE.** `cargo test -p lan-sync` 37 passed (13 new codec tests), clippy clean
+under `-D warnings`, `cargo fmt --all` applied.
+
+ADR 0019 was written **before** this task rather than at Task 9, because CLAUDE.md
+requires the ADR ahead of an architectural change and this is where the change
+actually happens. The ADR index was also missing 0018 entirely; both rows added.
+
+Clippy caught three things the tests could not: `Read` is reached through the
+`BufRead` supertrait bound so importing it is redundant, and three test fixtures
+allocated a `Vec` where an array would do.
 
 ### Task 8: Serve both protocols on the host's one port
 

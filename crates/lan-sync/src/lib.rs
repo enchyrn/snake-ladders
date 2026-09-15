@@ -16,6 +16,7 @@ pub mod host;
 pub mod peer;
 pub mod protocol;
 pub mod session;
+pub mod ws;
 
 pub use discovery::{Advertiser, Browser, FoundRoom, DISCOVERY_PORT};
 pub use host::Host;
