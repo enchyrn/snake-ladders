@@ -26,6 +26,7 @@ export const initialMatch = (config: MatchConfig): MatchState => {
     commitments: {},
     rng,
     timeline: [],
+    timelineRound: 0,
     winners: [],
   }
 }
@@ -106,10 +107,13 @@ const playCard = (
 
   const players = state.players.slice()
   let board = state.board
-  const timeline = [
-    ...state.timeline,
-    { _tag: "CardPlayed" as const, playerId: player.id, card, cost },
-  ]
+  // A card played after the round's timeline was last written starts a fresh
+  // one; otherwise BoardCanvas's array-identity replay would re-animate the
+  // round that just finished.
+  const fresh = state.timelineRound !== state.round
+  const timeline = fresh
+    ? [{ _tag: "CardPlayed" as const, playerId: player.id, card, cost }]
+    : [...state.timeline, { _tag: "CardPlayed" as const, playerId: player.id, card, cost }]
   let spent = cost
   let pending = [...player.pending]
   let anchored = player.anchored
@@ -161,7 +165,7 @@ const playCard = (
     anchored,
     position,
   }
-  return Effect.succeed({ ...state, players, board, timeline })
+  return Effect.succeed({ ...state, players, board, timeline, timelineRound: state.round })
 }
 
 /* ---------------------------------------------------------------- *

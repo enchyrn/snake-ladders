@@ -123,6 +123,9 @@ export const MatchState = Schema.Struct({
   rng: Schema.Tuple(Schema.Int, Schema.Int, Schema.Int, Schema.Int),
   /** Ordered, replayable narration of the last resolution — drives the 3D view. */
   timeline: Schema.Array(TimelineEvent),
+  /** The round `timeline` describes. A card played in a later round starts a
+   *  new one rather than extending the round already shown. */
+  timelineRound: Schema.Int,
   winners: Schema.Array(Schema.String),
 })
 export type MatchState = typeof MatchState.Type

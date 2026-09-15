@@ -281,6 +281,21 @@ describe("cards", () => {
     expect(succeeds(s, card("a", "anchor"))).toBe(true)
     expect(succeeds(s, card("b", "anchor"))).toBe(false)
   })
+
+  it("a card played in a new round does not carry the last round's timeline", () => {
+    const s = scenario({
+      modules: ["mutation"],
+      players: [{ id: "a", venom: 5 }],
+      dice: [3],
+    })
+    const afterRound1 = run(s, commit("a"))
+    expect(afterRound1.timeline.length).toBeGreaterThan(0)
+
+    const played = run(afterRound1, card("a", "reverse"))
+    // BoardCanvas replays on timeline array identity, so carrying round 1's
+    // events into round 2 would re-animate a round already shown.
+    expect(played.timeline.every((e) => e._tag === "CardPlayed")).toBe(true)
+  })
 })
 
 describe("minesweeper module", () => {

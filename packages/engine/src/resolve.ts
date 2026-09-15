@@ -297,6 +297,7 @@ export const resolveRound = (state: MatchState): MatchState => {
     activeSeat: nextSeat,
     commitments: {},
     timeline: ctx.events,
+    timelineRound: state.round,
     winners,
   }
 }
