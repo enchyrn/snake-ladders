@@ -107,6 +107,27 @@ export class MatchClient {
       })
   }
 
+  /**
+   * Stop admitting newcomers. The reducer refuses a Join once the match has
+   * started anyway; locking is what keeps the room off the Join screen so
+   * nobody connects, is welcomed, and only then turned away.
+   *
+   * Host-only: a peer has no room to close, and the relay only honours a
+   * lock request from whichever socket it recorded as the host.
+   */
+  lock(): void {
+    if (this.state.role !== "host") return
+    Effect.runPromise(Effect.either(this.transport.lock))
+      .then((done) => {
+        if (Either.isLeft(done)) {
+          this.patch((s) => ({ ...s, notice: `could not close the room: ${done.left.reason}` }))
+        }
+      })
+      .catch(() => {
+        this.patch((s) => ({ ...s, notice: `could not close the room: ${unexpected}` }))
+      })
+  }
+
   dismissNotice(): void {
     this.patch((s) => ({ ...s, notice: null }))
   }
@@ -130,10 +151,9 @@ export class MatchClient {
     if (this.state.role !== "host") return
     for (const entry of roster) {
       if (entry.connected) {
-        // A reconnect flips `Leave`'s effect back via `Join`, so this device
-        // must be eligible for retirement again the next time it drops —
-        // otherwise a rejoin-then-drop never gets a second Leave and the
-        // round stalls exactly as it did before this stopped happening once.
+        // A reconnect undoes Leave via Join, so this id must become
+        // retirable again — otherwise a rejoin-then-drop never sends a
+        // second Leave and the round stalls forever.
         this.retired.delete(entry.player_id)
         continue
       }

@@ -129,7 +129,10 @@ export const LobbyScreen = () => {
           type="button"
           className="primary start"
           disabled={match.players.length < 1}
-          onClick={() => client.send({ _tag: "Start" })}
+          onClick={() => {
+            client.send({ _tag: "Start" })
+            client.lock()
+          }}
         >
           Start match
         </button>

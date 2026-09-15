@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { MatchClient } from "../match-client"
 import { makeLocalTransport } from "@mutation/net/local"
-import { emitter, type Committed, type TransportService } from "@mutation/net/transport"
+import { emitter, TransportError, type Committed, type TransportService } from "@mutation/net/transport"
 import { defaultConfig } from "@mutation/engine/types"
 
 /** A transport whose commit stream the test drives by hand. */
@@ -10,6 +10,7 @@ const controllable = () => {
   const commits = emitter<Committed>()
   const rosters = emitter<ReadonlyArray<{ player_id: string; name: string; connected: boolean }>>()
   const sent: unknown[] = []
+  const transport = { locked: false }
   const service: TransportService = {
     ...makeLocalTransport(),
     submit: (action) => Effect.sync(() => {
@@ -17,8 +18,11 @@ const controllable = () => {
     }),
     onCommit: commits.subscribe,
     onRoster: rosters.subscribe,
+    lock: Effect.sync(() => {
+      transport.locked = true
+    }),
   }
-  return { service, commits, sent, rosters }
+  return { service, commits, sent, rosters, transport }
 }
 
 const config = defaultConfig(2024)
@@ -222,6 +226,42 @@ describe("MatchClient", () => {
     ])
 
     expect(sent).not.toContainEqual({ _tag: "Leave", playerId: "me" })
+    c.dispose()
+  })
+
+  it("locks the room when the host starts the match", () => {
+    const { service, commits, transport } = controllable()
+    const c = new MatchClient(service, config, "host", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    c.send({ _tag: "Start" })
+    c.lock()
+
+    expect(transport.locked).toBe(true)
+    c.dispose()
+  })
+
+  it("does not lock the room for a peer", () => {
+    const { service, commits, transport } = controllable()
+    const c = new MatchClient(service, config, "peer", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    c.lock()
+
+    expect(transport.locked).toBe(false)
+    c.dispose()
+  })
+
+  it("turns a failed lock into a notice, not a thrown error", async () => {
+    const { service, commits } = controllable()
+    const failing: TransportService = { ...service, lock: Effect.fail(new TransportError({ reason: "room not found" })) }
+    const c = new MatchClient(failing, config, "host", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    expect(() => c.lock()).not.toThrow()
+    await new Promise((resolve) => queueMicrotask(() => resolve(null)))
+
+    expect(c.state.notice).toMatch(/could not close the room: room not found/)
     c.dispose()
   })
 })
