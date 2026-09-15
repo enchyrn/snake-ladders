@@ -68,7 +68,11 @@ export class Sequencer {
     return this.#locked
   }
 
-  /** Whoever joined first, and the only player whose `lock` is honoured. */
+  /**
+   * Whoever joined first, and the only player whose `lock` is honoured.
+   * Never reassigned: `leave()` only flips `connected: false`, so if the
+   * host's socket drops, nobody can ever lock this room again.
+   */
   get hostId() {
     return this.#hostId
   }
@@ -246,15 +250,28 @@ if (isMain) {
   const room = String(arg("--room", randomRoom())).toUpperCase()
   const capacity = Number(arg("--capacity", 6))
 
-  startRelay({ port, room, capacity })
+  const relay = startRelay({ port, room, capacity })
+  try {
+    await relay.listening
+  } catch (cause) {
+    const clash = cause && cause.code === "EADDRINUSE"
+    console.error(
+      clash
+        ? `Port ${port} is already in use. Another relay is probably still running; ` +
+          `stop it, or pass --port with a free number.`
+        : `Could not start the relay: ${cause}`,
+    )
+    process.exit(1)
+  }
+
   const addresses = lanAddresses()
-  console.log(`\nRoom ${room} — up to ${capacity} players, listening on port ${port}.\n`)
+  console.log(`\nRoom ${room} — up to ${capacity} players, listening on port ${relay.port}.\n`)
   if (addresses.length === 0) {
     console.log("No LAN address found. Is this machine on a network?")
   } else {
     console.log("On each other device, open the game and paste this into")
     console.log("\"Join by address\":\n")
-    for (const address of addresses) console.log(`  ${address}:${port}@${room}`)
+    for (const address of addresses) console.log(`  ${address}:${relay.port}@${room}`)
   }
   console.log("\nKeep this process running for the length of the match.")
 }

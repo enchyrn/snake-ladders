@@ -281,4 +281,10 @@ describe("relay over a real socket", () => {
       ),
     )
   })
+
+  it("reports a bind failure instead of resolving", async () => {
+    const first = await relay()
+    const second = startRelay({ port: first.port, room: "TAKEN", capacity: 6 })
+    await expect(second.listening).rejects.toMatchObject({ code: "EADDRINUSE" })
+  })
 })
