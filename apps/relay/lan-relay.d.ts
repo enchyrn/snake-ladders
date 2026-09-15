@@ -37,10 +37,12 @@ export type SequencerFrame =
   | { readonly t: "welcome"; readonly player_id: string; readonly room: string; readonly log: SequencedEntry[] }
   | { readonly t: "roster"; readonly peers: RosterEntry[] }
   | { readonly t: "commit"; readonly seq: number; readonly action: unknown }
+  | { readonly t: "lock" }
 
 export declare class Sequencer {
   constructor(options?: { room?: string; capacity?: number })
   get room(): string
+  get hostId(): string | null
   get log(): SequencedEntry[]
   get locked(): boolean
   get hostId(): string | null
@@ -53,6 +55,7 @@ export declare class Sequencer {
   }): JoinResult
   submit(action: unknown): SequencedEntry
   leave(playerId: string, token?: symbol): void
+  canLock(playerId: string, token?: symbol): boolean
 }
 
 export declare const lanAddresses: () => string[]

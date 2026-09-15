@@ -6,7 +6,15 @@ import { makeClientSlot, closeIfOwned } from "./client-slot"
 import { isTauri } from "@mutation/net/lan"
 import { makeTransport, type TransportKind } from "@mutation/net/factory"
 import type { TransportService } from "@mutation/net/transport"
-import { loadIdentity, saveIdentity, type LocalIdentity } from "@mutation/net/identity"
+import {
+  loadIdentity,
+  loadProfiles,
+  newGuest,
+  saveIdentity,
+  saveProfiles,
+  type LocalIdentity,
+  type Profile,
+} from "@mutation/net/identity"
 import { defaultConfig, type MatchConfig } from "@mutation/engine/types"
 import type { Role } from "../store/match-client"
 
@@ -14,6 +22,8 @@ export type { TransportKind }
 
 interface SessionValue {
   readonly identity: LocalIdentity
+  readonly profiles: ReadonlyArray<Profile>
+  readonly addGuest: (name: string) => Profile
   readonly rename: (name: string) => void
   readonly client: MatchClient | null
   /** True when this build can host a room: only the installed app can. */
@@ -49,6 +59,7 @@ const SessionContext = createContext<SessionValue | null>(null)
  */
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [identity, setIdentity] = useState<LocalIdentity>(() => loadIdentity())
+  const [profiles, setProfiles] = useState<ReadonlyArray<Profile>>(() => loadProfiles())
   const [client, setClient] = useState<MatchClient | null>(null)
   // The slot is the live value; the state is only what the tree renders from.
   // `open` and `close` are rebuilt every render, so reading `client` in them
@@ -80,6 +91,14 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
 
   const value: SessionValue = {
     identity,
+    profiles,
+    addGuest: (name) => {
+      const guest = newGuest(name)
+      const next = [...profiles, guest]
+      setProfiles(next)
+      saveProfiles(next)
+      return guest
+    },
     canHost: native,
     canJoin: true,
     client,
@@ -87,6 +106,11 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       const next = { ...identity, name }
       setIdentity(next)
       saveIdentity(next)
+      const nextProfiles = profiles.map((profile) =>
+        profile.id === next.playerId ? { ...profile, name } : profile,
+      )
+      setProfiles(nextProfiles)
+      saveProfiles(nextProfiles)
     },
     transport,
     open: ({ role, seed, kind, config }) => {
@@ -97,6 +121,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
           role,
           identity.playerId,
           registry,
+          role === "local" ? profiles.map((profile) => profile.id) : [identity.playerId],
         ),
       )
       setClient(fresh)

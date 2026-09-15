@@ -46,6 +46,7 @@ export class Sequencer {
   #room
   #locked = false
   #hostId = null
+  #hostToken
 
   constructor({ room = "LOCAL", capacity = 6 } = {}) {
     this.#room = room
@@ -54,6 +55,10 @@ export class Sequencer {
 
   get room() {
     return this.#room
+  }
+
+  get hostId() {
+    return this.#hostId
   }
 
   get log() {
@@ -94,6 +99,9 @@ export class Sequencer {
    */
   join({ playerId, name, send }) {
     const returning = this.#clients.has(playerId)
+    if (returning && this.#clients.get(playerId)?.connected) {
+      return { ok: false, reason: "player already connected" }
+    }
     // A locked room still readmits someone who dropped mid-match: their seat
     // and their actions are already in the log.
     if (!returning && this.#locked) {
@@ -109,6 +117,12 @@ export class Sequencer {
     // it still owns the seat before touching it.
     const token = Symbol(playerId)
     this.#clients.set(playerId, { name, send, connected: true, token })
+    if (this.#hostId === null) {
+      this.#hostId = playerId
+      this.#hostToken = token
+    } else if (this.#hostId === playerId) {
+      this.#hostToken = token
+    }
     try {
       send({ t: "welcome", player_id: playerId, room: this.#room, log: this.log })
     } catch {
@@ -117,7 +131,13 @@ export class Sequencer {
       // to — and never let it take the rest of the room down with it. But
       // only if nothing has since reconnected onto this same playerId; a
       // losing race here must not delete a live entry it no longer owns.
-      if (this.#clients.get(playerId)?.token === token) this.#clients.delete(playerId)
+      if (this.#clients.get(playerId)?.token === token) {
+        this.#clients.delete(playerId)
+        if (this.#hostId === playerId && this.#hostToken === token) {
+          this.#hostId = null
+          this.#hostToken = undefined
+        }
+      }
       return { ok: false, reason: "could not reach client" }
     }
     // First to actually make it into the room, not merely to attempt it —
@@ -142,7 +162,12 @@ export class Sequencer {
     // and disabling the live client would cut it out of every broadcast.
     if (token !== undefined && client.token !== token) return
     client.connected = false
+    if (this.#hostId === playerId && this.#hostToken === token) this.#hostToken = undefined
     this.#broadcast({ t: "roster", peers: this.roster() })
+  }
+
+  canLock(playerId, token) {
+    return playerId === this.#hostId && token === this.#hostToken
   }
 
   #broadcast(frame) {
@@ -184,6 +209,18 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
 
       if (frame.t === "hello") {
         if (playerId !== null) return
+        if (
+          typeof frame.player_id !== "string" ||
+          typeof frame.name !== "string" ||
+          frame.player_id.trim() === "" ||
+          frame.name.trim() === "" ||
+          frame.player_id.length > 128 ||
+          frame.name.length > 128
+        ) {
+          send({ t: "rejected", reason: "invalid handshake" })
+          socket.close()
+          return
+        }
         const result = sequencer.join({
           playerId: frame.player_id,
           name: frame.name,
@@ -204,10 +241,7 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
 
       if (frame.t === "submit") sequencer.submit(frame.action)
       else if (frame.t === "ping") send({ t: "pong" })
-      // A bare sequencer has no notion of authority, so the rule is the
-      // simplest one that still means something: whoever opened the room is
-      // the only peer that can close it.
-      else if (frame.t === "lock" && playerId === sequencer.hostId) sequencer.lock()
+      else if (frame.t === "lock" && sequencer.canLock(playerId, token)) sequencer.lock()
     })
 
     socket.on("close", () => {

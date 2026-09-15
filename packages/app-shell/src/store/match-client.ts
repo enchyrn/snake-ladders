@@ -1,7 +1,7 @@
 import { Registry } from "@effect-atom/atom"
 import { Effect, Either } from "effect"
 import { decodeAction, type Action } from "@mutation/engine/actions"
-import { applyAction } from "@mutation/engine/match"
+import { applyAction, initialMatch } from "@mutation/engine/match"
 import { defaultConfig, type MatchConfig } from "@mutation/engine/types"
 import {
   unexpected,
@@ -11,7 +11,7 @@ import {
   type TransportService,
   type Unsubscribe,
 } from "@mutation/net/transport"
-import { clientStateAtom, emptyState, type ClientState, type Role } from "./atoms"
+import { actingSeatFor, clientStateAtom, emptyState, type ClientState, type Role } from "./atoms"
 
 export type { ClientState, Role } from "./atoms"
 
@@ -40,6 +40,8 @@ export class MatchClient {
   private nextSeq = 0
   /** Players for whom we have already submitted Leave. */
   private readonly retired = new Set<string>()
+  /** Roster departures that arrived before their Join commit folded. */
+  private readonly pendingDepartures = new Set<string>()
 
   constructor(
     transport: TransportService,
@@ -47,14 +49,23 @@ export class MatchClient {
     role: Role,
     me: string,
     registry: Registry.Registry = Registry.make(),
+    seats: ReadonlyArray<string> = [me],
   ) {
     this.transport = transport
     this.registry = registry
-    this.registry.set(clientStateAtom, emptyState(config, role, me))
+    const initial = emptyState(config, role, me)
+    this.registry.set(clientStateAtom, {
+      ...initial,
+      seats,
+      actingSeat: actingSeatFor(initial.match, seats),
+    })
     this.subscriptions.push(
       transport.onCommit((entry) => this.receive(entry)),
       transport.onRoster((roster) => {
         this.patch((s) => ({ ...s, roster }))
+        for (const entry of roster) {
+          if (!entry.connected) this.pendingDepartures.add(entry.player_id)
+        }
         this.retireDeparted(roster)
       }),
       transport.onStatus((connection) => this.patch((s) => ({ ...s, connection }))),
@@ -71,17 +82,24 @@ export class MatchClient {
     this.buffer.clear()
     this.nextSeq = 0
     this.retired.clear()
+    this.pendingDepartures.clear()
     const s = this.state
     this.registry.set(clientStateAtom, {
       ...emptyState(config, role, s.me),
       room: s.room,
       roster: s.roster,
       connection: s.connection,
+      seats: s.seats,
+      actingSeat: actingSeatFor(initialMatch(config), s.seats),
     })
   }
 
   setRoom(room: HostedRoom): void {
     this.patch((s) => ({ ...s, room }))
+  }
+
+  setSeats(seats: ReadonlyArray<string>): void {
+    this.patch((s) => ({ ...s, seats, actingSeat: actingSeatFor(s.match, seats) }))
   }
 
   /**
@@ -132,6 +150,15 @@ export class MatchClient {
     this.patch((s) => ({ ...s, notice: null }))
   }
 
+  /** Stop admitting newcomers. The room should close once the host starts. */
+  lock(): void {
+    Effect.runPromise(Effect.either(this.transport.lock)).then((done) => {
+      if (Either.isLeft(done)) {
+        this.patch((s) => ({ ...s, notice: `could not close the room: ${done.left.reason}` }))
+      }
+    })
+  }
+
   dispose(): void {
     for (const off of this.subscriptions) off()
     this.subscriptions.length = 0
@@ -155,14 +182,25 @@ export class MatchClient {
         // retirable again — otherwise a rejoin-then-drop never sends a
         // second Leave and the round stalls forever.
         this.retired.delete(entry.player_id)
+        this.pendingDepartures.delete(entry.player_id)
         continue
       }
-      if (entry.player_id === this.state.me) continue // never retire the host's own seat
-      if (this.retired.has(entry.player_id)) continue
-      const seated = this.state.match.players.some((p) => p.id === entry.player_id)
+      this.pendingDepartures.add(entry.player_id)
+    }
+    for (const playerId of this.pendingDepartures) {
+      if (playerId === this.state.me) continue
+      if (this.retired.has(playerId)) continue
+      const seated = this.state.match.players.some((p) => p.id === playerId)
       if (!seated) continue
-      this.retired.add(entry.player_id)
-      this.send({ _tag: "Leave", playerId: entry.player_id })
+      this.retired.add(playerId)
+      const action = { _tag: "Leave" as const, playerId }
+      Effect.runPromise(Effect.either(this.transport.submit(action))).then((result) => {
+        if (Either.isLeft(result)) {
+          this.retired.delete(playerId)
+          this.pendingDepartures.add(playerId)
+          this.patch((s) => ({ ...s, notice: `could not send: ${result.left.reason}` }))
+        }
+      })
     }
   }
 
@@ -217,11 +255,18 @@ export class MatchClient {
         continue
       }
 
-      state = { ...state, match: result.right, applied: state.applied + 1, notice: null }
+      state = {
+        ...state,
+        match: result.right,
+        actingSeat: actingSeatFor(result.right, state.seats),
+        applied: state.applied + 1,
+        notice: null,
+      }
       changed = true
     }
 
     if (changed) this.registry.set(clientStateAtom, state)
+    this.retireDeparted(this.state.roster)
   }
 }
 

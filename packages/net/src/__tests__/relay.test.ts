@@ -6,6 +6,7 @@ interface Frame {
   t: string
   seq?: number
   action?: unknown
+  room?: string
   log?: Array<{ seq: number; action: unknown }>
   peers?: Array<{ player_id: string; connected: boolean }>
   reason?: string
@@ -93,6 +94,7 @@ describe("Sequencer", () => {
       ok: false,
     })
     // Someone whose phone left Wi-Fi still owns their seat.
+    seq.leave("a")
     expect(seq.join({ playerId: "a", name: "A", send: () => {} })).toMatchObject({ ok: true })
   })
 
@@ -125,6 +127,7 @@ describe("Sequencer", () => {
     const first = seq.join({ playerId: "p1", name: "Ada", send: (f: Frame) => firstFrames.push(f) })
     expect(first).toMatchObject({ ok: true })
 
+    seq.leave("p1", first.ok ? first.token : undefined)
     const second = seq.join({ playerId: "p1", name: "Ada", send: (f: Frame) => secondFrames.push(f) })
     expect(second).toMatchObject({ ok: true })
 
@@ -206,6 +209,76 @@ describe("relay over a real socket", () => {
     hello(late.socket, "late")
     await until(() => late.frames.some((f) => f.t === "rejected"))
     expect(late.frames.find((f) => f.t === "rejected")!.reason).toMatch(/already started/)
+  })
+
+  it("locks the room when the host sends a lock frame", async () => {
+    const relayHandle = await relay()
+    const host = await connect(relayHandle.port)
+    const peer = await connect(relayHandle.port)
+    hello(host.socket, "p1")
+    hello(peer.socket, "p2")
+    await until(() => host.frames.some((f) => f.t === "welcome") && peer.frames.some((f) => f.t === "welcome"))
+
+    send(host.socket, { t: "lock" })
+    await until(() => relayHandle.sequencer.locked)
+
+    const late = await connect(relayHandle.port)
+    hello(late.socket, "p3")
+    await until(() => late.frames.some((f) => f.t === "rejected"))
+    expect(late.frames.find((f) => f.t === "rejected")!.reason).toMatch(/already started/)
+  })
+
+  it("ignores a lock frame from a player who is not the host", async () => {
+    const relayHandle = await relay()
+    const host = await connect(relayHandle.port)
+    const peer = await connect(relayHandle.port)
+    hello(host.socket, "p1")
+    hello(peer.socket, "p2")
+    await until(() => host.frames.some((f) => f.t === "welcome") && peer.frames.some((f) => f.t === "welcome"))
+
+    send(peer.socket, { t: "lock" })
+    await new Promise((resolve) => setTimeout(resolve, 120))
+
+    const late = await connect(relayHandle.port)
+    hello(late.socket, "p3")
+    await until(() => late.frames.some((f) => f.t === "welcome"))
+    expect(late.frames.find((f) => f.t === "welcome")!.room).toBe("LOCAL")
+  })
+
+  it("does not let a peer replace the live host identity", async () => {
+    const relayHandle = await relay()
+    const host = await connect(relayHandle.port)
+    hello(host.socket, "p1")
+    await until(() => host.frames.some((f) => f.t === "welcome"))
+
+    const impostor = await connect(relayHandle.port)
+    hello(impostor.socket, "p1")
+    await until(() => impostor.frames.some((f) => f.t === "rejected"))
+
+    expect(impostor.frames.find((f) => f.t === "rejected")!.reason).toMatch(/already connected/)
+    send(host.socket, { t: "lock" })
+    await until(() => relayHandle.sequencer.locked)
+  })
+
+  it("rejects a malformed handshake without occupying the room", async () => {
+    const relayHandle = await relay({ capacity: 1 })
+    const malformed = await connect(relayHandle.port)
+    send(malformed.socket, { t: "hello", player_id: "", name: 42 })
+    await until(() => malformed.frames.some((f) => f.t === "rejected"))
+
+    const valid = await connect(relayHandle.port)
+    hello(valid.socket, "valid")
+    await until(() => valid.frames.some((f) => f.t === "welcome"))
+    expect(valid.frames.some((f) => f.t === "welcome")).toBe(true)
+  })
+
+  it("reports a bind failure instead of resolving", async () => {
+    const first = await relay()
+
+    const second = startRelay({ port: first.port, room: "TAKEN", capacity: 6 })
+    await expect(second.listening).rejects.toMatchObject({ code: "EADDRINUSE" })
+
+    first.wss.close()
   })
 
   it("ignores junk and unauthenticated submits", async () => {

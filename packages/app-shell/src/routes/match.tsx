@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { useSession } from "../app/session"
 import type { CardKind } from "@mutation/engine/types"
-import { canRollAtom, matchAtom, meAtom } from "../store/atoms"
+import { actingSeatAtom, canRollAtom, matchAtom } from "../store/atoms"
 import type { MatchClient } from "../store/match-client"
 import { BoardCanvas } from "@mutation/ui/BoardCanvas"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
@@ -13,14 +13,14 @@ import { CardRail, PlayerStrip, Progress } from "@mutation/ui/HUD"
 /** Isolated so the Roll button re-renders on its own — not on every card play,
  *  every tile reveal, or the roster twitching — since `canRollAtom` is the
  *  only slice it reads. */
-const RollButton = ({ client, me }: { readonly client: MatchClient; readonly me: string }) => {
+const RollButton = ({ client, seat }: { readonly client: MatchClient; readonly seat: string }) => {
   const canRoll = useAtomValue(canRollAtom)
   return (
     <button
       type="button"
       className="primary roll"
       disabled={!canRoll}
-      onClick={() => client.send({ _tag: "Commit", playerId: me })}
+      onClick={() => client.send({ _tag: "Commit", playerId: seat })}
     >
       Roll
     </button>
@@ -32,7 +32,7 @@ export const MatchScreen = () => {
   const navigate = useNavigate()
   const client = session.client
   const match = useAtomValue(matchAtom)
-  const me = useAtomValue(meAtom)
+  const actingSeat = useAtomValue(actingSeatAtom)
   // Set by pressing the defuse card; the next tile tap targets it instead of
   // toggling a flag, so a card that needs a target does not need its own
   // separate picker UI.
@@ -44,7 +44,7 @@ export const MatchScreen = () => {
 
   if (!client) return null
 
-  const mePlayer = match.players.find((p) => p.id === me)
+  const actingPlayer = match.players.find((p) => p.id === actingSeat)
   const nameOf = (id: string) => match.players.find((p) => p.id === id)?.name ?? id
   const hasMines = match.config.modules.includes("minesweeper")
   const winner = match.winners[0]
@@ -54,16 +54,16 @@ export const MatchScreen = () => {
       setArmedDefuse(true)
       return
     }
-    client.send({ _tag: "PlayCard", playerId: me, card })
+    client.send({ _tag: "PlayCard", playerId: actingSeat, card })
   }
 
   const pickTile = (tile: number) => {
     if (armedDefuse) {
-      client.send({ _tag: "PlayCard", playerId: me, card: "defuse", targetTile: tile })
+      client.send({ _tag: "PlayCard", playerId: actingSeat, card: "defuse", targetTile: tile })
       setArmedDefuse(false)
       return
     }
-    client.send({ _tag: "Flag", playerId: me, tile })
+    client.send({ _tag: "Flag", playerId: actingSeat, tile })
   }
 
   const backHome = () => {
@@ -83,7 +83,7 @@ export const MatchScreen = () => {
         <BoardCanvas state={match} onPickTile={hasMines ? pickTile : undefined} />
       </div>
 
-      <PlayerStrip state={match} me={me} />
+      <PlayerStrip state={match} me={actingSeat} />
       <Progress state={match} />
       <EventLog state={match} />
 
@@ -106,8 +106,8 @@ export const MatchScreen = () => {
       )}
 
       <div className="control-bar">
-        <CardRail me={mePlayer} state={match} onPlay={playCard} disabled={match.phase !== "committing"} />
-        <RollButton client={client} me={me} />
+        <CardRail me={actingPlayer} state={match} onPlay={playCard} disabled={match.phase !== "committing"} />
+        <RollButton client={client} seat={actingSeat} />
       </div>
     </main>
   )

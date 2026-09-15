@@ -9,6 +9,10 @@ export interface ClientState {
   readonly match: MatchState
   readonly role: Role
   readonly me: string
+  /** Local-only seat ownership, so a single device can drive more than one player. */
+  readonly seats: ReadonlyArray<string>
+  /** Which local-owned seat is currently acting for this device. */
+  readonly actingSeat: string
   readonly room: HostedRoom | null
   readonly roster: ReadonlyArray<RosterEntry>
   readonly connection: ConnectionStatus
@@ -19,10 +23,18 @@ export interface ClientState {
   readonly applied: number
 }
 
+/** The first owned seat that can act, in the device's stable seat order. */
+export const actingSeatFor = (
+  match: MatchState,
+  seats: ReadonlyArray<string>,
+): string => seats.find((seat) => canCommit(match, seat)) ?? seats[0] ?? ""
+
 export const emptyState = (config: MatchConfig, role: Role, me: string): ClientState => ({
   match: initialMatch(config),
   role,
   me,
+  seats: [me],
+  actingSeat: me,
   room: null,
   roster: [],
   connection: { connected: role === "local", reason: null },
@@ -59,9 +71,11 @@ export const connectionAtom = select((s) => s.connection)
 export const rosterAtom = select((s) => s.roster)
 export const roleAtom = select((s) => s.role)
 export const meAtom = select((s) => s.me)
+export const seatsAtom = select((s) => s.seats)
+export const actingSeatAtom = select((s) => s.actingSeat)
 export const roomAtom = select((s) => s.room)
 
 /** Whether it is this device's turn to roll — narrow enough that the Roll
  *  button re-renders on its own, not whenever anything else about the round
  *  changes (a card played, a chat-free nudge, the roster blinking). */
-export const canRollAtom = select((s) => canCommit(s.match, s.me))
+export const canRollAtom = select((s) => canCommit(s.match, s.actingSeat))

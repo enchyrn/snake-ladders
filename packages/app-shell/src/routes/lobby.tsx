@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { roomCode } from "../app/hooks"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
@@ -18,6 +18,7 @@ export const LobbyScreen = () => {
   const role = useAtomValue(roleAtom)
   const me = useAtomValue(meAtom)
   const room = useAtomValue(roomAtom)
+  const [guestName, setGuestName] = useState("")
 
   // A peer only ever proposes modules and a start through the host's Configure
   // and Start; on this device's own screen a peer just watches them happen.
@@ -34,8 +35,13 @@ export const LobbyScreen = () => {
     }
     if (joined.current) return
     joined.current = true
-    client.send({ _tag: "Join", playerId: session.identity.playerId, name: session.identity.name })
-  }, [client, navigate, session.identity.playerId, session.identity.name])
+    const identities = role === "local"
+      ? session.profiles
+      : [{ id: session.identity.playerId, name: session.identity.name }]
+    for (const identity of identities) {
+      client.send({ _tag: "Join", playerId: identity.id, name: identity.name })
+    }
+  }, [client, navigate, role, session.identity.playerId, session.identity.name, session.profiles])
 
   useEffect(() => {
     if (phase !== "lobby") void navigate({ to: "/match" })
@@ -98,6 +104,31 @@ export const LobbyScreen = () => {
           ))}
           {match.players.length === 0 && <li className="hint">Waiting for players to join…</li>}
         </ul>
+        {role === "local" && (
+          <form
+            className="add-player"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const name = guestName.trim()
+              if (!name || match.players.length >= 6) return
+              const guest = session.addGuest(name)
+              client.setSeats([...client.state.seats, guest.id])
+              client.send({ _tag: "Join", playerId: guest.id, name: guest.name })
+              setGuestName("")
+            }}
+          >
+            <input
+              value={guestName}
+              maxLength={14}
+              onChange={(event) => setGuestName(event.target.value)}
+              placeholder="Add a player"
+              aria-label="New player name"
+            />
+            <button type="submit" disabled={!guestName.trim() || match.players.length >= 6}>
+              Add player
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="rules">

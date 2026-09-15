@@ -1,18 +1,21 @@
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { MatchClient } from "../match-client"
+import { actingSeatFor, emptyState } from "../atoms"
 import { makeLocalTransport } from "@mutation/net/local"
 import { emitter, TransportError, type Committed, type TransportService } from "@mutation/net/transport"
+import { newPlayer } from "@mutation/engine/match"
 import { defaultConfig } from "@mutation/engine/types"
 
 /** A transport whose commit stream the test drives by hand. */
-const controllable = () => {
+const controllable = (lock: TransportService["lock"] = Effect.void) => {
   const commits = emitter<Committed>()
   const rosters = emitter<ReadonlyArray<{ player_id: string; name: string; connected: boolean }>>()
   const sent: unknown[] = []
   const transport = { locked: false }
   const service: TransportService = {
     ...makeLocalTransport(),
+    lock,
     submit: (action) => Effect.sync(() => {
       sent.push(action)
     }),
@@ -46,6 +49,44 @@ const seatPlayers = (
 }
 
 describe("MatchClient", () => {
+  it("keeps a local seat roster and active seat for pass-and-play", () => {
+    const state = emptyState(config, "local", "a")
+
+    expect(state.seats).toEqual(["a"])
+    expect(state.actingSeat).toBe("a")
+    expect(state.me).toBe("a")
+  })
+
+  it("selects the first owned seat that still owes a roll", () => {
+    const state = emptyState(
+      { ...config, modules: ["simultaneous"] },
+      "local",
+      "a",
+    )
+    const match = {
+      ...state.match,
+      phase: "committing" as const,
+      players: [
+        newPlayer("a", "A", 0),
+        newPlayer("b", "B", 1),
+      ],
+      commitments: { a: 1 },
+    }
+
+    expect(actingSeatFor(match, ["a", "b"])).toBe("b")
+  })
+
+  it("adds a newly joined local seat to ownership", () => {
+    const { service } = controllable()
+    const c = client(service)
+
+    c.setSeats(["a", "b"])
+
+    expect(c.state.seats).toEqual(["a", "b"])
+    expect(c.state.actingSeat).toBe("a")
+    c.dispose()
+  })
+
   it("folds commits in sequence order", () => {
     const { service, commits } = controllable()
     const c = client(service)
@@ -262,6 +303,27 @@ describe("MatchClient", () => {
     await new Promise((resolve) => queueMicrotask(() => resolve(null)))
 
     expect(c.state.notice).toMatch(/could not close the room: room not found/)
+
+  it("reconciles a disconnect that arrived before its Join commit", () => {
+    const { service, commits, rosters, sent } = controllable()
+    const c = new MatchClient(service, config, "host", "me")
+
+    rosters.emit([{ player_id: "them", name: "Them", connected: false }])
+    commits.emit({ seq: 0, action: join("them") })
+
+    expect(sent).toContainEqual({ _tag: "Leave", playerId: "them" })
+    c.dispose()
+  })
+
+  it("locks the room when the host starts the match", async () => {
+    let locked = false
+    const { service } = controllable(Effect.sync(() => {
+      locked = true
+    }))
+    const c = new MatchClient(service, config, "host", "me")
+    c.lock()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(locked).toBe(true)
     c.dispose()
   })
 })
