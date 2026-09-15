@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Effect, Either } from "effect"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { seedFromRoom } from "../app/hooks"
+import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
 
@@ -11,6 +12,7 @@ export const JoinScreen = () => {
   const navigate = useNavigate()
   const [manual, setManual] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [joining, setJoining] = useState(false)
 
   // Kick discovery off once; the query below just reads what it has found.
   useEffect(() => {
@@ -30,7 +32,7 @@ export const JoinScreen = () => {
     initialData: [] as ReadonlyArray<RoomView>,
   })
 
-  const enter = async (addr: string, seed: number) => {
+  const runEnter = async (addr: string, seed: number) => {
     setError(null)
     // Held so the teardown paths below can only reach *this* join's client: a
     // slow handshake can settle long after the player has tapped another room.
@@ -63,6 +65,16 @@ export const JoinScreen = () => {
     await navigate({ to: "/lobby" })
   }
 
+  // Held across renders on purpose: the room list refetches about once a
+  // second, and a wrapper rebuilt each render would start every tap with a
+  // fresh `busy` flag and so guard nothing at all.
+  const latest = useRef(runEnter)
+  latest.current = runEnter
+  const enter = useMemo(
+    () => onceAtATime((addr: string, seed: number) => latest.current(addr, seed), setJoining),
+    [],
+  )
+
   const enterManually = () => {
     const [addr, code] = manual.split("@")
     const seed = code ? seedFromRoom(code) : null
@@ -94,7 +106,7 @@ export const JoinScreen = () => {
           <li key={room.room}>
             <button
               type="button"
-              disabled={room.locked || room.players >= room.capacity}
+              disabled={joining || room.locked || room.players >= room.capacity}
               onClick={() => void enter(room.addr, room.seed)}
             >
               <span className="room-code">{room.room}</span>
@@ -121,7 +133,7 @@ export const JoinScreen = () => {
           autoCapitalize="characters"
           onChange={(e) => setManual(e.target.value)}
         />
-        <button type="button" onClick={enterManually}>
+        <button type="button" disabled={joining} onClick={enterManually}>
           Join
         </button>
       </details>
