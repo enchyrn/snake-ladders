@@ -4,6 +4,53 @@ State of the branch `claude/snake-ladders-cross-device-3uu177` as of
 2026-09-15, written so another session — or the same person on a different
 machine — can pick it up without re-deriving anything.
 
+## Current checkpoint (2026-09-15)
+
+The latest durable checkpoint is commit `ada4ab8` (`feat: add local
+multi-seat pass-and-play`). The worktree was clean after that commit. It adds
+device-local owner/guest profiles, migration from the existing `sl:identity`,
+local lobby guest creation, multiple owned seats, `actingSeat` selection, and
+match controls that target the currently acting local seat. It also includes
+the browser relay lock flow, host authorization hardening in progress, and
+regressions for profiles, relay behavior, and seat ownership.
+
+The fresh verification run after the checkpoint's implementation changes was:
+
+- `nub run test`: 141 tests passed.
+- `nub run typecheck`: passed.
+- `nub run lint`: passed.
+- `git diff --check`: passed before the checkpoint commit.
+- `nub run verify:ui`: blocked by the container's missing `libnspr4.so`, even
+  after installing the Playwright Chromium binary. This is an environment
+  limitation, not a passing UI result.
+
+The second read-only pre-merge review found two **Critical** issues, so this
+branch must not be merged yet:
+
+1. **Relay host authority can transfer after host disconnect.**
+  `apps/relay/lan-relay.mjs` clears `hostId` when the host leaves, allowing
+  the next joining identity to become host and lock the room. Preserve the
+  original host identity across disconnects; only that identity's valid
+  reconnect should regain lock authority. Add a regression for a host
+  disconnect followed by a stranger joining and attempting `lock`.
+2. **A failed departure submission is never retried.**
+  `packages/app-shell/src/store/match-client.ts` marks a player retired before
+  `transport.submit(Leave)` succeeds. If submission fails, the simultaneous
+  round can remain blocked forever. Re-arm the departure when submission fails
+  or retry until the Leave commit is observed, with a focused regression using
+  a transport that fails the first submission.
+
+The review also identified lower-priority follow-up work: persist repaired
+profile data after deduplication/validation, guarantee at least one usable
+owner profile even when legacy identity data is malformed, and assert that
+repair is written back. The current profile fallback handles storage failure
+but those normalization details should be tightened before merge.
+
+**Next session:** fix the two Critical review findings first, add their
+regressions, run `nub run test`, `nub run typecheck`, `nub run lint`, and then
+request another read-only review. Only after that review is clean should the
+branch be merged into `origin/main`.
+
 Tasks 1, 3, 4, 5, 6 and 7 of the Nx/Nub/PWA plan are complete. Task 1 deployed
 the PWA and it was opened on a real device; that deployment also settled a
 question the plan had left open, and not in the direction anyone hoped — see
