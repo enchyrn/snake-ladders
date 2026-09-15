@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { at, events, ladder, run, runAll, scenario, snake, succeeds } from "./helpers"
 import { advance } from "../rules/momentum"
+import * as Mines from "../rules/minesweeper"
 import { knockbackTile } from "../rules/simultaneous"
 import { defaultConfig } from "../types"
 
@@ -350,6 +351,33 @@ describe("minesweeper module", () => {
     })
     expect(at(run(s, card("a", "defuse", 21)), "a").venom).toBe(0)
     expect(succeeds(s, card("a", "defuse", 40))).toBe(false)
+  })
+
+  it("a blast strips the momentum the player arrived with, not just the gain", () => {
+    // momentum + mines together: the blast is the only thing that should be
+    // able to zero speed outright, and it was being overwritten by the decay
+    // the tail of moveOne applies to every move. A second player is along for
+    // the ride only so the stunned seat is not immediately re-resolved by
+    // settle()'s sit-out auto-advance, which would tick the stun back to 0
+    // before this test gets to look at it.
+    const s = scenario({
+      modules: ["momentum", "minesweeper"],
+      mines: [14],
+      players: [{ id: "a", position: 4 }, { id: "b" }],
+      dice: [4],
+    })
+    // scenario() has no knob for a player's starting momentum, so carry it in
+    // by hand: momentum from a prior move, on the roll that hits the mine.
+    const withMomentum = {
+      ...s,
+      players: s.players.map((p) => (p.id === "a" ? { ...p, momentum: 6 } : p)),
+    }
+
+    const after = run(withMomentum, commit("a"))
+
+    const a = at(after, "a")
+    expect(a.stunned).toBe(Mines.blastStun)
+    expect(a.momentum).toBe(0)
   })
 })
 

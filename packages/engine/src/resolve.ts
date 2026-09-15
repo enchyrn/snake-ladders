@@ -218,7 +218,9 @@ const moveOne = (ctx: Ctx, idx: number, steps: number, state: MatchState, placed
   ctx.players[idx] = {
     ...after,
     // Speed just spent bleeds off by half; a fresh link overrides it outright.
-    momentum: Momentum.enabled(config) ? Momentum.decay(carried, gained) : 0,
+    // A blast is the exception: it throws the token off the board's line
+    // entirely, so there is no speed left to carry.
+    momentum: Momentum.enabled(config) && !blasted ? Momentum.decay(carried, gained) : 0,
   }
   applyFinish(ctx, idx, state, placed)
 }
