@@ -10,6 +10,7 @@ import {
   loadIdentity,
   loadProfiles,
   newGuest,
+  removeProfile,
   saveIdentity,
   saveProfiles,
   type LocalIdentity,
@@ -24,6 +25,7 @@ interface SessionValue {
   readonly identity: LocalIdentity
   readonly profiles: ReadonlyArray<Profile>
   readonly addGuest: (name: string) => Profile
+  readonly removeGuest: (id: string) => void
   readonly rename: (name: string) => void
   readonly client: MatchClient | null
   /** True when this build can host a room: only the installed app can. */
@@ -98,6 +100,12 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       setProfiles(next)
       saveProfiles(next)
       return guest
+    },
+    removeGuest: (id) => {
+      const next = removeProfile(profiles, id)
+      if (next === profiles) return
+      setProfiles(next)
+      saveProfiles(next)
     },
     canHost: native,
     canJoin: true,

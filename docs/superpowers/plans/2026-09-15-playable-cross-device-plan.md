@@ -374,7 +374,7 @@ ever grows until it hits the six-player cap.
 - Produces: `SessionValue.removeGuest(id: string): void` — drops the guest from
   React state and from `localStorage`. Owner profiles are never removable.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/app-shell/src/store/__tests__/match-client.test.ts`:
 
@@ -400,7 +400,7 @@ Read the existing helpers in that file first. If there is no `makeLocalClient`
 or `transport.settle()`, use whatever construction and flush the neighbouring
 tests already use and keep the three assertions — do not invent a helper.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -409,7 +409,7 @@ nubx vitest run packages/app-shell/src/store/__tests__/match-client.test.ts -t "
 
 Expected: FAIL.
 
-- [ ] **Step 3: Add `removeGuest` to the session**
+- [x] **Step 3: Add `removeGuest` to the session**
 
 In `packages/app-shell/src/app/session.tsx`, add to the `SessionValue` interface
 beside `addGuest`:
@@ -432,7 +432,7 @@ and to the `value` object beside `addGuest`:
     },
 ```
 
-- [ ] **Step 4: Add the remove control to the lobby**
+- [x] **Step 4: Add the remove control to the lobby**
 
 In `packages/app-shell/src/routes/lobby.tsx`, inside the roster `<ul>`, render a
 remove button for local guest seats. Replace the existing player `<li>` map with
@@ -460,7 +460,7 @@ one that adds the control — read the current markup and keep its classes:
           ))}
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -469,7 +469,7 @@ nub run test && nub run typecheck && nub run lint
 
 Expected: all pass.
 
-- [ ] **Step 6: Drive the UI**
+- [x] **Step 6: Drive the UI**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -480,7 +480,7 @@ Expected: no console errors, no horizontal overflow. If Playwright cannot launch
 (the container has been missing `libnspr4.so`), record that as blocked rather
 than reporting a pass — do not claim a UI result you did not see.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/app-shell/src/app/session.tsx packages/app-shell/src/routes/lobby.tsx packages/app-shell/src/store/__tests__/match-client.test.ts
@@ -488,6 +488,25 @@ git commit -m "feat: remove a local guest from the lobby"
 ```
 
 ---
+
+
+**DONE.** `nub run test` 161 passed, typecheck and lint clean, `verify:ui` clean.
+
+Three corrections to the plan:
+
+- The removal rule went into `identity.ts` as a pure `removeProfile(profiles, id)`
+  rather than living inline in `session.tsx`. The React context is not unit-testable
+  here, and the plan's `match-client` test would have passed without the feature.
+  `removeProfile` returns the original array when nothing matched, so the caller
+  skips the write and the re-render.
+- `verify:ui` is **not** blocked in this container, contrary to what the handoff
+  recorded. `drive-app.mjs` already falls back to any Chromium under
+  `PLAYWRIGHT_BROWSERS_PATH`, and build 1194 is installed and launches.
+- Driving the flow found a real layout defect. `.players` is shared with the match
+  HUD, which wants a wrapping horizontal strip; the lobby roster needs one player
+  per row, or six names each with a remove button run off the side of a phone.
+  `.roster .players` is now a column, and `.add-player`/`.remove-player` had no
+  styling at all. Screenshots confirmed before and after.
 
 ### Task 4: Say whose turn it is, and let the device switch seats
 

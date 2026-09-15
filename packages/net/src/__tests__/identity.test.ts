@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { loadProfiles, saveProfiles, type Profile } from "../identity"
+import { loadProfiles, removeProfile, saveProfiles, type Profile } from "../identity"
 
 const storage = new Map<string, string>()
 
@@ -89,5 +89,30 @@ describe("local profiles", () => {
       expect.objectContaining({ id: "owner-1", name: "Sam", kind: "owner" }),
     )
     expect(profiles.map((p) => p.id)).toEqual(["owner-1", "g1"])
+  })
+
+  it("removes a guest from the roster", () => {
+    const profiles: Profile[] = [
+      { id: "p1", name: "Sam", kind: "owner", createdAt: 1 },
+      { id: "g1", name: "Guest", kind: "guest", createdAt: 2 },
+      { id: "g2", name: "Jo", kind: "guest", createdAt: 3 },
+    ]
+
+    expect(removeProfile(profiles, "g1").map((p) => p.id)).toEqual(["p1", "g2"])
+  })
+
+  it("refuses to remove an owner, because the device would lose its own seat", () => {
+    const profiles: Profile[] = [
+      { id: "p1", name: "Sam", kind: "owner", createdAt: 1 },
+      { id: "g1", name: "Guest", kind: "guest", createdAt: 2 },
+    ]
+
+    expect(removeProfile(profiles, "p1")).toBe(profiles)
+  })
+
+  it("returns the same roster when the id is unknown", () => {
+    const profiles: Profile[] = [{ id: "p1", name: "Sam", kind: "owner", createdAt: 1 }]
+
+    expect(removeProfile(profiles, "nope")).toBe(profiles)
   })
 })

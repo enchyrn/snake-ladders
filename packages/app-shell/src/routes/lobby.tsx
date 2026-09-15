@@ -100,6 +100,21 @@ export const LobbyScreen = () => {
                 {player.id === me ? " (you)" : ""}
               </span>
               {!player.connected && <span className="hint">away</span>}
+              {role === "local" &&
+                session.profiles.some((p) => p.id === player.id && p.kind === "guest") && (
+                  <button
+                    type="button"
+                    className="remove-player"
+                    aria-label={`Remove ${player.name}`}
+                    onClick={() => {
+                      session.removeGuest(player.id)
+                      client.setSeats(client.state.seats.filter((seat) => seat !== player.id))
+                      client.send({ _tag: "Leave", playerId: player.id })
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
             </li>
           ))}
           {match.players.length === 0 && <li className="hint">Waiting for players to join…</li>}

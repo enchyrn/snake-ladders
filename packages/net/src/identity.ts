@@ -93,6 +93,22 @@ const validate = (parsed: unknown): Profile[] => {
   })
 }
 
+/**
+ * Drop a guest from the roster. Owners are refused: an owner is the device
+ * itself, so removing one would leave the person holding it with no seat, and
+ * `loadProfiles` would put it straight back on the next load anyway.
+ *
+ * Returns the original array when nothing matched, so a caller can skip the
+ * write and the re-render.
+ */
+export const removeProfile = (
+  profiles: ReadonlyArray<Profile>,
+  id: string,
+): ReadonlyArray<Profile> => {
+  const next = profiles.filter((profile) => !(profile.kind === "guest" && profile.id === id))
+  return next.length === profiles.length ? profiles : next
+}
+
 const ownerFromIdentity = (): Profile => {
   const identity = loadIdentity()
   return { id: identity.playerId, name: identity.name, kind: "owner", createdAt: Date.now() }
