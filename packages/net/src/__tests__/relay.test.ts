@@ -98,6 +98,38 @@ describe("Sequencer", () => {
     expect(seq.join({ playerId: "a", name: "A", send: () => {} })).toMatchObject({ ok: true })
   })
 
+  /** `join` returns a union; every caller here expects the admitted branch. */
+  const admit = (seq: Sequencer, playerId: string) => {
+    const result = seq.join({ playerId, name: playerId, send: () => {} })
+    if (!result.ok) throw new Error(`join refused: ${result.reason}`)
+    return result
+  }
+
+  it("does not hand host authority to a stranger after the host drops", () => {
+    const seq = new Sequencer({ room: "ROOM" })
+    const host = admit(seq, "host")
+
+    seq.leave("host", host.token)
+    const stranger = admit(seq, "stranger")
+
+    // The identity survives the drop, so the seat the host left is still theirs.
+    expect(seq.hostId).toBe("host")
+    expect(seq.canLock("stranger", stranger.token)).toBe(false)
+    expect(seq.locked).toBe(false)
+  })
+
+  it("gives lock authority back to the original host on reconnect", () => {
+    const seq = new Sequencer({ room: "ROOM" })
+    const first = admit(seq, "host")
+    seq.leave("host", first.token)
+
+    const again = admit(seq, "host")
+
+    expect(seq.canLock("host", again.token)).toBe(true)
+    // The stale registration must not still carry authority.
+    expect(seq.canLock("host", first.token)).toBe(false)
+  })
+
   it("refuses a player beyond capacity", () => {
     const seq = new Sequencer({ capacity: 2 })
     seq.join({ playerId: "a", name: "A", send: () => {} })

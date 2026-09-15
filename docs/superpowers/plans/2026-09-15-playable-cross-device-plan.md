@@ -678,7 +678,7 @@ its regression is not closed. There is also dead code left behind by the first.
   `submit` can be made to fail.
 - Produces: no new exports.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to the `describe("Sequencer", ...)` block in
 `packages/net/src/__tests__/relay.test.ts`:
@@ -742,7 +742,7 @@ Read the file's existing fake transport before writing this. If it has no
 `failNextSubmit` or `emitRoster`, add the smallest hooks to the existing fake
 that let a submit fail once and a roster be pushed — do not build a second fake.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -752,7 +752,7 @@ nubx vitest run packages/net/src/__tests__/relay.test.ts packages/app-shell/src/
 Expected: the three new tests FAIL. If a relay one passes, the fix is already
 complete — say so and keep the test.
 
-- [ ] **Step 3: Remove the dead host claim**
+- [x] **Step 3: Remove the dead host claim**
 
 In `apps/relay/lan-relay.mjs`, `join()` now claims `#hostId` before the welcome
 send, so the line after the `try/catch` can never fire. Delete these three lines:
@@ -763,12 +763,12 @@ send, so the line after the `try/catch` can never fire. Delete these three lines
     if (this.#hostId === null) this.#hostId = playerId
 ```
 
-- [ ] **Step 4: Remove the duplicate declaration**
+- [x] **Step 4: Remove the duplicate declaration**
 
 In `apps/relay/lan-relay.d.ts`, `get hostId(): string | null` appears twice in
 the `Sequencer` class. Delete the second one.
 
-- [ ] **Step 5: Make the departure retry**
+- [x] **Step 5: Make the departure retry**
 
 If the `match-client` test still fails, the re-arm is not reachable: a stalled
 round produces no commits, so `drain()` never runs and nothing re-fires
@@ -778,7 +778,7 @@ the retry — confirm the re-armed id is still in `pendingDepartures` and not
 short-circuited by `this.retired`. Fix whichever of the two sets is wrong; do
 not add a timer.
 
-- [ ] **Step 6: Run the gates**
+- [x] **Step 6: Run the gates**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -787,7 +787,7 @@ nub run test && nub run typecheck && nub run lint
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/relay/lan-relay.mjs apps/relay/lan-relay.d.ts packages/net/src/__tests__/relay.test.ts packages/app-shell/src/store/__tests__/match-client.test.ts
@@ -795,6 +795,19 @@ git commit -m "test: pin host authority across a drop, and a retried departure"
 ```
 
 ---
+
+
+**DONE.** `nub run test` 166 passed, typecheck and lint clean.
+
+Both Criticals were already fixed in `5f6f661`; all three regressions passed on
+first write. A test that passes on broken code proves nothing, so each was
+mutation-checked by reverting the fix it guards — the host-authority one fails
+when `leave` clears `#hostId`, and the departure one fails when the re-arm is
+removed from the failed-submit branch. Step 5 needed no change: the roster
+handler already re-runs `retireDeparted`, which is the retry.
+
+Typecheck caught that `JoinResult` is a union, so `.token` needs narrowing —
+hence the `admit` helper rather than reaching into the result directly.
 
 ### Task 6: Update the handoff and reconcile the pull request
 

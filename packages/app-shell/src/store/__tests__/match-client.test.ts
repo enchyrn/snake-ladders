@@ -12,15 +12,20 @@ const controllable = (lock?: TransportService["lock"]) => {
   const commits = emitter<Committed>()
   const rosters = emitter<ReadonlyArray<{ player_id: string; name: string; connected: boolean }>>()
   const sent: unknown[] = []
-  const transport = { locked: false }
+  // `failSubmit` lets a test make one submission fail the way a dropped socket
+  // would, which is the only way to reach the departure re-arm.
+  const transport = { locked: false, failSubmit: null as string | null }
   const service: TransportService = {
     ...makeLocalTransport(),
     lock: lock ?? Effect.sync(() => {
       transport.locked = true
     }),
-    submit: (action) => Effect.sync(() => {
-      sent.push(action)
-    }),
+    submit: (action) =>
+      transport.failSubmit === null
+        ? Effect.sync(() => {
+            sent.push(action)
+          })
+        : Effect.fail(new TransportError({ reason: transport.failSubmit })),
     onCommit: commits.subscribe,
     onRoster: rosters.subscribe,
   }
@@ -359,6 +364,33 @@ describe("local transport", () => {
     c.setActingSeat("b")
 
     expect(c.state.actingSeat).toBe("a")
+    c.dispose()
+  })
+
+  it("re-arms a departure whose Leave could not be submitted", async () => {
+    const { service, commits, rosters, transport, sent } = controllable()
+    const c = new MatchClient(service, config, "host", "a")
+    const away = [
+      { player_id: "a", name: "a", connected: true },
+      { player_id: "b", name: "b", connected: false },
+    ]
+
+    seatPlayers(commits, ["a", "b"])
+    commits.emit({ seq: 2, action: { _tag: "Start" } })
+
+    transport.failSubmit = "offline"
+    rosters.emit(away)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(sent).toEqual([])
+
+    // The round is stalled, so no commit arrives to drive a retry: the next
+    // roster frame is the only thing that can, and it has to still try.
+    transport.failSubmit = null
+    rosters.emit(away)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(sent).toContainEqual({ _tag: "Leave", playerId: "b" })
     c.dispose()
   })
 })

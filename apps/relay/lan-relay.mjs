@@ -140,9 +140,6 @@ export class Sequencer {
       }
       return { ok: false, reason: "could not reach client" }
     }
-    // First to actually make it into the room, not merely to attempt it —
-    // a join that failed above never reaches here to claim it.
-    if (this.#hostId === null) this.#hostId = playerId
     this.#broadcast({ t: "roster", peers: this.roster() })
     return { ok: true, token }
   }
