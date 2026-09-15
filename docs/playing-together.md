@@ -32,6 +32,20 @@ Pick the row that matches what you have.
 | Android phones only | **Install the app** on each — native Wi-Fi, nothing else running |
 | An iPhone in the mix | **Run the relay** on a computer |
 | A computer and any phones | **Run the relay** — simplest, no installs |
+| An Android host and a browser | **Install the app** on the Android, and open the game over `http://` on the other device — no relay needed |
+
+### A browser joining an installed host
+
+The installed app's host accepts browsers directly, so an Android phone can be
+the host for someone on a laptop with nothing else running. On the host, read
+the `address:port@CODE` line off the lobby screen; on the laptop, pick **Join a
+game** and type it in.
+
+One hard limit, and no setting changes it: **the page has to have been opened
+over `http://`.** A page served over HTTPS — which is what the deployed site is
+— is forbidden by the browser from opening an insecure connection to a device on
+your Wi-Fi, and it refuses before anything reaches the network. Use a dev server
+on the LAN (`nub run dev -- --host`), or the installed app. See ADR 0019.
 
 ### Native Wi-Fi (installed app)
 

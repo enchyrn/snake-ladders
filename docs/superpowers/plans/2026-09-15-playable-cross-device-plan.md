@@ -1130,7 +1130,7 @@ since whatever sent it cannot decode a WebSocket frame.
 - Create: `docs/adr/0019-native-host-speaks-websocket.md`
 - Modify: `docs/playing-together.md`, `docs/handoff.md`
 
-- [ ] **Step 1: Write the ADR first**
+- [x] **Step 1: Write the ADR first**
 
 CLAUDE.md requires the ADR *before* the change, and this is architectural. Record:
 the decision (one listener, two protocols, chosen over a second port); the cost
@@ -1139,14 +1139,14 @@ fragmentation support); and what it does **not** buy — the deployed HTTPS PWA
 still cannot join, because mixed content is a browser rule and not ours to fix.
 ADR 0012 and 0013 are the prior art.
 
-- [ ] **Step 2: Let the join screen take a host address**
+- [x] **Step 2: Let the join screen take a host address**
 
 Read `packages/net/src/websocket.ts` and the join route. The browser transport
 already builds a `ws://` URL for the relay; it needs to accept a `host:port` from
 the join screen so it can dial an Android host directly. Keep the room code as the
 seed — nothing about seeding changes.
 
-- [ ] **Step 3: Run every gate**
+- [x] **Step 3: Run every gate**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1154,7 +1154,7 @@ nub run test && nub run typecheck && nub run lint
 cargo test -p lan-sync
 ```
 
-- [ ] **Step 4: Commit and push**
+- [x] **Step 4: Commit and push**
 
 ```bash
 git add -A
@@ -1162,12 +1162,25 @@ git commit -m "feat: let a LAN-served browser join a native host directly"
 git push -u origin claude/snake-ladders-cross-device-3uu177
 ```
 
-- [ ] **Step 5: Record honestly what is still unverified**
+- [x] **Step 5: Record honestly what is still unverified**
 
 Two phones have still not played each other. CI builds the APK; it does not run
 it. Say so in `docs/handoff.md` rather than implying the pairing is proven.
 
 ---
+
+
+**DONE.** All JS gates green at 166 tests, `verify:ui` clean.
+
+Step 2 turned out to need no code. `relayUrl` already accepts any `host:port`
+and defaults the port only when one is omitted, and `refuseInsecure` already
+produces the right message for the HTTPS case. The native host binds an
+**ephemeral** port, advertised over UDP, so a browser could never have guessed
+it anyway — the player types the `address:port@CODE` line the host lobby already
+displays. What was wrong was the copy, which said "nearby devices" and meant
+only installed apps.
+
+The ADR was written ahead of Task 7, not here, per CLAUDE.md.
 
 ## Deferred
 

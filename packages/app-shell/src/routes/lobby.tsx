@@ -82,6 +82,9 @@ export const LobbyScreen = () => {
             Port {room.port}. Nearby devices find this automatically on the
             Join screen; if one doesn't see it, it can enter this device's own
             Wi-Fi address as <code>address:{room.port}@{roomCode(match.config.seed)}</code>.
+            A browser on the same Wi-Fi can join with that same address, as long
+            as the page it's on was opened over <code>http://</code> — a page
+            served over HTTPS is not allowed to reach this room.
           </p>
         )}
         {role === "local" && (

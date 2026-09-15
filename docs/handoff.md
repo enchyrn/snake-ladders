@@ -64,9 +64,39 @@ time on this branch that driving the built app found something review did not.
 browser's default favicon request 404s. Harmless, pre-existing, and invisible to
 `verify:ui` because the browser issues that request outside the page context.
 
-**Next:** Milestone B of the same plan — teaching the native host RFC 6455 so a
-LAN-served PWA can join an Android-hosted room. Read its preamble first: it does
-**not** unblock the deployed PWA, and is not a substitute for open thread 1.
+### Milestone B: a browser can now join a natively hosted room
+
+Done, and tested end to end in Rust. `crates/lan-sync/src/ws.rs` is a partial
+RFC 6455 codec (`7d67d3c`) and `host.rs` now decides which protocol a client
+speaks before reading its handshake (`4627d01`). One listener, two protocols.
+
+| | |
+|---|---|
+| Codec | 13 tests, including the RFC's own worked accept-key example |
+| Host | `a_browser_handshake_is_upgraded_and_welcomed`, and — the one that matters — `a_browser_and_a_native_peer_share_one_ordered_log` |
+| Gates | `cargo test -p lan-sync` 39 passed, clippy clean under `-D warnings` |
+
+Detection is on the **first byte**, not four. `fill_buf` blocks until one byte
+is available and never waits to accumulate more, so a four-byte comparison can
+read a short buffer and mistake a browser for a native peer. `G` and `{` cannot
+collide.
+
+The browser side needed no transport change: `relayUrl` already dials any
+`host:port`, and `refuseInsecure` already explains the HTTPS refusal properly.
+Only the copy changed, because "nearby devices" now includes browsers.
+
+**What this does not do.** The deployed PWA on GitHub Pages still cannot join an
+Android host, and nothing here changes that — an HTTPS page may not open a
+`ws://` socket. The achievable pairing is a page served over plain HTTP on the
+LAN. Open thread 1 is still open and still needs its own ADR.
+
+**Still unverified, and only hardware can close it.** Two devices have not
+played each other. CI builds the APK; it does not run it. The Rust tests prove
+the host accepts a browser's framing on loopback — they do not prove an Android
+build serves it over real Wi-Fi. Do not describe Android-to-browser cross-play
+as proven.
+
+**Next:** open thread 1 (the `wss://` decision), then the remaining threads.
 
 Tasks 1, 3, 4, 5, 6 and 7 of the Nx/Nub/PWA plan are complete. Task 1 deployed
 the PWA and it was opened on a real device; that deployment also settled a
