@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest"
 import { at, events, ladder, run, runAll, scenario, snake, succeeds } from "./helpers"
+import { buildTiles } from "../board"
 import { advance } from "../rules/momentum"
+import * as Mutation from "../rules/mutation"
 import * as Mines from "../rules/minesweeper"
 import { knockbackTile } from "../rules/simultaneous"
-import { defaultConfig } from "../types"
+import { seedRng } from "../rng"
+import { defaultConfig, type Board, type MatchConfig } from "../types"
 
 const commit = (id: string) => ({ _tag: "Commit" as const, playerId: id })
 const card = (id: string, c: "reverse" | "anchor" | "double" | "swap" | "defuse", tile?: number) =>
@@ -168,6 +171,28 @@ describe("mutation module", () => {
     // Round 3 is not a breathing round, so the layout holds still.
     const quiet = run(breathed, commit("a"))
     expect(quiet.board.links.map((l) => `${l.from}->${l.to}`)).toEqual(after)
+  })
+
+  it("never seats a relocated link's mouth on another link's endpoint", () => {
+    // free excluded the endpoints that existed when it was built, but a
+    // relocation adds two more and only removed one of them from free, so the
+    // next draw could land on the partner tile of the previous relocation.
+    const config: MatchConfig = { ...defaultConfig(1), modules: ["mutation"], size: 6 }
+    const board: Board = {
+      size: config.size,
+      tiles: buildTiles(config.size, new Set()),
+      links: [ladder("L1", 3, 9), snake("S1", 30, 18), ladder("L2", 12, 22)],
+    }
+
+    // Sweep seeds rather than guessing one: the collision needs two successful
+    // relocations in the same call, which only some streams produce.
+    for (let seed = 0; seed < 400; seed++) {
+      const [next] = Mutation.breathe(board, config, new Set<number>(), seedRng(seed))
+      const mouths = next.links.map((l) => l.from)
+      const landings = next.links.map((l) => l.to)
+      const all = [...mouths, ...landings]
+      expect(new Set(all).size, `seed ${seed} produced a chained board`).toBe(all.length)
+    }
   })
 })
 

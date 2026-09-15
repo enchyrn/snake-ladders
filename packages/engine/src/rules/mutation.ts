@@ -72,12 +72,20 @@ export const breathe = (
     const span = Math.abs(link.to - link.from)
     const partner = link.kind === "ladder" ? anchor + span : anchor - span
     if (partner <= 1 || partner >= top || endpoints.has(partner) || occupied.has(partner)) continue
+    // A previous relocation in this same call added its endpoints to
+    // `endpoints` but only took its anchor out of `free`, so both of its
+    // tiles could still be drawn here.
+    if (endpoints.has(anchor)) continue
 
     endpoints.delete(link.from)
     endpoints.delete(link.to)
     endpoints.add(anchor)
     endpoints.add(partner)
-    free.splice(slot, 1)
+    // Drop the higher index first so the lower one does not shift.
+    const partnerSlot = free.indexOf(partner)
+    for (const s of [slot, partnerSlot].filter((s) => s >= 0).sort((a, b) => b - a)) {
+      free.splice(s, 1)
+    }
 
     links[pick] = { ...link, from: anchor, to: partner }
     moved.push(link.id)
