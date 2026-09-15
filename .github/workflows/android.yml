@@ -26,6 +26,13 @@ jobs:
           java-version: "17"
 
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's default package list is "tools platform-tools", and
+          # `tools` no longer exists in the SDK repository — sdkmanager fails
+          # the whole job on it before anything of ours has run. Nothing here
+          # used it: the NDK is installed explicitly below and the Gradle
+          # build wants platform-tools.
+          packages: platform-tools
 
       - name: Install Android NDK
         # `tauri android build` cross-compiles the Rust side (see
