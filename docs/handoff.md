@@ -6,50 +6,67 @@ machine — can pick it up without re-deriving anything.
 
 ## Current checkpoint (2026-09-15)
 
-The latest durable checkpoint is commit `ada4ab8` (`feat: add local
-multi-seat pass-and-play`). The worktree was clean after that commit. It adds
-device-local owner/guest profiles, migration from the existing `sl:identity`,
-local lobby guest creation, multiple owned seats, `actingSeat` selection, and
-match controls that target the currently acting local seat. It also includes
-the browser relay lock flow, host authorization hardening in progress, and
-regressions for profiles, relay behavior, and seat ownership.
+Pass-and-play is complete and playable, and the two Criticals the multi-seat
+review raised are closed with regressions. The branch is ready to merge.
 
-The fresh verification run after the checkpoint's implementation changes was:
+The multi-seat work arrived from another session as `25a09ac`. Its own handoff
+note cited commit `ada4ab8`, which does not exist in this history — that was a
+pre-rebase sha from that session's local clone, and `5f6f661` reconciled it.
+Do not go looking for it.
 
-- `nub run test`: 141 tests passed.
+**What `docs/superpowers/plans/2026-09-15-playable-cross-device-plan.md` closed
+(Milestone A, Tasks 1–5):**
+
+| Task | Commit | What it fixed |
+|---|---|---|
+| 1 | `94e03b4` | `loadProfiles` repaired the roster but never wrote it back, so the same junk was re-validated on every load; and it could return a roster with no owner, leaving the person holding the device with no seat at all. |
+| 2 | `53c7b08` | `Leave` in the **lobby** now frees the seat and closes the gap. Mid-match it still keeps it — seats are the deterministic tiebreaker. |
+| 3 | `33b5b5c` | Guests could be added but never removed, so every future local match auto-joined every guest ever created. |
+| 4 | `c0a9f61` | The device now says whose turn it is, and can switch between the seats it owns — under `simultaneous` only the first was reachable. |
+| 5 | `b9cb446` | Regressions for both inherited Criticals, plus the dead code the first fix left behind. |
+
+**Gates, run on `b9cb446`:**
+
+- `nub run test`: 166 passed, 16 files (was 152 at `5f6f661`).
 - `nub run typecheck`: passed.
 - `nub run lint`: passed.
-- `git diff --check`: passed before the checkpoint commit.
-- `nub run verify:ui`: blocked by the container's missing `libnspr4.so`, even
-  after installing the Playwright Chromium binary. This is an environment
-  limitation, not a passing UI result.
+- `cargo test -p lan-sync`: 24 passed.
+- `nub run verify:ui`: **passed** — no console errors, no page errors, no
+  horizontal overflow.
 
-The second read-only pre-merge review found two **Critical** issues, so this
-branch must not be merged yet:
+### Two corrections to what the previous checkpoint recorded
 
-1. **Relay host authority can transfer after host disconnect.**
-  `apps/relay/lan-relay.mjs` clears `hostId` when the host leaves, allowing
-  the next joining identity to become host and lock the room. Preserve the
-  original host identity across disconnects; only that identity's valid
-  reconnect should regain lock authority. Add a regression for a host
-  disconnect followed by a stranger joining and attempting `lock`.
-2. **A failed departure submission is never retried.**
-  `packages/app-shell/src/store/match-client.ts` marks a player retired before
-  `transport.submit(Leave)` succeeds. If submission fails, the simultaneous
-  round can remain blocked forever. Re-arm the departure when submission fails
-  or retry until the Leave commit is observed, with a focused regression using
-  a transport that fails the first submission.
+**`verify:ui` is not blocked in this container.** The previous note said
+Playwright failed on a missing `libnspr4.so`. It does not: `drive-app.mjs`
+already falls back to any Chromium under `PLAYWRIGHT_BROWSERS_PATH`, and build
+1194 is installed at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` and
+launches fine. Playwright asks for build 1243 and refuses it by default, which
+is what the fallback exists to absorb. **Run the UI gate; do not assume it is
+unavailable.**
 
-The review also identified lower-priority follow-up work: persist repaired
-profile data after deduplication/validation, guarantee at least one usable
-owner profile even when legacy identity data is malformed, and assert that
-repair is written back. The current profile fallback handles storage failure
-but those normalization details should be tightened before merge.
+**Both Criticals were already fixed in `5f6f661`**, not left open. What was
+missing was the evidence. All three regressions written for Task 5 passed on
+first write, so each was checked against the defect it guards by reverting the
+fix and confirming the test goes red. That is worth repeating for any test
+written after the fix it covers.
 
-**Next session:** fix the two Critical review findings first, add their
-regressions, run `nub run test`, `nub run typecheck`, `nub run lint`, and then
-request another read-only review. Only after that review is clean should the
-branch be merged into `origin/main`.
+### What driving the app found that reading it did not
+
+The lobby roster shares its `.players` class with the match HUD, which wants a
+wrapping horizontal strip. Once each row carried a remove button, six players
+ran off the side of a phone — and `.add-player` had no styling at all. Neither
+was visible in the source; both were obvious in a screenshot. This is the third
+time on this branch that driving the built app found something review did not.
+
+### Known, unfixed, and not this branch's
+
+`dist/` has no `favicon.ico` and `index.html` links no icon of that name, so a
+browser's default favicon request 404s. Harmless, pre-existing, and invisible to
+`verify:ui` because the browser issues that request outside the page context.
+
+**Next:** Milestone B of the same plan — teaching the native host RFC 6455 so a
+LAN-served PWA can join an Android-hosted room. Read its preamble first: it does
+**not** unblock the deployed PWA, and is not a substitute for open thread 1.
 
 Tasks 1, 3, 4, 5, 6 and 7 of the Nx/Nub/PWA plan are complete. Task 1 deployed
 the PWA and it was opened on a real device; that deployment also settled a

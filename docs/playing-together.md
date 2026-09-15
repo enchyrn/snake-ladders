@@ -12,6 +12,17 @@ The lobby shows a room code even in pass-and-play, because the code is the
 board: type the same code another day and you get the same snakes, ladders and
 minefield.
 
+**Adding and removing players.** Type a name in the lobby and press **Add
+player**. Everyone but you gets a **×** to remove them again; you cannot remove
+yourself, because the device has to have a seat. Players you add are remembered
+on this device, so the same group is already seated next time — remove anyone
+who is not playing today, or they join again.
+
+**Whose turn it is.** Once more than one player shares the device, the match
+screen names whoever should be holding it. With **Simultaneous** on everyone
+rolls in the same round, so the names appear as buttons: tap one to play as that
+player, and the highlighted name is the one your roll and cards will apply to.
+
 ## Several devices
 
 Pick the row that matches what you have.
