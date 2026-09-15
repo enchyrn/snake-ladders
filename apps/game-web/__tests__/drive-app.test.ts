@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { request as httpRequest } from "node:http"
 import { request as httpsRequest } from "node:https"
 import { tmpdir } from "node:os"
@@ -69,5 +69,23 @@ describe("serveDist", () => {
     // exactly as on a host serving a project site.
     expect((await get(served.origin, "/snake-ladders")).status).toBe(200)
     expect((await get(served.origin, "/")).status).toBe(404)
+  })
+
+  it("refuses a longer name that merely starts with the base, and its escape", async () => {
+    // The check was a bare string prefix, so /snake-laddersX counted as inside
+    // the base and left a *relative* remainder — the one shape where a leading
+    // ".." survives normalize and join walks back out of dist.
+    const parent = await mkdtemp(join(tmpdir(), "drive-app-outer-"))
+    await writeFile(join(parent, "secret.txt"), "not servable")
+    const dist = join(parent, "dist")
+    await mkdir(dist)
+    await writeFile(join(dist, "index.html"), '<!doctype html><div id="root">hello</div>')
+
+    const served = await serveDist({ dist, port: 0, base: "/snake-ladders" })
+    open.push(served.server)
+
+    const escaped = await get(served.origin, "/snake-ladders../secret.txt")
+    expect(escaped.status).toBe(404)
+    expect(escaped.body).not.toContain("not servable")
   })
 })

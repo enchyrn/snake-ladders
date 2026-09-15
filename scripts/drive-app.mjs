@@ -115,11 +115,16 @@ export const serveDist = async ({ dist, base = "", port = 0, https = false }) =>
       // would serve a root-absolute URL — the manifest, an icon, the
       // service worker — happily here and 404 only once deployed, which
       // is the one failure this flag exists to catch.
-      if (!path.startsWith(prefix)) {
+      // The prefix has to end on a path boundary. /snake-laddersX is a
+      // different site, and counting it as inside the base leaves a
+      // *relative* remainder, where normalize keeps a leading ".." instead
+      // of collapsing it and join walks back out of dist.
+      const rest = path.startsWith(prefix) ? path.slice(prefix.length) : null
+      if (rest === null || (rest !== "" && !rest.startsWith("/"))) {
         res.writeHead(404).end("not found")
         return
       }
-      path = path.slice(prefix.length)
+      path = rest
     }
     path = normalize(path).replace(/^\/+/, "")
     // normalize("") is "." — reading that is a directory, not the page.
