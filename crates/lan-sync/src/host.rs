@@ -464,10 +464,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
     pending.complete();
 
     // --- frame loop ------------------------------------------------------
-    loop {
-        let Some(buf) = read_frame(&mut reader, ws) else {
-            break;
-        };
+    while let Some(buf) = read_frame(&mut reader, ws) {
         let trimmed = buf.trim();
         if trimmed.is_empty() {
             continue;

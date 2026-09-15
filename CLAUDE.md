@@ -98,6 +98,14 @@ because it does not look, not because they are clean. `src-tauri` needs its own
 `cargo fmt` run from inside that directory. Two files had drifted unformatted
 for exactly this reason before anyone noticed.
 
+`cargo clippy` is only as strict as the toolchain running it. CI uses
+`dtolnay/rust-toolchain@stable`, which is whatever stable is that day; a
+container's Rust can be months older and will happily pass code that CI then
+rejects, because clippy gains lints over time. A `while let` rewrite failed CI
+on exactly this after passing locally. `mise` cannot resolve `rust@stable` in a
+cloud session (the GitHub releases API answers 403), but `rustup update stable`
+works and is worth running before trusting a clean clippy.
+
 The Tauri app cannot be built in most dev containers: it needs webkit2gtk on
 Linux, an Android SDK+NDK for Android, and macOS with Xcode for iOS. **Do not
 try to `cargo build` or `cargo check` `src-tauri/`** unless those are present.
