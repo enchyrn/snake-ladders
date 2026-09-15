@@ -29,6 +29,11 @@ jobs:
       # outside every project's include list has no typechecker at all. This is
       # the root config, which covers the tree as one program — including
       # vitest.config.ts, where every alias the suite resolves through lives.
+      # It also covers scripts/: packages/tooling declares sourceRoot: scripts,
+      # but Nx attributes files to a project by root, not sourceRoot, so
+      # scripts/ (drive-app.d.ts among them) belongs to no Nx project and is
+      # invisible to run-many and its cache. This uncached step is the only
+      # thing that typechecks it — do not drop it as redundant with run-many below.
       - run: nub run typecheck
 
       # Every project's typecheck runs, and the whole suite with it: vitest

@@ -74,6 +74,13 @@ export const JoinScreen = () => {
     () => onceAtATime((addr: string, seed: number) => latest.current(addr, seed), setJoining),
     [],
   )
+  // This guard is instance-scoped, not global: Back is deliberately left
+  // enabled while joining, so tap-room -> Back -> Join remounts JoinScreen
+  // with a fresh `busy === false` wrapper, and a second join can start while
+  // the first is still awaiting its handshake. That's fine only because
+  // session.closeIf / client-slot.ts's clearIf stays the one authority on who
+  // owns the session — don't read "only one join runs now" as license to
+  // remove that machinery, it's the fix for a defect an earlier session hit.
 
   const enterManually = () => {
     const [addr, code] = manual.split("@")

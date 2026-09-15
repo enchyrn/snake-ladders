@@ -451,6 +451,21 @@ collision, where the fixed-port version failed every time.)
   public would make GitHub-hosted macOS runners free; it would not remove the
   signing requirement.
 
+- **`packages/tooling` declares `sourceRoot: scripts`, but Nx attributes a
+  file to a project by its root, not its `sourceRoot`, and the project's root
+  is `packages/tooling/`.** `scripts/` therefore belongs to no Nx project
+  at all, and three things follow from that, all of them silent. `nx graph`
+  shows no `game-web -> tooling` edge, so `@nx/enforce-module-boundaries`
+  cannot attribute `scripts/*` to any layer — the `layer:app -> layer:tooling`
+  constraint in `eslint.config.js` and the "declared project edge the boundary
+  rule can check" comment in `vitest.config.ts` are both describing an edge
+  that the graph does not have. Nx's cache also never invalidates a target
+  when a file under `scripts/**` changes, since nothing declares it as an
+  input. And `scripts/drive-app.d.ts` ends up checked only by the root
+  `nub run typecheck`, which is a plain script rather than a cached Nx target.
+  Fixing the `sourceRoot` mis-scoping itself is untried and would change what
+  the boundary rule enforces, so it is not the trivial edit it looks like.
+
 ## Agent Workflow Checkpoint
 
 Each agent framework reads its own configuration to follow the same rules:

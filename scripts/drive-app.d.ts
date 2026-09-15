@@ -5,7 +5,10 @@
  */
 
 export interface ServedDist {
-  readonly server: import("node:http").Server
+  // https.Server extends tls.Server, not http.Server, so the https: true
+  // path in drive-app.mjs (createTlsServer) returns a value the http-only
+  // type would reject.
+  readonly server: import("node:http").Server | import("node:https").Server
   readonly port: number
   readonly origin: string
 }

@@ -13,17 +13,19 @@ const deferred = () => {
 }
 
 describe("onceAtATime", () => {
-  it("drops a call made while the first is still in flight", async () => {
+  it("drops a call made while the first is still in flight, without reporting for it", async () => {
     const gate = deferred()
     let calls = 0
+    const reported: boolean[] = []
     const guarded = onceAtATime(async () => {
       calls += 1
       await gate.promise
-    }, () => {})
+    }, (busy) => reported.push(busy))
 
     const first = guarded()
     await guarded()
     expect(calls).toBe(1)
+    expect(reported).toEqual([true])
 
     gate.resolve()
     await first
