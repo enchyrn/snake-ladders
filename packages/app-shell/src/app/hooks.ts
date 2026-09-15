@@ -32,9 +32,12 @@ export const roomCode = (seed: number): string => {
 }
 
 export const seedFromRoom = (code: string): number | null => {
-  let seed = 0
   const upper = code.toUpperCase()
-  for (let i = 0; i < Math.min(4, upper.length); i++) {
+  // The code is the seed, so a short one is not a partial match — it is a
+  // different board, built silently and with every frame still decoding.
+  if (upper.length !== 4) return null
+  let seed = 0
+  for (let i = 0; i < 4; i++) {
     const digit = ALPHABET.indexOf(upper[i]!)
     if (digit < 0) return null
     seed += digit * Math.pow(ALPHABET.length, i)

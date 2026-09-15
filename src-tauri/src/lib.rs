@@ -189,14 +189,21 @@ fn net_rooms(net: State<'_, Net>) -> CmdResult<Vec<RoomView>> {
     Ok(browser
         .rooms()
         .into_iter()
-        .map(|found| RoomView {
-            seed: seed_from_room(&found.beacon.room).unwrap_or(0),
-            room: found.beacon.room,
-            host: found.beacon.host,
-            addr: found.addr.to_string(),
-            players: found.beacon.players,
-            capacity: found.beacon.capacity,
-            locked: found.beacon.locked,
+        // A beacon's room code is always one this crate encoded, so this
+        // never actually fails — but `unwrap_or(0)` would silently offer a
+        // real, joinable room for the wrong board instead. Drop it instead:
+        // an omitted room is a lobby that looks a little sparse, not a
+        // desync with no banner to explain it.
+        .filter_map(|found| {
+            Some(RoomView {
+                seed: seed_from_room(&found.beacon.room)?,
+                room: found.beacon.room,
+                host: found.beacon.host,
+                addr: found.addr.to_string(),
+                players: found.beacon.players,
+                capacity: found.beacon.capacity,
+                locked: found.beacon.locked,
+            })
         })
         .collect())
 }

@@ -41,9 +41,14 @@ pub fn room_code(seed: u32) -> String {
 
 /// Recover the seed a room code was built from.
 pub fn seed_from_room(code: &str) -> Option<u32> {
+    // The code is the seed, so a short one is not a partial match — it is a
+    // different board, built silently and with every frame still decoding.
+    if code.len() != 4 {
+        return None;
+    }
     let radix = ROOM_ALPHABET.len() as u32;
     let mut seed: u32 = 0;
-    for (i, ch) in code.bytes().enumerate().take(4) {
+    for (i, ch) in code.bytes().enumerate() {
         let digit = ROOM_ALPHABET
             .iter()
             .position(|c| *c == ch.to_ascii_uppercase())? as u32;
