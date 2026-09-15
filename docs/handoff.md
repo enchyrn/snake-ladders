@@ -499,6 +499,37 @@ the plan inventing an authority rule without checking whether anything could
 satisfy it. **Deciding who may lock a relay-hosted room is a design question**
 and belongs with the relay-architecture decision, not a fix-up task.
 
+### The final review found two things eleven per-task reviews could not
+
+Both were defects in the plan, not in any implementation, and both came from the
+same root cause — two tasks sharing a gate that neither review could see whole.
+
+**`Leave` was a one-way door** (`59aeae1`). Task 7 set `connected: false` on a
+roster disconnect, but `case "Join"` checked `phase !== "lobby"` *above* its
+reconnect branch, so once a match started nothing could set `connected: true`
+again. Before this branch `connected` was never false, so it had never mattered.
+A three-second blip permanently ejected a player into spectating. It also
+defeated the mid-match readmission **both** sequencers deliberately implement and
+comment on — the transport readmitted a client the reducer then refused. Fixed by
+moving the reconnect branch above the phase guard.
+
+**The same host-only gate blocks `Leave` as blocks `lock`.** `retireDeparted`
+opens with `role !== "host"`, identical to `lock()`. The caveat was documented for
+one and not the other, so this file claimed the dead-phone freeze was fixed when
+on the browser path it is not. Corrected in the table above.
+
+An edge case recorded rather than fixed: `Commit(A) → Leave(B) → Join(B)` resolves
+the round without B, while `Leave(B) → Join(B) → Commit(A)` leaves it open waiting
+for B. Every device agrees — one ordered log, one pure reducer — so the
+determinism contract holds. It is a fairness question: a disconnect racing a
+co-player's commit can cost the disconnecting player their roll.
+
+**`determinism.test.ts` cannot catch any of this.** Its random-match generator
+emits Join/Start/PlayCard/Flag/Commit and never `Leave` or a mid-match `Join` —
+so the guard protecting this codebase's most important invariant has a blind spot
+over exactly the paths this work introduced. Adding a `Leave` branch to
+`playRandomMatch` is cheap and worth doing before the next change here.
+
 ### Two tooling facts that cost real time to establish
 
 - **`cargo fmt --all` from the root has never covered `src-tauri`.** The root
