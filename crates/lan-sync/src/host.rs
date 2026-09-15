@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -33,7 +33,13 @@ struct HostState {
     next_seq: u64,
     log: Vec<Sequenced>,
     clients: HashMap<String, Client>,
-    pending: HashMap<SocketAddr, TcpStream>,
+    /// Accepted sockets that have not finished a handshake, keyed by a number
+    /// this host hands out rather than by peer address. Two connections can
+    /// share an address once the OS recycles a source port, and then a
+    /// retiring connection's `Drop` evicts the live one's entry — leaving it
+    /// invisible to `shutdown`'s drain.
+    pending: HashMap<u64, TcpStream>,
+    next_pending_id: u64,
     /// Actions committed locally, drained by the host's own UI thread.
     outbox: Vec<Sequenced>,
 }
@@ -66,16 +72,29 @@ impl Host {
                 }
                 match incoming {
                     Ok(stream) => {
-                        let peer_addr = stream.peer_addr().ok();
-                        if let Some(peer_addr) = peer_addr {
-                            if let Ok(mut state) = listener_inner.state.lock() {
-                                if let Ok(registry_stream) = stream.try_clone() {
-                                    state.pending.insert(peer_addr, registry_stream);
-                                }
-                            }
-                        }
+                        // Registration must not be conditional on anything that
+                        // can fail independently of the connection being live.
+                        // `peer_addr()` and `try_clone()` both can, and either
+                        // one failing used to drop the stream into
+                        // `serve_client` with no entry in `pending` — so
+                        // `shutdown`'s drain could never reach it, race or no
+                        // race, and the peer waited out its own read timeout
+                        // instead of being told the host had gone. A stream
+                        // that cannot be registered is refused here rather than
+                        // served untracked.
+                        let registered = stream.try_clone().ok().and_then(|registry| {
+                            let mut state = listener_inner.state.lock().ok()?;
+                            let id = state.next_pending_id;
+                            state.next_pending_id += 1;
+                            state.pending.insert(id, registry);
+                            Some(id)
+                        });
+                        let Some(id) = registered else {
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        };
                         let per_client = Arc::clone(&listener_inner);
-                        thread::spawn(move || serve_client(per_client, stream, peer_addr));
+                        thread::spawn(move || serve_client(per_client, stream, id));
                     }
                     // A single refused connection must not take the room down.
                     Err(_) => continue,
@@ -140,6 +159,18 @@ impl Host {
 
     pub fn log_len(&self) -> usize {
         self.inner.state.lock().map(|s| s.log.len()).unwrap_or(0)
+    }
+
+    /// Sockets accepted but not yet through a handshake. Exposed so a test can
+    /// pin that every accepted connection is tracked, which is the property
+    /// `shutdown`'s drain rests on.
+    #[doc(hidden)]
+    pub fn pending_count(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .map(|s| s.pending.len())
+            .unwrap_or(0)
     }
 
     pub fn shutdown(&mut self) {
@@ -215,10 +246,10 @@ fn send(stream: &mut TcpStream, frame: &Downstream) -> std::io::Result<()> {
     stream.write_all(payload.as_bytes())
 }
 
-fn serve_client(shared: Arc<Shared>, stream: TcpStream, peer_addr: Option<SocketAddr>) {
+fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
     let mut pending = PendingClient {
         shared: Arc::clone(&shared),
-        peer_addr,
+        id: Some(pending_id),
     };
 
     // The accept loop inserts into `pending` and only then spawns this, so a
@@ -367,14 +398,14 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, peer_addr: Option<Socket
 
 struct PendingClient {
     shared: Arc<Shared>,
-    peer_addr: Option<SocketAddr>,
+    id: Option<u64>,
 }
 
 impl PendingClient {
     fn complete(&mut self) {
-        if let Some(peer_addr) = self.peer_addr.take() {
+        if let Some(id) = self.id.take() {
             if let Ok(mut state) = self.shared.state.lock() {
-                state.pending.remove(&peer_addr);
+                state.pending.remove(&id);
             }
         }
     }

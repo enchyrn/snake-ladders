@@ -21,6 +21,16 @@ fn pump_until(session: &Session, sink: &mut RecordingSink, want: usize) -> Vec<S
     sink.commits()
 }
 
+/// Poll a predicate until it holds, or time out. Accept runs on the listener
+/// thread, so a count settles shortly after `connect` returns rather than with
+/// it; sleeping a fixed amount instead would be either flaky or slow.
+fn wait_for(mut predicate: impl FnMut() -> bool) {
+    let deadline = Instant::now() + TIMEOUT;
+    while Instant::now() < deadline && !predicate() {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 #[test]
 fn a_host_and_a_peer_fold_the_same_numbered_log() {
     // `false`: skip the broadcast beacon so the test does not depend on the
@@ -235,4 +245,56 @@ fn session_types_satisfy_tauri_managed_state_bounds() {
     assert_send_sync::<lan_sync::Browser>();
     assert_send_sync::<lan_sync::Advertiser>();
     assert_send_sync::<std::sync::Arc<Session>>();
+}
+
+/// `shutdown` can only close what `pending` holds, so every accepted socket has
+/// to be in there before its thread is spawned, and has to leave once its
+/// handshake completes.
+///
+/// This is a guard, not a reproduction. The hole it protects against was
+/// structural: registration used to be conditional on `peer_addr()` and
+/// `try_clone()`, and a failure of either served the connection with nothing in
+/// the map. Neither can be forced to fail from a test without a new dependency
+/// or an rlimit stunt on the whole process, so this passes against the unfixed
+/// host too. What it catches is the conditional shape being reintroduced.
+#[test]
+fn every_accepted_socket_is_tracked_until_its_handshake_completes() {
+    let host = lan_sync::Host::bind("TRACK", 0, 4).expect("host should open");
+    let port = host.port();
+
+    // Connect and say nothing: accepted, spawned, and parked in `read_line`.
+    let silent: Vec<TcpStream> = (0..3)
+        .map(|_| TcpStream::connect(local(port)).expect("peer should connect"))
+        .collect();
+    wait_for(|| host.pending_count() == 3);
+    assert_eq!(
+        host.pending_count(),
+        3,
+        "every accepted socket must be tracked before its thread is spawned"
+    );
+
+    // Now one that does handshake. Wait for it to be tracked *before* sending
+    // hello: connect-then-immediately-hello would race registration against
+    // retirement, and a count that read 3 throughout would prove nothing —
+    // it cannot tell "not accepted yet" from "accepted and retired".
+    let mut joiner = TcpStream::connect(local(port)).expect("peer should connect");
+    wait_for(|| host.pending_count() == 4);
+    assert_eq!(
+        host.pending_count(),
+        4,
+        "a connection must be tracked before its handshake, not after"
+    );
+
+    // A completed handshake retires its own entry. Without that the map grows
+    // for the life of the room and `shutdown` works through sockets long gone.
+    let hello = json!({"t": "hello", "player_id": "bo", "name": "Bo"});
+    writeln!(joiner, "{hello}").expect("hello should be sent");
+    wait_for(|| host.pending_count() == 3);
+    assert_eq!(
+        host.pending_count(),
+        3,
+        "a peer through its handshake must not stay pending"
+    );
+
+    drop(silent);
 }
