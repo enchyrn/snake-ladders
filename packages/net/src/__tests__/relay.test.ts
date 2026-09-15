@@ -226,6 +226,46 @@ describe("relay over a real socket", () => {
     expect(commits(a.frames)[0]!.action).toEqual({ n: 1 })
   })
 
+  it("locks the room when the host sends a lock frame", async () => {
+    const { port, sequencer } = await relay()
+    const host = await connect(port)
+    hello(host.socket, "p1")
+    await until(() => host.frames.some((f) => f.t === "welcome"))
+
+    const peer = await connect(port)
+    hello(peer.socket, "p2")
+    await until(() => peer.frames.some((f) => f.t === "welcome"))
+
+    send(host.socket, { t: "lock" })
+    await until(() => sequencer.locked)
+
+    const late = await connect(port)
+    hello(late.socket, "p3")
+    await until(() => late.frames.some((f) => f.t === "rejected"))
+    expect(late.frames.find((f) => f.t === "rejected")!.reason).toMatch(/already started/)
+  })
+
+  it("ignores a lock frame from a player who is not the host", async () => {
+    const { port, sequencer } = await relay()
+    const host = await connect(port)
+    hello(host.socket, "p1")
+    await until(() => host.frames.some((f) => f.t === "welcome"))
+
+    const peer = await connect(port)
+    hello(peer.socket, "p2")
+    await until(() => peer.frames.some((f) => f.t === "welcome"))
+
+    send(peer.socket, { t: "lock" })
+    await new Promise((r) => setTimeout(r, 120))
+    expect(sequencer.locked).toBe(false)
+
+    // The room can still be locked, by the host — proving the frame itself
+    // works and the peer's attempt was refused for being the wrong player,
+    // not because the relay drops "lock" frames altogether.
+    send(host.socket, { t: "lock" })
+    await until(() => sequencer.locked)
+  })
+
   it("marks a peer disconnected when its socket drops", async () => {
     const { port } = await relay()
     const a = await connect(port)

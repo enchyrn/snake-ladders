@@ -43,6 +43,7 @@ export declare class Sequencer {
   get room(): string
   get log(): SequencedEntry[]
   get locked(): boolean
+  get hostId(): string | null
   lock(): void
   roster(): RosterEntry[]
   join(client: {

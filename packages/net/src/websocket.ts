@@ -222,7 +222,14 @@ export const makeWebSocketTransport = (): TransportService => {
     // Discovery needs UDP, so rooms are reached by the address the relay prints.
     rooms: Effect.succeed([] as ReadonlyArray<RoomView>),
     join: connect,
-    lock: Effect.void,
+    lock: Effect.suspend(() => {
+      const current = socket
+      if (!current || current.readyState !== WebSocket.OPEN) {
+        return Effect.fail(new TransportError({ reason: "not connected to a relay" }))
+      }
+      current.send(JSON.stringify({ t: "lock" }))
+      return Effect.void
+    }),
     submit: (action: Action) =>
       Effect.suspend(() => {
         const current = socket

@@ -45,6 +45,7 @@ export class Sequencer {
   #capacity
   #room
   #locked = false
+  #hostId = null
 
   constructor({ room = "LOCAL", capacity = 6 } = {}) {
     this.#room = room
@@ -65,6 +66,11 @@ export class Sequencer {
 
   get locked() {
     return this.#locked
+  }
+
+  /** Whoever joined first, and the only player whose `lock` is honoured. */
+  get hostId() {
+    return this.#hostId
   }
 
   roster() {
@@ -110,6 +116,9 @@ export class Sequencer {
       if (this.#clients.get(playerId)?.token === token) this.#clients.delete(playerId)
       return { ok: false, reason: "could not reach client" }
     }
+    // First to actually make it into the room, not merely to attempt it —
+    // a join that failed above never reaches here to claim it.
+    if (this.#hostId === null) this.#hostId = playerId
     this.#broadcast({ t: "roster", peers: this.roster() })
     return { ok: true, token }
   }
@@ -191,6 +200,10 @@ export const startRelay = ({ port = 4455, room = "LOCAL", capacity = 6 } = {}) =
 
       if (frame.t === "submit") sequencer.submit(frame.action)
       else if (frame.t === "ping") send({ t: "pong" })
+      // A bare sequencer has no notion of authority, so the rule is the
+      // simplest one that still means something: whoever opened the room is
+      // the only peer that can close it.
+      else if (frame.t === "lock" && playerId === sequencer.hostId) sequencer.lock()
     })
 
     socket.on("close", () => {

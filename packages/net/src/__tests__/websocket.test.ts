@@ -112,6 +112,26 @@ describe("WebSocket transport against a live relay", () => {
     expect(statuses.at(-1)!.reason).toMatch(/already started/)
   })
 
+  it("sends a lock frame rather than doing nothing", async () => {
+    // The first joiner is the host under the relay's rule, so its `lock`
+    // reaching the wire is provable end to end: a later joiner is refused,
+    // which the old `Effect.void` stub could never cause.
+    const { port } = await relay()
+    const host = await joined(port, "a")
+    await Effect.runPromise(host.transport.lock)
+
+    const late = track(makeWebSocketTransport())
+    const statuses: ConnectionStatus[] = []
+    late.onStatus((s) => statuses.push(s))
+    const result = await Effect.runPromise(
+      Effect.either(late.join(`127.0.0.1:${port}`, { player_id: "x", name: "X" })),
+    )
+
+    await until(() => statuses.some((s) => !s.connected && s.reason !== null))
+    expect(Either.isLeft(result)).toBe(true)
+    if (Either.isLeft(result)) expect(result.left.reason).toMatch(/already started/)
+  })
+
   it("fails submit when nothing is connected", async () => {
     const transport = track(makeWebSocketTransport())
     const result = await Effect.runPromise(
