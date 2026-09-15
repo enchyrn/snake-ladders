@@ -8,6 +8,7 @@ import { defaultConfig } from "@mutation/engine/types"
 /** A transport whose commit stream the test drives by hand. */
 const controllable = () => {
   const commits = emitter<Committed>()
+  const rosters = emitter<ReadonlyArray<{ player_id: string; name: string; connected: boolean }>>()
   const sent: unknown[] = []
   const service: TransportService = {
     ...makeLocalTransport(),
@@ -15,8 +16,9 @@ const controllable = () => {
       sent.push(action)
     }),
     onCommit: commits.subscribe,
+    onRoster: rosters.subscribe,
   }
-  return { service, commits, sent }
+  return { service, commits, sent, rosters }
 }
 
 const config = defaultConfig(2024)
@@ -24,6 +26,20 @@ const config = defaultConfig(2024)
 const client = (service: TransportService) => new MatchClient(service, config, "peer", "a")
 
 const join = (id: string) => ({ _tag: "Join" as const, playerId: id, name: id })
+
+/**
+ * Seat the given players by emitting Join commits on the given commits emitter.
+ * This simulates them having been seated by the host without polluting the sent array.
+ */
+const seatPlayers = (
+  commits: ReturnType<typeof emitter<Committed>>,
+  ids: string[],
+) => {
+  let seq = 0
+  for (const id of ids) {
+    commits.emit({ seq: seq++, action: join(id) })
+  }
+}
 
 describe("MatchClient", () => {
   it("folds commits in sequence order", () => {
@@ -124,6 +140,50 @@ describe("MatchClient", () => {
 
     commits.emit({ seq: 0, action: join("a") })
     expect(c.state.applied).toBe(0)
+  })
+
+  it("the host turns a roster disconnect into a sequenced Leave", () => {
+    const { service, commits, rosters, sent } = controllable()
+    const c = new MatchClient(service, config, "host", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    rosters.emit([
+      { player_id: "me", name: "Me", connected: true },
+      { player_id: "them", name: "Them", connected: false },
+    ])
+
+    expect(sent).toContainEqual({ _tag: "Leave", playerId: "them" })
+    c.dispose()
+  })
+
+  it("a peer does not submit Leave — only the host does", () => {
+    const { service, commits, rosters, sent } = controllable()
+    const c = new MatchClient(service, config, "peer", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    rosters.emit([
+      { player_id: "me", name: "Me", connected: true },
+      { player_id: "them", name: "Them", connected: false },
+    ])
+
+    expect(sent).toEqual([])
+    c.dispose()
+  })
+
+  it("does not submit Leave twice for the same disconnect", () => {
+    const { service, commits, rosters, sent } = controllable()
+    const c = new MatchClient(service, config, "host", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    const roster = [
+      { player_id: "me", name: "Me", connected: true },
+      { player_id: "them", name: "Them", connected: false },
+    ]
+    rosters.emit(roster)
+    rosters.emit(roster)
+
+    expect(sent.filter((a) => typeof a === "object" && a !== null && "_tag" in a && a._tag === "Leave")).toHaveLength(1)
+    c.dispose()
   })
 })
 

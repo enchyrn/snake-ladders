@@ -7,6 +7,7 @@ import {
   unexpected,
   type Committed,
   type HostedRoom,
+  type RosterEntry,
   type TransportService,
   type Unsubscribe,
 } from "@mutation/net/transport"
@@ -37,6 +38,8 @@ export class MatchClient {
   /** Commits that arrived before the one we are waiting for. */
   private readonly buffer = new Map<number, unknown>()
   private nextSeq = 0
+  /** Players for whom we have already submitted Leave. */
+  private readonly retired = new Set<string>()
 
   constructor(
     transport: TransportService,
@@ -50,7 +53,10 @@ export class MatchClient {
     this.registry.set(clientStateAtom, emptyState(config, role, me))
     this.subscriptions.push(
       transport.onCommit((entry) => this.receive(entry)),
-      transport.onRoster((roster) => this.patch((s) => ({ ...s, roster }))),
+      transport.onRoster((roster) => {
+        this.patch((s) => ({ ...s, roster }))
+        this.retireDeparted(roster)
+      }),
       transport.onStatus((connection) => this.patch((s) => ({ ...s, connection }))),
     )
   }
@@ -64,6 +70,7 @@ export class MatchClient {
   reset(config: MatchConfig, role: Role = this.state.role): void {
     this.buffer.clear()
     this.nextSeq = 0
+    this.retired.clear()
     const s = this.state
     this.registry.set(clientStateAtom, {
       ...emptyState(config, role, s.me),
@@ -108,6 +115,27 @@ export class MatchClient {
     for (const off of this.subscriptions) off()
     this.subscriptions.length = 0
     this.buffer.clear()
+  }
+
+  /**
+   * A seated player who never commits stalls the whole round under the
+   * `simultaneous` module, so a disconnect has to reach the reducer. It goes
+   * through the log like any other action — a locally applied Leave would
+   * diverge every device that had not seen the same roster frame.
+   *
+   * The host submits it alone: it is the device that sequences, and one
+   * departure should appear in the log once however many peers are watching.
+   */
+  private retireDeparted(roster: ReadonlyArray<RosterEntry>): void {
+    if (this.state.role !== "host") return
+    for (const entry of roster) {
+      if (entry.connected) continue
+      if (this.retired.has(entry.player_id)) continue
+      const seated = this.state.match.players.some((p) => p.id === entry.player_id)
+      if (!seated) continue
+      this.retired.add(entry.player_id)
+      this.send({ _tag: "Leave", playerId: entry.player_id })
+    }
   }
 
   private patch(f: (s: ClientState) => ClientState): void {
