@@ -231,7 +231,7 @@ every device folding the same log produces the same seats.
   now removes the player and renumbers `seat` by index when
   `state.phase === "lobby"`. Task 3's UI depends on this.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/engine/src/__tests__/rules.test.ts`:
 
@@ -278,7 +278,7 @@ If `MatchState`, `initialMatch`, `defaultConfig`, `applyAction`, `Effect` or
 `describe`/`it`/`expect` are not already imported at the top of that file, add
 them — check the existing imports first rather than assuming.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -288,7 +288,7 @@ nubx vitest run packages/engine/src/__tests__/rules.test.ts -t "leaving the lobb
 Expected: the first and third FAIL (the player is still present, seats unchanged);
 the second PASSES already.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Replace the `case "Leave"` block in `packages/engine/src/match.ts`:
 
@@ -318,7 +318,7 @@ Replace the `case "Leave"` block in `packages/engine/src/match.ts`:
     }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -328,7 +328,7 @@ nubx vitest run packages/engine/src/__tests__/determinism.test.ts
 
 Expected: PASS. The determinism guard must stay green — it is the contract.
 
-- [ ] **Step 5: Run the full gates**
+- [x] **Step 5: Run the full gates**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -339,7 +339,7 @@ Expected: all pass. `packages/app-shell/src/store/__tests__/match-client.test.ts
 exercises `Leave`; if a case there assumed the seat survived a lobby leave, read
 it and decide whether the test or this rule is wrong before changing either.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/engine/src/match.ts packages/engine/src/__tests__/rules.test.ts
@@ -347,6 +347,14 @@ git commit -m "feat: leaving the lobby frees the seat instead of holding it"
 ```
 
 ---
+
+
+**DONE.** `nub run test` 158 passed, typecheck and lint clean; the determinism
+guard stays green.
+
+The plan's test sketch called `initialMatch(defaultConfig)`, but `defaultConfig`
+is a function taking a seed — `defaultConfig(seed)`. Corrected in the test. No
+existing `match-client` test assumed a lobby leave kept the seat.
 
 ### Task 3: Remove a local player
 

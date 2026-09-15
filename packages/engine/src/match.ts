@@ -202,9 +202,21 @@ export const applyAction = (
     case "Leave": {
       const found = findPlayer(state, action.playerId)
       if (!found) return fail("unknown player", "Leave")
+      // In the lobby no die has been drawn and no seat has broken a tie, so the
+      // seat can genuinely be vacated and the rest closed up. Renumbering here
+      // is a pure function of the ordered log, so every device still agrees.
+      if (state.phase === "lobby") {
+        return Effect.succeed({
+          ...state,
+          players: state.players
+            .filter((p) => p.id !== action.playerId)
+            .map((p, seat) => ({ ...p, seat })),
+        })
+      }
       const players = state.players.slice()
       players[found.index] = { ...found.player, connected: false }
-      // Never renumber seats: seat order is the deterministic tiebreaker.
+      // Never renumber seats once the match is running: seat order is the
+      // deterministic tiebreaker.
       const next: MatchState = { ...state, players }
       return Effect.succeed(
         state.phase === "committing" && pendingCommitters(next).length === 0 && next.round > 0

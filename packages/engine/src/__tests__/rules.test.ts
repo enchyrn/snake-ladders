@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest"
 import { at, events, ladder, run, runAll, scenario, snake, succeeds } from "./helpers"
+import { initialMatch } from "../match"
 import { buildTiles } from "../board"
 import { advance } from "../rules/momentum"
 import * as Mutation from "../rules/mutation"
 import * as Mines from "../rules/minesweeper"
 import { knockbackTile } from "../rules/simultaneous"
 import { seedRng } from "../rng"
-import { defaultConfig, type Board, type MatchConfig } from "../types"
+import { defaultConfig, type Board, type MatchConfig, type MatchState } from "../types"
 
 const commit = (id: string) => ({ _tag: "Commit" as const, playerId: id })
 const card = (id: string, c: "reverse" | "anchor" | "double" | "swap" | "defuse", tile?: number) =>
@@ -489,5 +490,42 @@ describe("finishing", () => {
     expect(next.phase).toBe("committing")
     expect(at(next, "a").position).toBe(98)
     expect(events(next, "Moved")[0]).toMatchObject({ bounced: true })
+  })
+})
+
+describe("leaving the lobby", () => {
+  const join = (state: MatchState, id: string) =>
+    run(state, { _tag: "Join", playerId: id, name: id })
+
+  it("frees the seat and closes the gap before the match starts", () => {
+    let state = initialMatch(defaultConfig(1))
+    for (const id of ["a", "b", "c"]) state = join(state, id)
+
+    state = run(state, { _tag: "Leave", playerId: "b" })
+
+    expect(state.players.map((p) => p.id)).toEqual(["a", "c"])
+    expect(state.players.map((p) => p.seat)).toEqual([0, 1])
+  })
+
+  it("keeps the seat once the match has started", () => {
+    let state = initialMatch(defaultConfig(1))
+    for (const id of ["a", "b"]) state = join(state, id)
+    state = run(state, { _tag: "Start" })
+
+    state = run(state, { _tag: "Leave", playerId: "a" })
+
+    expect(state.players.map((p) => p.id)).toEqual(["a", "b"])
+    expect(state.players[0]!.connected).toBe(false)
+    expect(state.players.map((p) => p.seat)).toEqual([0, 1])
+  })
+
+  it("readmits a player who left the lobby, at the end of the order", () => {
+    let state = initialMatch(defaultConfig(1))
+    for (const id of ["a", "b"]) state = join(state, id)
+    state = run(state, { _tag: "Leave", playerId: "a" })
+    state = join(state, "a")
+
+    expect(state.players.map((p) => p.id)).toEqual(["b", "a"])
+    expect(state.players.map((p) => p.seat)).toEqual([0, 1])
   })
 })
