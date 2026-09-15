@@ -31,7 +31,10 @@ const EVENT_STATUS: &str = "lan://status";
 struct NetState {
     session: Mutex<Option<Arc<Session>>>,
     browser: Mutex<Option<Browser>>,
-    pumping: Arc<AtomicBool>,
+    /// One flag per pump. Sharing a single flag let a replaced pump observe
+    /// the *next* pump's `true` during its sleep and carry on running, holding
+    /// its session — listener, beacon and all — alive behind the slot.
+    pumping: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 type Net = Arc<NetState>;
@@ -107,8 +110,12 @@ impl SessionSink for WebviewSink {
 
 /// Run one pump thread per session, ending when the session is replaced.
 fn start_pump(app: AppHandle, net: Net, session: Arc<Session>) {
-    net.pumping.store(true, Ordering::SeqCst);
-    let running = Arc::clone(&net.pumping);
+    let running = Arc::new(AtomicBool::new(true));
+    if let Ok(mut slot) = net.pumping.lock() {
+        if let Some(previous) = slot.replace(Arc::clone(&running)) {
+            previous.store(false, Ordering::SeqCst);
+        }
+    }
     thread::spawn(move || {
         let mut sink = WebviewSink(app);
         while running.load(Ordering::SeqCst) {
@@ -119,7 +126,11 @@ fn start_pump(app: AppHandle, net: Net, session: Arc<Session>) {
 }
 
 fn teardown(net: &Net, app: &AppHandle) {
-    net.pumping.store(false, Ordering::SeqCst);
+    if let Ok(mut slot) = net.pumping.lock() {
+        if let Some(previous) = slot.take() {
+            previous.store(false, Ordering::SeqCst);
+        }
+    }
     if let Ok(mut slot) = net.session.lock() {
         slot.take();
     }
