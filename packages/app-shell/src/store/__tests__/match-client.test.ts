@@ -8,22 +8,21 @@ import { newPlayer } from "@mutation/engine/match"
 import { defaultConfig } from "@mutation/engine/types"
 
 /** A transport whose commit stream the test drives by hand. */
-const controllable = (lock: TransportService["lock"] = Effect.void) => {
+const controllable = (lock?: TransportService["lock"]) => {
   const commits = emitter<Committed>()
   const rosters = emitter<ReadonlyArray<{ player_id: string; name: string; connected: boolean }>>()
   const sent: unknown[] = []
   const transport = { locked: false }
   const service: TransportService = {
     ...makeLocalTransport(),
-    lock,
+    lock: lock ?? Effect.sync(() => {
+      transport.locked = true
+    }),
     submit: (action) => Effect.sync(() => {
       sent.push(action)
     }),
     onCommit: commits.subscribe,
     onRoster: rosters.subscribe,
-    lock: Effect.sync(() => {
-      transport.locked = true
-    }),
   }
   return { service, commits, sent, rosters, transport }
 }
@@ -303,6 +302,7 @@ describe("MatchClient", () => {
     await new Promise((resolve) => queueMicrotask(() => resolve(null)))
 
     expect(c.state.notice).toMatch(/could not close the room: room not found/)
+  })
 
   it("reconciles a disconnect that arrived before its Join commit", () => {
     const { service, commits, rosters, sent } = controllable()

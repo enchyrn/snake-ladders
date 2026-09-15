@@ -150,15 +150,6 @@ export class MatchClient {
     this.patch((s) => ({ ...s, notice: null }))
   }
 
-  /** Stop admitting newcomers. The room should close once the host starts. */
-  lock(): void {
-    Effect.runPromise(Effect.either(this.transport.lock)).then((done) => {
-      if (Either.isLeft(done)) {
-        this.patch((s) => ({ ...s, notice: `could not close the room: ${done.left.reason}` }))
-      }
-    })
-  }
-
   dispose(): void {
     for (const off of this.subscriptions) off()
     this.subscriptions.length = 0
