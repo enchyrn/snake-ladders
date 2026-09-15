@@ -10,6 +10,27 @@
 
 **Spec:** No separate spec. Each task below states the defect, quotes the confirming read, and states the fix. The findings came from `superpowers:requesting-code-review` run against `main...HEAD` on 2026-09-15 and every one was re-read against the source before this plan was written.
 
+## STATUS — read this before doing anything
+
+**Tasks 1-7 are DONE, committed and pushed.** Their steps are ticked and each
+carries a `DONE — commit <sha>` note recording what the plan did not anticipate.
+Do not redo them. Verify with `git log --oneline origin/main..HEAD`.
+
+**Tasks 8-11 and Finishing remain.** Start at Task 8.
+
+**One caveat that is not visible from the checkboxes:** Task 7 (`4dbf1ff`) was
+pushed WITHOUT an independent task review — the model session limit hit mid-plan.
+It is the only commit from this plan in that state. Review it before merging.
+
+**Three deferred minors** are recorded in the notes under Tasks 3, 6 and 7.
+
+This status block exists because the SDD ledger at `.superpowers/sdd/` is
+gitignored and does not travel with the branch. The plan file and
+`docs/handoff.md` are the only progress records another machine or another
+agent will see.
+
+---
+
 ## Global Constraints
 
 - **The determinism contract governs every engine change.** `packages/engine/src/**` stays pure: no `Math.random`, no `Date.now`, no iteration over unordered collections, no floating point where an integer will do. Run `packages/engine/src/__tests__/determinism.test.ts` after any engine change.
@@ -66,7 +87,7 @@
 
 The neighbouring case is already handled deliberately — a mine at the far end of a link sets `gained = 0`, which the comment describes as cancelling *the gain*. That is the intended behaviour and must not change. Only the direct blast is wrong.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `packages/engine/src/__tests__/rules.test.ts`:
 
@@ -89,7 +110,7 @@ it("a blast strips the momentum the player arrived with, not just the gain", () 
 
 If `makeConfig`, `withPlayers`, `plantMine` or `resolveWithRoll` do not already exist in that file under those names, use whatever the file's existing tests use to build a state and resolve one round — read the top of the file first and follow it rather than inventing helpers.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -98,7 +119,7 @@ nubx vitest run -t "a blast strips the momentum"
 
 Expected: FAIL, `expected 3 to be 0` (half of 6). If it passes, the test is not reaching the blast — fix the test before touching `resolve.ts`.
 
-- [ ] **Step 3: Make the blast authoritative**
+- [x] **Step 3: Make the blast authoritative**
 
 In `moveOne`, capture whether the blast happened and honour it in the tail. `blasted` is already computed a few lines above:
 
@@ -115,7 +136,7 @@ In `moveOne`, capture whether the blast happened and honour it in the tail. `bla
 
 Leave `applyTile`'s `momentum: 0` in place — it is now load-bearing for the intermediate state the collision pass reads.
 
-- [ ] **Step 4: Run the test, then the whole engine**
+- [x] **Step 4: Run the test, then the whole engine**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -125,7 +146,7 @@ nubx vitest run packages/engine
 
 Expected: the new test passes and every existing engine test still passes. A failure in `determinism.test.ts` means the change was not pure — stop and re-read it rather than adjusting the test.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/engine/src/resolve.ts packages/engine/src/__tests__/rules.test.ts
@@ -144,8 +165,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `5f8f949`.** Test scenario re-derived: the brief's numbers did not reach the defect through the real dispatch path. Needed a second, otherwise-unused player, because with one player a lone stunned active seat empties `pendingCommitters`, so `settle()` resolves a second round and ticks the stun back to 0 inside one `run()`.
 
+---
 ## Task 2: `breathe` can seat a link's mouth on another link's endpoint
 
 **Files:**
@@ -166,7 +188,7 @@ MSG
 
 `anchor` leaves `free`; **`partner` does not**. And the anchor drawn on the next iteration is never checked against `endpoints` — only `partner` is. So the second relocation can draw the first relocation's `partner` as its own `anchor`, putting a link's mouth exactly on another link's landing tile. That is the chain the invariant exists to prevent.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("never seats a relocated link's mouth on another link's endpoint", () => {
@@ -191,7 +213,7 @@ it("never seats a relocated link's mouth on another link's endpoint", () => {
 
 Read the existing mutation tests first and reuse their board/rng constructors; the names above are indicative, the assertion is the point.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -200,7 +222,7 @@ nubx vitest run -t "never seats a relocated link's mouth"
 
 Expected: FAIL naming a specific seed. Record that seed in the commit message — it is the proof the test reproduces.
 
-- [ ] **Step 3: Close both halves of the hole**
+- [x] **Step 3: Close both halves of the hole**
 
 ```ts
     const anchor = free[slot]!
@@ -225,7 +247,7 @@ Expected: FAIL naming a specific seed. Record that seed in the commit message �
 
 `sort` on numbers with an explicit comparator is deterministic and stays inside the purity rule.
 
-- [ ] **Step 4: Run the test, then the whole engine**
+- [x] **Step 4: Run the test, then the whole engine**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -235,7 +257,7 @@ nubx vitest run packages/engine
 
 Expected: both green. `determinism.test.ts` must stay green — it plays every module combination.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/engine/src/rules/mutation.ts packages/engine/src/__tests__/mutation.test.ts
@@ -257,8 +279,9 @@ MSG
 
 Replace `<N>` with the seed Step 2 actually printed. Do not commit the placeholder.
 
----
+**DONE — commit `72b6ac0`.** Seed 17 reproduces the chaining. Reviewer confirmed independently in a disposable worktree: `S1: 17->5`, `L2: 5->15`.
 
+---
 ## Task 3: `playCard` appends to the previous round's timeline
 
 **Files:**
@@ -290,7 +313,7 @@ So tapping a card in round N re-animates the whole of round N−1. The card even
 
 This is a renderer-visible bug only — it cannot change a result, because the renderer never feeds the engine. That is why it survived.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("a card played in a new round does not carry the last round's timeline", () => {
@@ -306,7 +329,7 @@ it("a card played in a new round does not carry the last round's timeline", () =
 
 Build `resolveARoundThenPlayACard` from the helpers already in `match.test.ts`: resolve one round so `state.timeline` is non-empty, then `playCard` a card the player can afford.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -315,7 +338,7 @@ nubx vitest run -t "does not carry the last round's timeline"
 
 Expected: FAIL — the timeline still holds `Moved`, `MineTripped` and friends from the resolved round.
 
-- [ ] **Step 3: Record which round the timeline describes**
+- [x] **Step 3: Record which round the timeline describes**
 
 The timeline needs to say which round it belongs to; nothing currently does, which is why `playCard` cannot tell. Add one field beside it.
 
@@ -340,14 +363,14 @@ and include `timelineRound: state.round` in the state `playCard` returns.
 
 `timelineRound` is a plain integer folded from the log like everything else, so it stays inside the determinism contract. If `MatchState` has an Effect schema in `primitives.ts` or `types.ts`, add the field there too or decoding will drop it.
 
-- [ ] **Step 4: Run the test, then the whole engine**
+- [x] **Step 4: Run the test, then the whole engine**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 nubx vitest run packages/engine
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/engine/src/match.ts packages/engine/src/__tests__/match.test.ts
@@ -363,8 +386,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `d01b730`.** Plan named `match.test.ts`, which does not exist — test went in `rules.test.ts`. Scope was wider than the plan's file list: also `types.ts` (the new field) and `resolve.ts`. The Effect schema in `types.ts` needed the field too, or it would be dropped on decode. DEFERRED MINOR: no test covers two *different* cards in one round both surviving; logic verified correct by inspection.
 
+---
 ## Task 4: `seedFromRoom` accepts a code that is not a room code
 
 **Files:**
@@ -387,7 +411,7 @@ export const seedFromRoom = (code: string): number | null => {
 
 This is the highest-severity finding in the set for exactly that reason: it is silent, and it is reachable from a text input a human types into.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 describe("seedFromRoom", () => {
@@ -413,7 +437,7 @@ describe("seedFromRoom", () => {
 })
 ```
 
-- [ ] **Step 2: Run them and watch the middle one fail**
+- [x] **Step 2: Run them and watch the middle one fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -422,7 +446,7 @@ nubx vitest run -t "refuses anything that is not exactly four"
 
 Expected: FAIL on `seedFromRoom("ABC")`, which currently returns a number.
 
-- [ ] **Step 3: Require the full width**
+- [x] **Step 3: Require the full width**
 
 ```ts
 export const seedFromRoom = (code: string): number | null => {
@@ -440,7 +464,7 @@ export const seedFromRoom = (code: string): number | null => {
 }
 ```
 
-- [ ] **Step 4: Check every caller handles `null`**
+- [x] **Step 4: Check every caller handles `null`**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -451,7 +475,7 @@ nub run typecheck
 
 Every call site must already branch on `null` — the return type has always admitted it, so `tsc` would have caught a caller that did not. Read each one anyway and confirm the message a player sees is intelligible ("that is not a room code", not a stack trace). Fix any that merely swallow it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/app-shell/src/app/hooks.ts packages/app-shell/src/app/__tests__/hooks.test.ts
@@ -468,8 +492,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `97d5a3a`.** Scope extended before dispatch: `crates/lan-sync/src/lib.rs`'s `seed_from_room` had the identical `.take(4)` defect and is fixed in the same commit — fixing one side alone would have made the browser and the native app disagree. A third site was found by the implementer: `src-tauri`'s `net_rooms()` called `seed_from_room(...).unwrap_or(0)`, fixed with `.filter_map()`. CONFIRMED: `apps/relay/lan-relay.mjs` has NO decoder — CLAUDE.md's "three places" are three *encoders*, only two ever decoded.
 
+---
 ## Task 5: a dead connection disables the one that replaced it (Rust)
 
 **Files:**
@@ -501,7 +526,7 @@ which reaches straight into the entry the reconnect just installed. `broadcast` 
 
 The fix is the one this codebase already reached for in `PendingClient`: give the registration an epoch and let the exit path only act on the entry it still owns.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `crates/lan-sync/tests/session.rs`:
 
@@ -531,7 +556,7 @@ fn a_reconnect_survives_the_old_connection_noticing_it_died() {
 
 Reuse the `wait_for` helper already in this file. Add `#[doc(hidden)] pub fn connected_count(&self) -> usize` to `Host` alongside the existing `pending_count`, counting `clients.values().filter(|c| c.connected)`.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -540,7 +565,7 @@ cargo test -p lan-sync --test session a_reconnect_survives
 
 Expected: FAIL — either `connected_count()` is 0, or the read times out because `broadcast` skipped the live socket. If it passes first time the test is not actually racing; make the first connection's death land *after* the second registers.
 
-- [ ] **Step 3: Give each registration an epoch**
+- [x] **Step 3: Give each registration an epoch**
 
 ```rust
 struct Client {
@@ -583,7 +608,7 @@ Keep `epoch` in a local so the frame loop can close over it, and gate the exit p
 
 The `state.clients.remove(&player_id)` on the failed-welcome path (`:349`) needs the same guard, for the same reason.
 
-- [ ] **Step 4: Run the whole crate**
+- [x] **Step 4: Run the whole crate**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -594,7 +619,7 @@ cargo fmt --all
 
 Expected: 23 passing (22 existing plus the new one), clippy clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/lan-sync/src/host.rs crates/lan-sync/tests/session.rs
@@ -613,8 +638,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `61fe618`.** WARNING FOR ANY SIMILAR TEST: the first draft — a `wait_for(|| connected_count() == 1)` poll, close to what this plan sketched — PASSED with the epoch guards stripped out, because the poll ran ahead of the dying thread's mutation. Replaced with a blocking read on the roster frame the exit path itself broadcasts, under the same lock as the mutation. Reviewer re-verified by stripping the guards in a worktree: 10/10 failures.
 
+---
 ## Task 6: the same defect in the Node relay
 
 **Files:**
@@ -644,7 +670,7 @@ and the socket handlers that call it:
 
 A reconnect calls `this.#clients.set(playerId, …)` with a fresh entry. When the old socket's `close` fires afterwards — and it does, that is what a dropped connection means — it disables the live client. Both implementations must behave the same or a peer can tell which one it joined, which the architecture explicitly forbids.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("a reconnect is not disconnected by the old socket's close", () => {
@@ -669,7 +695,7 @@ it("a reconnect is not disconnected by the old socket's close", () => {
 
 Match the real `join` signature — read it before writing the test rather than trusting this sketch.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -678,7 +704,7 @@ nubx vitest run -t "not disconnected by the old socket's close"
 
 Expected: FAIL — `secondFrames` holds no `commit`, because `leave` disabled the live entry.
 
-- [ ] **Step 3: Hand out a token and check it**
+- [x] **Step 3: Hand out a token and check it**
 
 ```js
   join({ playerId, name, send }) {
@@ -710,7 +736,7 @@ Then carry the token through the socket handlers:
     socket.on("error", () => { if (playerId !== null) sequencer.leave(playerId, token ?? undefined) })
 ```
 
-- [ ] **Step 4: Update the declaration and run the suites**
+- [x] **Step 4: Update the declaration and run the suites**
 
 `apps/relay/lan-relay.d.ts` declares `Sequencer`. Add `token` to the success shape of `JoinResult` and the optional parameter to `leave`, then:
 
@@ -722,7 +748,7 @@ nubx vitest run packages/net
 
 `lan-relay.d.ts` is hand-written and only the root `nub run typecheck` checks it — `nub run lint` and the per-project targets will not catch a mismatch here.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/relay/lan-relay.mjs apps/relay/lan-relay.d.ts packages/net/src/__tests__/relay.test.ts
@@ -742,8 +768,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `f559ae7`.** Used a `Symbol` token rather than an integer epoch: one Sequencer per room, no shared counter to thread. Test made fully synchronous (no sockets, timers or polling), which sidesteps the Task 5 trap entirely. DEFERRED MINOR: this plan specified `leave(playerId, token?)` as optional 'so existing callers keep working' — there are no other callers, so the optional form is dead code and a latent hole. Making it required is a two-line change.
 
+---
 ## Task 7: a dropped player freezes the round forever
 
 **Files:**
@@ -766,7 +793,7 @@ With the `simultaneous` module — the default — resolution waits for every se
 
 **The design constraint that decides the fix:** `Leave` changes match state, so it must go through the log like every other action. If each device submitted its own `Leave` on seeing a disconnect, the log would carry N copies; the reducer rejects all but the first with "unknown player", which is a notice rather than a desync, so it would *work* — but it is noise, and it makes the log depend on how many devices happened to be watching. **Only the host submits.** The host is the device that sequences, it already knows the roster, and one `Leave` enters the log exactly once.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 it("the host turns a roster disconnect into a sequenced Leave", () => {
@@ -813,7 +840,7 @@ it("does not submit Leave twice for the same disconnect", () => {
 
 Follow the existing fake transport in that test file; do not build a second one.
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -822,7 +849,7 @@ nubx vitest run packages/app-shell/src/store
 
 Expected: the first and third fail (nothing is submitted); the second passes vacuously, which is fine — it is there to pin the rule once the others are green.
 
-- [ ] **Step 3: Submit one Leave per departure, from the host only**
+- [x] **Step 3: Submit one Leave per departure, from the host only**
 
 ```ts
       transport.onRoster((roster) => {
@@ -854,7 +881,7 @@ Expected: the first and third fail (nothing is submitted); the second passes vac
 
 `this.send` already checks the action against the local match first, so a `Leave` for a player the reducer has forgotten becomes a local notice and never reaches the wire — which is what makes the third test pass without a separate "already retired" set.
 
-- [ ] **Step 4: Run the suites**
+- [x] **Step 4: Run the suites**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -864,7 +891,7 @@ nub run typecheck
 
 If `send`'s notice-on-rejection makes the third test noisy (a visible "unknown player" banner every roster frame), suppress it for this path rather than weakening `send`: call `transport.submit` directly here and keep the pre-check.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/app-shell/src/store/match-client.ts packages/app-shell/src/store/__tests__/match-client.test.ts
@@ -884,8 +911,9 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
----
+**DONE — commit `4dbf1ff`.** **NOT INDEPENDENTLY REVIEWED** — the model session limit hit mid-plan and the retry ran on a smaller model. Controller-verified only: host-only guard, goes through the log, correct `RosterEntry.player_id` (snake_case), app-shell 29/29, typecheck and lint clean. NEEDS A TASK REVIEW. DEFERRED MINOR: `retired` clears only on `reset()`, so a player who drops, rejoins the same match and drops again is never retired the second time.
 
+---
 ## Task 8: `lock` has no wire frame, so a browser room never locks
 
 **Files:**
