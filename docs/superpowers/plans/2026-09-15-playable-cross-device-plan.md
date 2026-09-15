@@ -60,7 +60,7 @@ profiles to seats, so `identity.playerId` drops out of the match entirely.
   now guaranteed to contain at least one `kind: "owner"` profile, and to have
   persisted whatever repair it performed. Task 2 and Task 3 rely on both.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `packages/net/src/__tests__/identity.test.ts`, inside the
 `describe("local profiles", ...)` block:
@@ -107,7 +107,7 @@ Append to `packages/net/src/__tests__/identity.test.ts`, inside the
   })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -117,7 +117,7 @@ nubx vitest run packages/net/src/__tests__/identity.test.ts
 Expected: the three new tests FAIL — the first two because `sl:profiles` still
 holds the unrepaired array, the third because the owner is missing.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Replace the body of `loadProfiles` in `packages/net/src/identity.ts` with:
 
@@ -177,7 +177,7 @@ export const loadProfiles = (): ReadonlyArray<Profile> => {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -186,7 +186,7 @@ nubx vitest run packages/net/src/__tests__/identity.test.ts
 
 Expected: PASS, including the three pre-existing profile tests.
 
-- [ ] **Step 5: Run the full gates**
+- [x] **Step 5: Run the full gates**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -195,7 +195,7 @@ nub run test && nub run typecheck && nub run lint
 
 Expected: all pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/net/src/identity.ts packages/net/src/__tests__/identity.test.ts
@@ -203,6 +203,11 @@ git commit -m "fix: persist the repaired profile roster and always seat the owne
 ```
 
 ---
+
+
+**DONE.** `nub run test` 155 passed (was 152), typecheck and lint clean.
+The "already-clean roster" case passed before the change too — it is a guard
+against the new write-back churning storage on every load, so it was kept.
 
 ### Task 2: Leaving the lobby frees the seat
 

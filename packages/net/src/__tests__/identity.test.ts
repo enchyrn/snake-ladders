@@ -51,4 +51,43 @@ describe("local profiles", () => {
       { id: "p3", name: "Jo", kind: "guest", createdAt: 3 },
     ])
   })
+  it("writes the repaired roster back so the junk is not re-parsed every load", () => {
+    storage.set(
+      "sl:profiles",
+      JSON.stringify([
+        { id: "p1", name: "Sam", kind: "owner", createdAt: 1 },
+        { id: "p1", name: "Duplicate", kind: "guest", createdAt: 2 },
+      ]),
+    )
+
+    loadProfiles()
+
+    expect(JSON.parse(storage.get("sl:profiles")!)).toEqual([
+      { id: "p1", name: "Sam", kind: "owner", createdAt: 1 },
+    ])
+  })
+
+  it("leaves an already-clean roster untouched in storage", () => {
+    const clean: Profile[] = [{ id: "p1", name: "Sam", kind: "owner", createdAt: 1 }]
+    storage.set("sl:profiles", JSON.stringify(clean))
+
+    loadProfiles()
+
+    expect(JSON.parse(storage.get("sl:profiles")!)).toEqual(clean)
+  })
+
+  it("seats this device even when the stored roster is all guests", () => {
+    storage.set("sl:identity", JSON.stringify({ playerId: "owner-1", name: "Sam" }))
+    storage.set(
+      "sl:profiles",
+      JSON.stringify([{ id: "g1", name: "Guest", kind: "guest", createdAt: 1 }]),
+    )
+
+    const profiles = loadProfiles()
+
+    expect(profiles[0]).toEqual(
+      expect.objectContaining({ id: "owner-1", name: "Sam", kind: "owner" }),
+    )
+    expect(profiles.map((p) => p.id)).toEqual(["owner-1", "g1"])
+  })
 })

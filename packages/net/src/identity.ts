@@ -70,46 +70,56 @@ export const saveProfiles = (profiles: ReadonlyArray<Profile>): void => {
   }
 }
 
+const validate = (parsed: unknown): Profile[] => {
+  if (!Array.isArray(parsed)) return []
+  const seen = new Set<string>()
+  return (parsed as unknown[]).filter((candidate): candidate is Profile => {
+    if (!candidate || typeof candidate !== "object") return false
+    const profile = candidate as Partial<Profile>
+    if (
+      typeof profile.id !== "string" ||
+      typeof profile.name !== "string" ||
+      (profile.kind !== "owner" && profile.kind !== "guest") ||
+      typeof profile.createdAt !== "number" ||
+      !profile.id ||
+      !profile.name ||
+      !Number.isFinite(profile.createdAt) ||
+      seen.has(profile.id)
+    ) {
+      return false
+    }
+    seen.add(profile.id)
+    return true
+  })
+}
+
+const ownerFromIdentity = (): Profile => {
+  const identity = loadIdentity()
+  return { id: identity.playerId, name: identity.name, kind: "owner", createdAt: Date.now() }
+}
+
+/**
+ * The roster is repaired on read and the repair is written back, because a
+ * caller that reads `sl:profiles` directly would otherwise still see the junk
+ * this dropped, and the same entries would be re-validated on every load.
+ *
+ * A roster with no owner is repaired too: seats are derived from this list, so
+ * an owner-less roster leaves the person holding the device with no player.
+ */
 export const loadProfiles = (): ReadonlyArray<Profile> => {
   try {
     const raw = localStorage.getItem(PROFILES_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown
-      if (Array.isArray(parsed)) {
-        const seen = new Set<string>()
-        const valid = (parsed as unknown[]).filter((candidate): candidate is Profile => {
-          if (!candidate || typeof candidate !== "object") return false
-          const profile = candidate as Partial<Profile>
-          if (
-            typeof profile.id !== "string" ||
-            typeof profile.name !== "string" ||
-            (profile.kind !== "owner" && profile.kind !== "guest") ||
-            typeof profile.createdAt !== "number" ||
-            !profile.id ||
-            !profile.name ||
-            !Number.isFinite(profile.createdAt) ||
-            seen.has(profile.id)
-          ) {
-            return false
-          }
-          seen.add(profile.id)
-          return true
-        })
-        if (valid.length > 0) return valid
-      }
-    }
-
-    const identity = loadIdentity()
-    const migrated: Profile = {
-      id: identity.playerId,
-      name: identity.name,
-      kind: "owner",
-      createdAt: Date.now(),
-    }
-    saveProfiles([migrated])
-    return [migrated]
+    const stored = raw === null ? [] : validate(JSON.parse(raw) as unknown)
+    const repaired = stored.some((profile) => profile.kind === "owner")
+      ? stored
+      : [ownerFromIdentity(), ...stored]
+    if (repaired.length === 0) repaired.push(ownerFromIdentity())
+    // Only rewrite when the parse actually changed something; an untouched
+    // roster should not churn storage on every load.
+    if (raw === null || JSON.stringify(repaired) !== raw) saveProfiles(repaired)
+    return repaired
   } catch {
-    const identity = loadIdentity()
-    return [{ id: identity.playerId, name: identity.name, kind: "owner", createdAt: Date.now() }]
+    // Private browsing, disabled storage, or unparseable JSON.
+    return [ownerFromIdentity()]
   }
 }
