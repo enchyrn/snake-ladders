@@ -26,5 +26,5 @@
       "@mutation/tooling/*": ["./scripts/*"]
     }
   },
-  "include": ["apps", "packages", "vite.config.ts"]
+  "include": ["apps", "packages", "vitest.config.ts"]
 }

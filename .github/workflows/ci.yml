@@ -25,6 +25,12 @@ jobs:
       # scoped like the rest.
       - run: nub run lint
 
+      # `run-many -t typecheck` runs each project's own tsconfig, so anything
+      # outside every project's include list has no typechecker at all. This is
+      # the root config, which covers the tree as one program — including
+      # vitest.config.ts, where every alias the suite resolves through lives.
+      - run: nub run typecheck
+
       # Every project's typecheck runs, and the whole suite with it: vitest
       # transpiles without checking, so a test file left out of the tsconfig
       # that covers it has no typechecker at all and an error in it reaches
