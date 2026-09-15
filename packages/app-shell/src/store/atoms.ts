@@ -79,3 +79,7 @@ export const roomAtom = select((s) => s.room)
  *  button re-renders on its own, not whenever anything else about the round
  *  changes (a card played, a chat-free nudge, the roster blinking). */
 export const canRollAtom = select((s) => canCommit(s.match, s.actingSeat))
+
+/** The owned seats that could commit right now. More than one only under the
+ *  `simultaneous` module, which is exactly when the switcher is worth showing. */
+export const ownedActableAtom = select((s) => s.seats.filter((seat) => canCommit(s.match, seat)))

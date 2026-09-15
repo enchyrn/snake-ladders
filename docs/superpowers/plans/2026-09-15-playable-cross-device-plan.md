@@ -528,7 +528,7 @@ Pass-and-play needs to say, in words, who should take the device. And under the
   seat is in `state.seats`; and `ownedActableAtom`, a
   `ReadonlyArray<string>` of owned seats that can commit right now.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/app-shell/src/store/__tests__/match-client.test.ts`:
 
@@ -560,7 +560,7 @@ Append to `packages/app-shell/src/store/__tests__/match-client.test.ts`:
 
 Use the same construction helper the neighbouring tests use.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -569,7 +569,7 @@ nubx vitest run packages/app-shell/src/store/__tests__/match-client.test.ts -t "
 
 Expected: FAIL with `setActingSeat is not a function`.
 
-- [ ] **Step 3: Implement the client method**
+- [x] **Step 3: Implement the client method**
 
 In `packages/app-shell/src/store/match-client.ts`, beside `setSeats`:
 
@@ -587,7 +587,7 @@ In `packages/app-shell/src/store/match-client.ts`, beside `setSeats`:
   }
 ```
 
-- [ ] **Step 4: Add the atom**
+- [x] **Step 4: Add the atom**
 
 In `packages/app-shell/src/store/atoms.ts`, beside `canRollAtom`:
 
@@ -597,7 +597,7 @@ In `packages/app-shell/src/store/atoms.ts`, beside `canRollAtom`:
 export const ownedActableAtom = select((s) => s.seats.filter((seat) => canCommit(s.match, seat)))
 ```
 
-- [ ] **Step 5: Render the prompt and switcher**
+- [x] **Step 5: Render the prompt and switcher**
 
 In `packages/app-shell/src/routes/match.tsx`, add `ownedActableAtom` to the
 `../store/atoms` import, read it beside `actingSeat`:
@@ -635,7 +635,7 @@ and render this directly above the existing `<div className="control-bar">`:
 `canRollNow` comes from `useAtomValue(canRollAtom)` — add that read next to
 `ownedActable` rather than reaching into the `RollButton` component.
 
-- [ ] **Step 6: Run the gates**
+- [x] **Step 6: Run the gates**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -644,7 +644,7 @@ nub run test && nub run typecheck && nub run lint
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/app-shell/src/store/atoms.ts packages/app-shell/src/store/match-client.ts packages/app-shell/src/routes/match.tsx packages/app-shell/src/store/__tests__/match-client.test.ts
@@ -652,6 +652,14 @@ git commit -m "feat: name the acting local seat and let the device switch betwee
 ```
 
 ---
+
+
+**DONE.** `nub run test` 163 passed, typecheck, lint and `verify:ui` clean.
+
+Driven in a real browser with two local seats: the prompt reads
+"Krait's turn — pass the device", both seats offer a switch button because
+`simultaneous` is on by default, and clicking Jo moved the acting seat from
+Krait to Jo. `.seat-turn` and `.seat-switch` needed styles of their own.
 
 ### Task 5: Close the two inherited review findings, and prove they are closed
 

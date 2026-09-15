@@ -103,6 +103,18 @@ export class MatchClient {
   }
 
   /**
+   * Under `simultaneous` several owned seats can act at once and `actingSeatFor`
+   * only ever picks the first, so the device needs a way to say which of its own
+   * players is holding it. A seat it does not own is refused rather than
+   * silently accepted: acting as someone else's player is rejected by every
+   * device that folds the log, including this one.
+   */
+  setActingSeat(seat: string): void {
+    if (!this.state.seats.includes(seat)) return
+    this.patch((s) => ({ ...s, actingSeat: seat }))
+  }
+
+  /**
    * Send an action. It is checked against the local match first so an obvious
    * mistake (rolling out of turn, a card you cannot afford) becomes a message
    * to this player instead of network traffic and a rejection everywhere else.

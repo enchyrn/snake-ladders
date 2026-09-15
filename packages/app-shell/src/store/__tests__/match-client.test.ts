@@ -339,4 +339,26 @@ describe("local transport", () => {
     expect(c.state.match.players.map((p) => p.id)).toEqual(["a"])
     c.dispose()
   })
+
+  it("holds a manually chosen seat instead of snapping back to the first", () => {
+    const { service, commits } = controllable()
+    const c = new MatchClient(service, config, "local", "a", undefined, ["a", "b"])
+
+    seatPlayers(commits, ["a", "b"])
+    c.setActingSeat("b")
+
+    expect(c.state.actingSeat).toBe("b")
+    c.dispose()
+  })
+
+  it("refuses a seat this device does not own", () => {
+    const { service, commits } = controllable()
+    const c = new MatchClient(service, config, "local", "a", undefined, ["a"])
+
+    seatPlayers(commits, ["a", "b"])
+    c.setActingSeat("b")
+
+    expect(c.state.actingSeat).toBe("a")
+    c.dispose()
+  })
 })
