@@ -372,6 +372,76 @@ text is where the mistakes are.
   model did which work was removed. Cost if wrong: a grep for model names hits
   the plan file and finds templates.
 
+## Decisions taken during the review-findings plan, and what they cost
+
+Seven rulings made on the user's behalf while executing
+`docs/superpowers/plans/2026-09-15-review-findings-plan.md`. They lived only in a
+gitignored SDD ledger, which does not survive a reclaimed container — so they are
+here. Reverse any of them on purpose rather than rediscovering them by accident.
+
+**1. Task 4 fixes the Rust decoder as well as the TypeScript one.**
+`crates/lan-sync/src/lib.rs`'s `seed_from_room` had the identical `.take(4)`
+defect as `seedFromRoom`. Fixing one alone would have made the browser reject
+`ABC` while the native app accepted it — manufacturing the exact divergence the
+fix exists to prevent. *Cost if wrong:* a slightly larger commit spanning two
+languages. Confirmed correct: the Rust test returned `Some(9897)` pre-fix.
+
+**2. Task 3's file list and test target were corrected before dispatch.**
+The plan named `packages/engine/src/__tests__/match.test.ts`, which does not
+exist; `playCard` is covered in `rules.test.ts`. The plan also omitted `types.ts`
+and `resolve.ts`. *Cost if wrong:* none — a factual correction, verified by `ls`.
+
+**3. Test-helper names in the plan are sketches; the assertions are binding.**
+Tasks 1, 3, 5 and 7 named helpers that do not exist. Implementers were told to
+use what each file already has. *Cost if wrong:* a duplicate helper, caught by review.
+
+**4. Execution follows the plan's own order**, which is already the dependency
+order for the three tasks sharing `lan-relay.mjs` (6 → 8 → 10) and the two sharing
+`match-client.ts` (7 → 9). *Cost if wrong:* none identified.
+
+**5. The Android CI failure was not this PR's, and I fixed it anyway.**
+`android-actions/setup-android@v3` installs `tools platform-tools` by default;
+`tools` has been retired from the SDK repository, so `sdkmanager` exits 1 inside
+the action before any repo code runs. It failed identically on two consecutive
+commits, one documentation-only. I did not merely stand down, because this job is
+the only compiler `src-tauri/src/lib.rs` ever meets and plan Task 11 depends on it
+for its entire verification story. Fixed in `b3b3e89` by requesting
+`platform-tools` alone. *Cost if wrong:* a later, louder failure; the `with:`
+block is trivially revertible. Confirmed: Android green on `b3b3e89`, `d01b730`
+and `97d5a3a`, ~6.5 min each — real builds, not early bails.
+
+**6. The "flake" a reviewer reported was my own concurrency, not a test defect.**
+It flagged `a card played in a new round does not carry the last round's timeline`
+as pre-existing. `git log -S` shows `d01b730` added it three minutes earlier. I had
+dispatched an implementer and a suite-running reviewer against the same package at
+once, so the reviewer ran vitest while `rules.test.ts` was half-written. Ten
+consecutive clean runs with a settled tree, 65 tests each. **Process rule for the
+rest of this work: a reviewer that runs the suite must not overlap an implementer
+in the same package.** Reviewers are read-only for *writes*, but they execute
+tests against the live worktree, which is not isolation. *Cost if wrong:* a real
+intermittent failure could hide behind 10 clean runs; the final whole-branch
+review re-runs everything.
+
+**7. Task 4's third fix — `src-tauri`'s `net_rooms()` — is in scope, not creep.**
+It called `seed_from_room(...).unwrap_or(0)`. Tightening the decoder is what makes
+`None` reachable there, so shipping the decoder fix alone would have converted a
+silent-wrong-board bug into a silent-phantom-room bug. Changed `.map()` to
+`.filter_map()`. *Cost if wrong:* an undecodable beacon vanishes from the lobby
+rather than appearing unjoinable. Confirmed: it compiles (Android run 69).
+
+### Corrections to things this document and CLAUDE.md previously implied
+
+- CLAUDE.md says the room-code derivation lives in three places. Those are three
+  **encoders**. Only two of them ever decoded — `apps/relay/lan-relay.mjs` has no
+  decoder at all. Do not go hunting for a third decode site.
+- A test sketched in a plan is not a test that reproduces a bug. Two of this
+  plan's sketched tests passed against their own defects: Task 1's mine-blast
+  scenario did not reach the defect through the real dispatch path, and Task 5's
+  `wait_for` poll passed with the epoch guards stripped out, because the poll ran
+  ahead of the dying thread's mutation. Both were caught by the implementers.
+  Concurrency tests here must be **causally ordered** — block on a frame the code
+  under test actually broadcasts, under the same lock as the mutation.
+
 ## Deferred, and why
 
 Small, real, and none of them blocking. Recorded here because the scratch
