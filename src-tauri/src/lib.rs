@@ -12,9 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use lan_sync::{
-    seed_from_room, Browser, PeerInfo, Sequenced, Session, SessionSink, SessionStatus,
-};
+use lan_sync::{seed_from_room, Browser, PeerInfo, Sequenced, Session, SessionSink, SessionStatus};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -222,7 +220,12 @@ fn net_rooms(net: State<'_, Net>) -> CmdResult<Vec<RoomView>> {
 /// Join a room found by discovery, or one whose address was typed in by hand
 /// because the network blocks broadcast traffic.
 #[tauri::command]
-fn net_join(app: AppHandle, net: State<'_, Net>, addr: String, identity: Identity) -> CmdResult<()> {
+fn net_join(
+    app: AppHandle,
+    net: State<'_, Net>,
+    addr: String,
+    identity: Identity,
+) -> CmdResult<()> {
     let socket: SocketAddr = addr
         .parse()
         .map_err(|_| format!("`{addr}` is not a host address"))?;

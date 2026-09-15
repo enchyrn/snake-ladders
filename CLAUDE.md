@@ -15,7 +15,8 @@ nub run build            # typecheck + production bundle
 
 cargo test -p lan-sync   # Rust networking crate (real TCP/UDP sockets)
 cargo clippy -p lan-sync --all-targets -- -D warnings
-cargo fmt --all
+cargo fmt --all           # crates/ only — see below
+(cd src-tauri && cargo fmt)   # src-tauri is its own workspace
 
 nub run relay            # WebSocket relay; prints the join string to paste
 nub run verify:ui        # build first, then drive the app in a real browser
@@ -89,6 +90,13 @@ determinism contract and a poor author of code that has to honour it
 selected by `--agent`, and OpenCode silently falls back to an agent that *can*
 write. Delegation needs `opencode.ai` allowed, which is the default everywhere
 except a cloud environment below **Custom** access.
+
+`cargo fmt --all` from the root formats **`crates/` only**. The root workspace
+is `members = ["crates/*"]` and `src-tauri/Cargo.toml` declares its own
+`[workspace]`, so the root command never reads those files — it is silent
+because it does not look, not because they are clean. `src-tauri` needs its own
+`cargo fmt` run from inside that directory. Two files had drifted unformatted
+for exactly this reason before anyone noticed.
 
 The Tauri app cannot be built in most dev containers: it needs webkit2gtk on
 Linux, an Android SDK+NDK for Android, and macOS with Xcode for iOS. **Do not
