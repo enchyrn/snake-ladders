@@ -129,7 +129,15 @@ export class MatchClient {
   private retireDeparted(roster: ReadonlyArray<RosterEntry>): void {
     if (this.state.role !== "host") return
     for (const entry of roster) {
-      if (entry.connected) continue
+      if (entry.connected) {
+        // A reconnect flips `Leave`'s effect back via `Join`, so this device
+        // must be eligible for retirement again the next time it drops —
+        // otherwise a rejoin-then-drop never gets a second Leave and the
+        // round stalls exactly as it did before this stopped happening once.
+        this.retired.delete(entry.player_id)
+        continue
+      }
+      if (entry.player_id === this.state.me) continue // never retire the host's own seat
       if (this.retired.has(entry.player_id)) continue
       const seated = this.state.match.players.some((p) => p.id === entry.player_id)
       if (!seated) continue

@@ -185,6 +185,45 @@ describe("MatchClient", () => {
     expect(sent.filter((a) => typeof a === "object" && a !== null && "_tag" in a && a._tag === "Leave")).toHaveLength(1)
     c.dispose()
   })
+
+  it("submits a second Leave after a rejoin and a second disconnect", () => {
+    const { service, commits, rosters, sent } = controllable()
+    const c = new MatchClient(service, config, "host", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    rosters.emit([
+      { player_id: "me", name: "Me", connected: true },
+      { player_id: "them", name: "Them", connected: false },
+    ])
+    rosters.emit([
+      { player_id: "me", name: "Me", connected: true },
+      { player_id: "them", name: "Them", connected: true },
+    ])
+    rosters.emit([
+      { player_id: "me", name: "Me", connected: true },
+      { player_id: "them", name: "Them", connected: false },
+    ])
+
+    const leaves = sent.filter(
+      (a) => typeof a === "object" && a !== null && "_tag" in a && a._tag === "Leave",
+    )
+    expect(leaves).toHaveLength(2)
+    c.dispose()
+  })
+
+  it("never submits a Leave for the host's own seat", () => {
+    const { service, commits, rosters, sent } = controllable()
+    const c = new MatchClient(service, config, "host", "me")
+    seatPlayers(commits, ["me", "them"])
+
+    rosters.emit([
+      { player_id: "me", name: "Me", connected: false },
+      { player_id: "them", name: "Them", connected: true },
+    ])
+
+    expect(sent).not.toContainEqual({ _tag: "Leave", playerId: "me" })
+    c.dispose()
+  })
 })
 
 describe("local transport", () => {
