@@ -434,6 +434,20 @@ rather than appearing unjoinable. Confirmed: it compiles (Android run 69).
 - CLAUDE.md says the room-code derivation lives in three places. Those are three
   **encoders**. Only two of them ever decoded — `apps/relay/lan-relay.mjs` has no
   decoder at all. Do not go hunting for a third decode site.
+- **A browser and the installed app cannot join each other, and `wss://` does
+  not change that.** Asked to confirm the built artifact enables Android-host +
+  PWA same-network cross-play, I probed it directly: handing `Host::bind` the
+  exact bytes a browser sends for `new WebSocket(...)` returns
+  `{"t":"rejected","reason":"malformed handshake"}`. `crates/lan-sync` is a raw
+  `TcpListener` trading newline-delimited JSON, with `serde` and `serde_json`
+  as its only dependencies — no WebSocket anywhere. The reverse direction fails
+  too: the installed app joins via `net_join`, a Tauri command into that same
+  Rust TCP client. So a match is all-native or all-browser. The `wss://`
+  decision (task #14) only lets an HTTPS *page* reach the relay; it does not
+  create interop. `docs/playing-together.md` previously implied otherwise and
+  is corrected in `f1a55ca`. Mixing needs a bridge that does not exist: either
+  the Rust host answering a WebSocket upgrade, or the native app joining a
+  relay as a WebSocket client.
 - A test sketched in a plan is not a test that reproduces a bug. Two of this
   plan's sketched tests passed against their own defects: Task 1's mine-blast
   scenario did not reach the defect through the real dispatch path, and Task 5's
