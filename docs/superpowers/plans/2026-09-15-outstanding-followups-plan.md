@@ -87,7 +87,7 @@ registered is refused rather than served untracked.
 - Produces: `Host::pending_count(&self) -> usize`, `#[doc(hidden)]`. No other task
   uses it; it exists for the test.
 
-- [ ] **Step 1: Write the guard test**
+- [x] **Step 1: Write the guard test**
 
 Add this helper just below `pump_until` in `crates/lan-sync/tests/session.rs`:
 
@@ -163,7 +163,7 @@ The counts go 3 → 4 → 3, and every step of that sequence matters. If it neve
 reaches 4, registration is conditional again. If it never comes back to 3,
 `complete()` is not firing and `pending` grows for the life of the room.
 
-- [ ] **Step 2: Run it and watch it fail to compile**
+- [x] **Step 2: Run it and watch it fail to compile**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -173,7 +173,7 @@ cargo test -p lan-sync --test session every_accepted_socket
 Expected: a compile error, `no method named 'pending_count' found for struct 'Host'`.
 This is a compile failure, not a behavioural red — see the TDD note above.
 
-- [ ] **Step 3: Key `pending` by a number the host hands out**
+- [x] **Step 3: Key `pending` by a number the host hands out**
 
 In `crates/lan-sync/src/host.rs`, replace the `pending` field in `HostState` and
 add a counter beside it:
@@ -188,7 +188,7 @@ add a counter beside it:
     next_pending_id: u64,
 ```
 
-- [ ] **Step 4: Make registration unconditional in the accept loop**
+- [x] **Step 4: Make registration unconditional in the accept loop**
 
 Replace the whole `Ok(stream) => { ... }` arm in `Host::bind` with:
 
@@ -220,7 +220,7 @@ Replace the whole `Ok(stream) => { ... }` arm in `Host::bind` with:
                     }
 ```
 
-- [ ] **Step 5: Carry the id through `serve_client` and `PendingClient`**
+- [x] **Step 5: Carry the id through `serve_client` and `PendingClient`**
 
 Change `serve_client`'s signature and its guard construction:
 
@@ -256,7 +256,7 @@ impl PendingClient {
 
 `impl Drop for PendingClient` is unchanged.
 
-- [ ] **Step 6: Add the observability seam**
+- [x] **Step 6: Add the observability seam**
 
 In `impl Host`, directly below `pub fn log_len`:
 
@@ -270,7 +270,7 @@ In `impl Host`, directly below `pub fn log_len`:
     }
 ```
 
-- [ ] **Step 7: Drop the now-unused import**
+- [x] **Step 7: Drop the now-unused import**
 
 `SocketAddr` was only used for the `pending` key and `serve_client`'s parameter.
 Change the import at the top of `host.rs` to:
@@ -281,7 +281,7 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 
 If clippy reports it still in use, leave it — check the error rather than assuming.
 
-- [ ] **Step 8: Run the new test, then the whole crate**
+- [x] **Step 8: Run the new test, then the whole crate**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -294,7 +294,7 @@ Expected: the new test passes, and so do all the existing ones — in particular
 `host_shutdown_closes_a_socket_accepted_during_the_drain`, which are the two that
 would notice this change going wrong. Paste the real output; do not summarise it.
 
-- [ ] **Step 9: Clippy and fmt**
+- [x] **Step 9: Clippy and fmt**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -304,7 +304,7 @@ cargo fmt --all
 
 Expected: clippy clean. If `fmt` changes anything, include it in the commit.
 
-- [ ] **Step 10: Run the drain race test at power**
+- [x] **Step 10: Run the drain race test at power**
 
 The neighbouring race test is probabilistic and this change rewrites the code
 underneath it, so confirm it did not get weaker:
@@ -321,7 +321,7 @@ fails=0; for _ in $(seq 1 40); do "$BIN" \
 Expected: `0 / 40`. Anything else is a regression — stop and report the number
 rather than re-running until it reads zero.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add crates/lan-sync/src/host.rs crates/lan-sync/tests/session.rs
@@ -350,6 +350,17 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
+**Completion note:** landed as `0d85c8e`. Everything went as the brief
+predicted — Step 2's compile error named `peer_addr()` verbatim, and Step 10's
+race-test loop came back `0 / 40` on the first run, no re-runs needed. One
+thing the brief didn't anticipate: the commit first carried the implementing
+agent's own attribution rather than the one the Global Constraints name, on
+the reasoning that a standing session reminder overrides a brief's literal
+text. A review round corrected it by amend: the constraint's exact trailer
+string is the one that has to match across every commit on this branch,
+whichever agent authors the work. The code itself was approved unchanged —
+the amend touched only the trailer.
+
 ---
 
 ### Task 2: Give CI a whole-tree typecheck
@@ -371,7 +382,7 @@ file that decides how tests resolve imports is currently unchecked.
 - Produces: nothing other tasks reference. Task 3 also edits `tsconfig.json`, so run
   this task first.
 
-- [ ] **Step 1: Prove the gap with a deliberate error**
+- [x] **Step 1: Prove the gap with a deliberate error**
 
 ```bash
 cd /home/user/snake-ladders
@@ -384,7 +395,7 @@ nub run typecheck
 Expected: **exit 0**. The whole-tree typecheck does not see the file. That is the
 gap, and it is the red step.
 
-- [ ] **Step 2: Fix the include list**
+- [x] **Step 2: Fix the include list**
 
 In `tsconfig.json`, replace the `include` line with exactly this:
 
@@ -398,7 +409,7 @@ would match nothing while implying the scripts are checked.
 
 `apps/game-web/vite.config.ts` is already covered by `"apps"`.
 
-- [ ] **Step 3: Re-run and watch it fail**
+- [x] **Step 3: Re-run and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -408,7 +419,7 @@ nub run typecheck
 Expected: FAIL, `vitest.config.ts(...): error TS2322: Type 'number' is not
 assignable to type 'string'.`
 
-- [ ] **Step 4: Restore the file and confirm green**
+- [x] **Step 4: Restore the file and confirm green**
 
 ```bash
 cp /tmp/vitest.config.ts.bak vitest.config.ts
@@ -419,7 +430,7 @@ nub run typecheck
 Expected: exit 0, no output beyond the `$ tsc --noEmit` echo. Confirm
 `git diff --stat vitest.config.ts` is empty before moving on.
 
-- [ ] **Step 5: Add the step to CI**
+- [x] **Step 5: Add the step to CI**
 
 In `.github/workflows/ci.yml`, in the `web` job, insert this **after** the
 `nub run lint` step and **before** the `run-many` step:
@@ -432,7 +443,7 @@ In `.github/workflows/ci.yml`, in the `web` job, insert this **after** the
       - run: nub run typecheck
 ```
 
-- [ ] **Step 6: Check the workflow parses**
+- [x] **Step 6: Check the workflow parses**
 
 ```bash
 cd /home/user/snake-ladders
@@ -443,7 +454,7 @@ Expected: `ok`. If PyYAML is missing, use
 `node -e "require('fs').readFileSync('.github/workflows/ci.yml','utf8')"` and read
 the file back instead — do not skip the check silently, say which one you ran.
 
-- [ ] **Step 7: Run the full gates**
+- [x] **Step 7: Run the full gates**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -452,7 +463,7 @@ nub run lint && nub run typecheck && nub run test
 
 Expected: lint clean, typecheck clean, 111 tests passing, exit 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add tsconfig.json .github/workflows/ci.yml
@@ -473,6 +484,12 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
+
+**Completion note:** landed as `ac57ebc`. Went exactly to plan — the red step
+(Step 1) reproduced the gap as an exit-0 with no diagnostic, precisely
+because the whole-tree config never saw the deliberately-broken file, and the
+fix flipped it to `TS2322` on the next run. 111 tests passing at this point,
+as the brief's own reviewer note predicted for the state before Task 4.
 
 ---
 
@@ -513,7 +530,7 @@ A cast cannot notice that; a declaration can.
 - Produces: `RelayHandle`, `Sequencer`, `startRelay`, `serveDist` as named below.
   Nothing outside the three test files uses them.
 
-- [ ] **Step 1: Write the relay declaration**
+- [x] **Step 1: Write the relay declaration**
 
 Create `apps/relay/lan-relay.d.ts`:
 
@@ -583,7 +600,7 @@ export declare const startRelay: (options?: {
 }) => RelayHandle
 ```
 
-- [ ] **Step 2: Write the drive-app declaration**
+- [x] **Step 2: Write the drive-app declaration**
 
 Create `scripts/drive-app.d.ts`:
 
@@ -608,7 +625,7 @@ export declare const serveDist: (options: {
 }) => Promise<ServedDist>
 ```
 
-- [ ] **Step 3: Point `@mutation/relay` at the declaration**
+- [x] **Step 3: Point `@mutation/relay` at the declaration**
 
 In `tsconfig.json`, change only that one line:
 
@@ -620,7 +637,7 @@ Leave `@mutation/tooling/*` alone — the wildcard already finds `scripts/drive-
 Leave `vitest.config.ts` alone entirely; its aliases point at the runtime files and
 must keep doing so.
 
-- [ ] **Step 4: Drop the directive and the cast from `harness.ts`**
+- [x] **Step 4: Drop the directive and the cast from `harness.ts`**
 
 In `packages/net/src/__tests__/harness.ts`, replace the import:
 
@@ -648,7 +665,7 @@ and replace the body of `relay` with:
 Keep the `port: 0` comment above it as it is. The `@ts-expect-error` line and its
 two comment lines go.
 
-- [ ] **Step 5: Drop the directive from `relay.test.ts`**
+- [x] **Step 5: Drop the directive from `relay.test.ts`**
 
 In `packages/net/src/__tests__/relay.test.ts`, replace the three lines
 
@@ -682,7 +699,7 @@ harness:
 const relay = async (opts: { port?: number; room?: string; capacity?: number } = {}) => {
 ```
 
-- [ ] **Step 6: Drop the directive and the extension from `drive-app.test.ts`**
+- [x] **Step 6: Drop the directive and the extension from `drive-app.test.ts`**
 
 In `apps/game-web/__tests__/drive-app.test.ts`, replace
 
@@ -697,7 +714,7 @@ with
 import { serveDist } from "@mutation/tooling/drive-app"
 ```
 
-- [ ] **Step 7: Typecheck**
+- [x] **Step 7: Typecheck**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -710,7 +727,7 @@ Expected: exit 0. Two failure modes to read carefully rather than paper over:
   declaration is wrong. **Fix the declaration to match the `.mjs`**, never the test
   to match a wrong declaration. Re-read the `.mjs` and check.
 
-- [ ] **Step 8: Run the suite**
+- [x] **Step 8: Run the suite**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -721,7 +738,7 @@ Expected: 111 passed, exit 0. A resolution failure here means the extensionless
 specifier did not resolve at runtime; report it rather than putting `.mjs` back,
 because that would need the separate tsconfig entry this step was chosen to avoid.
 
-- [ ] **Step 9: Lint**
+- [x] **Step 9: Lint**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -731,7 +748,7 @@ nub run lint
 Expected: clean. The boundary rule reads the project graph, and this task adds no
 new project edges — both aliases already existed.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/relay/lan-relay.d.ts scripts/drive-app.d.ts tsconfig.json \
@@ -755,6 +772,19 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
+
+**Completion note:** landed as `68664ed`. The brief's `lan-relay.d.ts` text
+for `join`'s `send` field (`send: (frame: unknown) => void`) did not typecheck
+as written — an arrow-typed property is checked contravariantly under
+`strictFunctionTypes`, so `unknown` as the declared parameter rejected every
+caller's narrower handler type, which the brief's own literal text did not
+anticipate. Fixed by re-deriving the real frame shapes `Sequencer.join` and
+`#broadcast` actually pass to `send` from the `.mjs` source (a `SequencerFrame`
+union) rather than falling back to method-shorthand bivariance over
+`unknown`, since a real union is strictly more useful than either variance
+trick applied to a type that asserts nothing. A related dead cast on
+`seq.roster()` in `relay.test.ts`, left over from before `RosterEntry` existed,
+was removed as trivial cleanup. 111 tests still passing.
 
 ---
 
@@ -785,7 +815,7 @@ test environment for one ergonomic guard is out of scope for this task.
 - Consumes: nothing from other tasks.
 - Produces: `onceAtATime<A extends unknown[]>(run: (...args: A) => Promise<void>, report: (busy: boolean) => void): (...args: A) => Promise<void>`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/app-shell/src/app/__tests__/once-at-a-time.test.ts`:
 
@@ -876,7 +906,7 @@ describe("onceAtATime", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -885,7 +915,7 @@ nubx vitest run packages/app-shell/src/app/__tests__/once-at-a-time.test.ts
 
 Expected: FAIL — `Failed to resolve import "../once-at-a-time"`.
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 Create `packages/app-shell/src/app/once-at-a-time.ts`:
 
@@ -922,7 +952,7 @@ export const onceAtATime = <A extends unknown[]>(
 }
 ```
 
-- [ ] **Step 4: Run the test again**
+- [x] **Step 4: Run the test again**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -931,7 +961,7 @@ nubx vitest run packages/app-shell/src/app/__tests__/once-at-a-time.test.ts
 
 Expected: PASS, 5 tests.
 
-- [ ] **Step 5: Wire it into `JoinScreen`**
+- [x] **Step 5: Wire it into `JoinScreen`**
 
 In `packages/app-shell/src/routes/join.tsx`:
 
@@ -976,7 +1006,7 @@ each render would carry a fresh `busy: false` every time and guard nothing:
   )
 ```
 
-- [ ] **Step 6: Disable both buttons while a join is in flight**
+- [x] **Step 6: Disable both buttons while a join is in flight**
 
 The room button's `disabled` gains the new term:
 
@@ -994,7 +1024,7 @@ and the manual Join button gets one:
 
 `enterManually` needs no change — it calls `enter`, which is now the guarded one.
 
-- [ ] **Step 7: Typecheck and lint**
+- [x] **Step 7: Typecheck and lint**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1003,7 +1033,7 @@ nub run typecheck && nub run lint
 
 Expected: both clean. `noUnusedLocals` is on, so an import left dangling fails here.
 
-- [ ] **Step 8: Run the whole suite**
+- [x] **Step 8: Run the whole suite**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1012,7 +1042,7 @@ nub run test
 
 Expected: 116 passed (111 plus the 5 new), exit 0.
 
-- [ ] **Step 9: Drive the built app**
+- [x] **Step 9: Drive the built app**
 
 A disabled button that looks enabled is one of the three bugs this harness has
 already caught in this repo, so check the rendering rather than assuming it.
@@ -1027,7 +1057,7 @@ reports `log: []` and then times out on "nothing was narrated after rolling", th
 is the known cold-start flake recorded in `docs/handoff.md`; re-run once before
 treating it as real, and say in your report that you did.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add packages/app-shell/src/app/once-at-a-time.ts \
@@ -1052,6 +1082,17 @@ Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
 
+**Completion note:** landed as `ff07c79`. Went exactly to plan — RED failed
+on the missing module as expected, GREEN passed 5/5 once `once-at-a-time.ts`
+existed, and the wiring into `JoinScreen` needed no deviation from the
+brief's code. Final suite: 116 tests (111 plus the 5 new
+`once-at-a-time.test.ts` cases). `verify:ui` passed clean on the first run —
+the known cold-start narration flake did not occur, so no re-run was needed.
+Not anticipated by the brief: this task changes join semantics from "last tap
+wins" to "second tap dropped" as an unavoidable consequence of the guard,
+which review flagged as worth recording explicitly rather than leaving
+implicit in the diff — see Task 5's handoff edit.
+
 ---
 
 ### Task 5: Retire the follow-ups in the record
@@ -1069,14 +1110,14 @@ the file exists to prevent.
 
 **Interfaces:** consumes the outcomes of Tasks 1–4. Run last.
 
-- [ ] **Step 1: Rewrite the follow-ups list**
+- [x] **Step 1: Rewrite the follow-ups list**
 
 Cut items 2 through 5. Item 1 — the `wss://` relay architecture — stays exactly as
 it is, and becomes the only entry. Rewrite the section's opening paragraph so it
 does not promise five items; it should say that one thing is outstanding, that it is
 a decision rather than code, and that it blocks Task 8.
 
-- [ ] **Step 2: Close open thread 2**
+- [x] **Step 2: Close open thread 2**
 
 Open thread 2 is the `peer_addr()` hole. Move it out of the open threads and into
 the resolved record, keeping the mechanism description — it is the expensive part to
@@ -1084,7 +1125,7 @@ rediscover — and adding what closed it: unconditional registration keyed by a
 host-issued number, and that no test can force `peer_addr()` or `try_clone()` to
 fail, so the test that guards it is a guard rather than a reproduction.
 
-- [ ] **Step 3: Record what stayed deferred**
+- [x] **Step 3: Record what stayed deferred**
 
 Add to "Deferred, and why", in the file's existing voice:
 - **No component test environment.** There is no jsdom and no `@testing-library` in
@@ -1099,14 +1140,14 @@ Add to "Deferred, and why", in the file's existing voice:
   them — `drive-app.d.ts` does, for the one export the suite imports. Turning on
   `allowJs`/`checkJs` for `scripts/` would cover the rest and is untried.
 
-- [ ] **Step 4: Tick the plan**
+- [x] **Step 4: Tick the plan**
 
 In this plan file, change every `- [ ]` to `- [x]` and add a short note under each
 task recording anything it did not anticipate. Be specific: a note saying "went
 fine" is worth nothing to the next reader. In particular record the measured
 `n / 40` from Task 1 Step 10 and the final test count.
 
-- [ ] **Step 5: Run every gate, and read the output**
+- [x] **Step 5: Run every gate, and read the output**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1121,7 +1162,7 @@ into your report — the test count, the precache count, the clippy result. A cl
 without the output behind it is the one thing this repo's conventions call out by
 name.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/handoff.md docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md
@@ -1142,6 +1183,19 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 MSG
 ```
+
+**Completion note:** `nub run lint`, `nub run typecheck` and
+`cargo fmt --all -- --check` were all clean with no output; `nub run test`
+reported 116 tests passing; `cargo test -p lan-sync` reported 22 (12 in
+`relay.rs`, 10 in `session.rs`), all passing; `cargo clippy -p lan-sync
+--all-targets -- -D warnings` finished with no warnings. `nub run build`'s
+first run reported **14** precached entries, not 13 — but `dist/` still held
+hashed chunk files from an earlier build in this session, and workbox's glob
+picked those up alongside the fresh ones, doubling four icon entries. Deleting
+`dist/` and rebuilding from clean gave 13 entries (1215.61 KiB) on two
+consecutive runs, matching what the brief expected; the 14 was a stale-output
+artifact of this run, not a regression, and is recorded here rather than
+rounded away.
 
 ---
 

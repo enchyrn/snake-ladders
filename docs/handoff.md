@@ -1,7 +1,7 @@
 # Handoff
 
 State of the branch `claude/snake-ladders-cross-device-3uu177` as of
-2026-09-14, written so another session — or the same person on a different
+2026-09-15, written so another session — or the same person on a different
 machine — can pick it up without re-deriving anything.
 
 Tasks 1, 3, 4, 5, 6 and 7 of the Nx/Nub/PWA plan are complete. Task 1 deployed
@@ -43,8 +43,8 @@ wave, each independently committed and reviewed:
   binary directly (`cargo test` alone proves nothing about a race): 5 failures
   in 2000 runs before, 0 after; the strengthened regression test now detects a
   reintroduced regression about 20% of the time per run, up from roughly 0.8%
-  (`6b7ccfd`, fixed in `9a1a519`). See open thread 2 for what this did *not*
-  close.
+  (`6b7ccfd`, fixed in `9a1a519`). What this did *not* close was a further,
+  structural gap in the same accept loop — see below for what closed it.
 - **ADR 0018** records the Nx adoption and its costs; ADR 0014, which still
   called the migration "Proposed — deliberately not done" while this branch
   had already done it, is superseded (`982a9f2`).
@@ -66,6 +66,79 @@ wave, each independently committed and reviewed:
   to break and nothing to add — inventing an entry point just to close the
   asymmetry would have been backwards.
 
+A second plan (`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`,
+commits `0d85c8e`..`ff07c79`) then closed four of the five items the
+remediation plan's own follow-up list had left open, each independently
+committed and reviewed:
+
+- **The structural hole in `host.rs`'s accept loop is closed** — this was
+  open thread 2, distinct from the timing race the remediation plan's Task 5
+  closed above, because it was never a race at all. When `stream.peer_addr()`
+  or the subsequent `stream.try_clone()` failed, the accept loop still spawned
+  the connection into `serve_client` — it just never inserted it into the
+  `pending` map first. `shutdown`'s drain only walks `pending`, so a
+  connection that took this path was unreachable to it regardless of timing:
+  there was no race to lose, because it was never in the set being raced
+  over. Registration is now unconditional, and `pending` is keyed by a
+  host-issued `u64` rather than a `SocketAddr` — the address key was the
+  second half of the bug, since once the OS recycles a source port a
+  retiring connection's `Drop` could evict a live one's entry. A stream that
+  cannot be registered at all is refused rather than served untracked. The
+  new test, `every_accepted_socket_is_tracked_until_its_handshake_completes`,
+  asserts the pending count goes 3 → 4 → 3 as three silent peers connect, a
+  fourth handshakes, and it retires. It is a guard, not a reproduction, and
+  says so in its own doc comment: neither `peer_addr()` nor `try_clone()` can
+  be forced to fail from a test without a new dependency or an rlimit stunt
+  on the whole process, so it passes against the unfixed host too. What it
+  catches is the conditional shape coming back. The neighbouring race test,
+  `host_shutdown_closes_a_socket_accepted_during_the_drain`, was re-run at
+  power afterward — 40 loops of the compiled binary, 0 failures — to confirm
+  the rewrite underneath it did not weaken it (`0d85c8e`).
+- **CI typechecks the whole tree again, and for the right reason this time.**
+  `nx run-many -t typecheck` runs each project's own `tsconfig.json`, so a
+  file outside every project's include list has no typechecker at all. The
+  root `tsconfig.json` is the whole-tree one, and its own `include` had gone
+  stale: it named a root `vite.config.ts` the Nx split had already moved into
+  `apps/game-web`, and it omitted `vitest.config.ts` — the file that defines
+  every path alias the suite resolves through, and so the last file that
+  should go unchecked. `include` is now `["apps", "packages",
+  "vitest.config.ts"]`, and CI runs `nub run typecheck` beside the existing
+  `run-many` step. Verified by appending a type error to `vitest.config.ts`:
+  exit 0 before the fix, `TS2322` after (`ac57ebc`).
+- **The two hand-cast `.mjs` modules are declared instead.** Three test files
+  imported `lan-relay.mjs` or `drive-app.mjs` through a `@ts-expect-error` and
+  then hand-wrote the shape they expected; `startRelay`'s shape had already
+  drifted once this session, gaining the `port` getter and `listening` when
+  fixed test ports were replaced with port 0, and a cast cannot notice that
+  kind of drift. New `apps/relay/lan-relay.d.ts` and `scripts/drive-app.d.ts`
+  replace the casts. Two mechanics cost real time finding and are worth
+  keeping written down: a `paths` entry naming a `.mjs` resolves that exact
+  file and reads it as untyped regardless of what `.d.ts` sits beside it
+  (both a `.d.ts` and a `.d.mts` sibling were tried), so the entry has to
+  point straight at the `.d.ts` itself; and the `@mutation/tooling/*`
+  wildcard only picks up `scripts/drive-app.d.ts` for an import written
+  without the `.mjs` extension. vitest's own aliases still point at the
+  runtime `.mjs` files (`68664ed`).
+- **`JoinScreen` can only run one join at a time.** The room and manual-join
+  buttons started a join per tap with nothing stopping a second; the
+  correctness half of that was already closed by `closeIf` above, so what was
+  left was ergonomic rather than dangerous. The guard flag lives in a closure
+  inside new `packages/app-shell/src/app/once-at-a-time.ts`, not in
+  `useState` alone, because `enter` is `async` and reads the flag again after
+  an `await` — the same stale-closure trap `client-slot.ts` exists to avoid
+  for the session handle — and `useState` only mirrors it for rendering. This
+  changed join semantics from "last tap wins" to "second tap dropped": a
+  player who taps the wrong room now has to wait for that join to settle
+  before a retry is accepted, with only a dimmed button and no "Joining…"
+  text explaining the wait. The wait is bounded — a 10s handshake timer on
+  the browser path (`packages/net/src/websocket.ts:147`), an OS-level TCP
+  connect timeout on the LAN path — and is exactly what was asked for, so
+  it's a consequence rather than a defect. A "Joining…" affordance is the
+  obvious follow-up. There is no jsdom or `@testing-library` in this repo, so
+  the guard is tested through the pure `onceAtATime` module rather than by
+  rendering `JoinScreen`, and the rendering itself was checked by driving the
+  built app (`ff07c79`).
+
 ## What works, and how it was verified
 
 - **Toolchain** — Nub `0.9.1` is the package manager and Node `24.21.0` the
@@ -82,10 +155,10 @@ wave, each independently committed and reviewed:
   tests in `packages/engine`, including a fuzz driver that plays whole random
   matches and asserts two independent peers fold to byte-identical state, for
   every combination of modules.
-- **Rust relay** — 21 tests over real TCP and UDP sockets: ordering agreement,
+- **Rust relay** — 22 tests over real TCP and UDP sockets: ordering agreement,
   gapless sequencing under load, mid-match catch-up, readmitting a device that
   dropped off Wi-Fi, locked and full rooms, junk frames. **All of them pass**
-  (`cargo test -p lan-sync`: 12 in `relay.rs`, 9 in `session.rs`), and so do
+  (`cargo test -p lan-sync`: 12 in `relay.rs`, 10 in `session.rs`), and so do
   `cargo clippy -p lan-sync --all-targets -- -D warnings` and
   `cargo fmt --all -- --check`. `a_peer_notices_the_host_going_away` was
   failing about 3 in 25 locally; the Rust audit (Task 7 of the Nx/Nub/PWA
@@ -95,7 +168,10 @@ wave, each independently committed and reviewed:
   `serve_client` now observes `running` before doing anything else — verified
   by looping the test binary directly rather than trusting a single
   `cargo test` pass: 5 failures in 2000 runs before the fix, 0 after. A
-  further residual gap in `host.rs` remains — see open thread 2.
+  further residual gap in `host.rs` — the accept loop spawning a connection
+  into `serve_client` without ever registering it in `pending` — was left open
+  on purpose at the time; the follow-ups plan's Task 1 has since closed it
+  (see the intro section above).
 - **WebSocket relay + browser transport** — tested against a live relay: two
   clients fold identically, a late joiner catches up, a refusal surfaces
   instead of hanging, and a deliberate two-socket race still leaves both
@@ -188,58 +264,29 @@ after the next closure.
   code: a certificate means a public host, which cuts against the promise that
   the game never touches the internet. ADR 0012 and 0013 are the prior art and
   this deserves its own ADR. Plan Tasks 8 and 9 cover the work.
-2. **A structural hole in `host.rs`'s accept loop, deliberately left open.**
-  This is distinct from the timing race the remediation plan's Task 5 closed
-  (see the "Rust relay" bullet above) — that fix cannot reach this one,
-  because it isn't a timing window at all.
-
-  When `stream.peer_addr()` or the subsequent `stream.try_clone()` fails, the
-  accept loop (`host.rs`, around the `for incoming in listener.incoming()`
-  block) still spawns the connection into `serve_client` — it just never
-  inserts it into the `pending` map first. `shutdown`'s drain only walks
-  `pending`, so a connection that took this path is unreachable to it
-  regardless of timing: there is no race to lose, because it was never in the
-  set being raced over. Closing it means restructuring the accept loop so a
-  registration failure either retries, is itself tracked, or the connection is
-  refused outright — any of which is more than a config-hygiene task should
-  take on, so it stays open. `peer_addr()`/`try_clone()` failing at all should
-  be rare (the socket was just accepted), which is presumably why it survived
-  the Task 5 review, but "rare" is not "impossible" and the drain's contract —
-  every accepted socket gets shut down — is currently false for this path.
-
-  For anyone tempted to close it by adding a regression test that asserts
-  `state.pending` ends up empty: the obvious objection is that this needs a
-  public accessor for private state, since `tests/session.rs` is a separate
-  crate. That objection is correct as far as it goes but doesn't end the
-  question — a public accessor would indeed not help `tests/session.rs`, but a
-  `#[cfg(test)] mod tests` written *inside* `host.rs` itself can read
-  `state.pending` directly, no new API required, because it compiles as part
-  of the same crate. Task 5's review considered this and still advised against
-  writing the test: it would have to reproduce the same failure-injection
-  problem (making `peer_addr()`/`try_clone()` fail on demand) and would then be
-  fighting the same sub-1%-per-run detection odds as the race it was modeled
-  on. Recorded so nobody re-derives either half of this from scratch.
-3. **Run host-local Android capture.** The Codespace cannot see the device.
+2. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
-4. **Complete the available Phase 1 device checks.** With one Android device,
+3. **Complete the available Phase 1 device checks.** With one Android device,
   test native behavior separately and use the laptop relay for the PWA. Do
   not claim Android-native-host to PWA interoperability yet.
-5. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
+4. **Add Rust-side logging.** A failure in `net_host`/`net_submit` is still
   difficult to diagnose. The TypeScript half of this thread is done: no banner
   renders a raw stack trace any more. Four call sites took `String(cause)` on a
   rejected `Effect.runPromise`, which renders Effect's FiberFailure dump — a
   minified bundle offset in a production build, and a player saw exactly that.
   They now take the `TransportError`'s own `reason` through `Effect.either`.
-6. **The RPG layer.** Designed and approved, not built. See
+5. **The RPG layer.** Designed and approved, not built. See
   `docs/superpowers/specs/2026-09-13-rpg-layer-design.md`. Extend the fuzz
   driver before writing any class.
-7. **iOS and pinch-zoom validation.** Both require hardware or interaction
+6. **iOS and pinch-zoom validation.** Both require hardware or interaction
   tooling unavailable in this Codespace.
 
 The Nx split's own defects (Tasks 4 and 5) are now closed —
 every item is fixed and recorded in the intro section above rather than
-re-described here.
+re-described here. The structural hole in `host.rs`'s accept loop that used
+to be thread 2 here is closed as well, by the follow-ups plan's Task 1 — see
+the intro section for the mechanism and what closed it.
 
 ## Decisions taken during the remediation, and what they cost
 
@@ -256,12 +303,14 @@ them can be reversed on purpose rather than rediscovered by accident.
   timeout body was `fail(...); close()`, but `close()` acts on whichever socket
   is current, so an abandoned attempt could silently close its replacement.
   Cost if wrong: a timed-out socket occasionally left to GC rather than closed.
-- **`peer_addr()` hole left open** (see open thread 2). Closing it means
-  restructuring the accept loop, well beyond bounding one window. Cost: a rare
-  wedged socket until someone takes it.
+- **`peer_addr()` hole left open.** Closing it means restructuring the accept
+  loop, well beyond bounding one window. Cost: a rare wedged socket until
+  someone takes it. *Resolved 2026-09-15* by the follow-ups plan's Task 1 —
+  see the intro section for the fix.
 - **Thread 2 stays open** even though the remediation plan's own brief said to
   close it — the brief was written before the hole above was found. Cost: a
-  follow-up stays visible one cycle longer, which is the safe direction.
+  follow-up stays visible one cycle longer, which is the safe direction. *This
+  thread is now closed too* — see the same Task 1.
 - **The final whole-branch review was scoped** to the remediation's ten commits
   rather than the branch's thirty-seven, which run to 1 MB because the branch
   also carries the Nx split. Cost: this is what let two cross-task findings
@@ -282,21 +331,27 @@ Small, real, and none of them blocking. Recorded here because the scratch
 workspace that held them is deleted — a note in a gitignored directory is not
 a record.
 
-- **CI never runs a whole-tree `tsc --noEmit`.** `nub run typecheck` does; CI
-  runs only per-project `nx run-many -t typecheck`. Adding `"__tests__"` to
-  `apps/game-web/tsconfig.json` closed this for that one file, not the general
-  case: the next test file added to a project whose tsconfig omits it reopens
-  the same hole silently.
-- **`packages/net/src/__tests__/harness.ts` hand-writes `startRelay`'s return
-  shape** as a cast rather than importing a type. Typecheck is clean, but the
-  shape is now duplicated in two files and `startRelay` has already changed
-  once (gaining the `port` getter and `listening`). It will drift.
+- **No component test environment.** There is no jsdom and no
+  `@testing-library` in the repo, and the suite runs `environment: "node"`.
+  `JoinScreen`'s join-guard is therefore tested through the pure
+  `onceAtATime` module it was extracted into, and the rendering was checked
+  by driving the built app instead. A real component test needs that
+  environment added first, which is a decision worth taking on its own
+  rather than as a side effect of an ergonomic fix.
+- **`scripts/*.mjs` is still untypechecked.** The whole-tree `tsc --noEmit`
+  now covers `apps`, `packages` and `vitest.config.ts`. The scripts are plain
+  JavaScript and `allowJs` is off, so they are checked only where a `.d.ts`
+  declares them — `drive-app.d.ts` does, for the one export the suite
+  imports. Turning on `allowJs`/`checkJs` for `scripts/` would cover the rest
+  and is untried.
 
 ## Follow-ups, in the order worth doing them
 
-Everything outstanding, in one place, so a fresh session does not have to
-assemble it from the sections above. Two are real work, one is a decision only
-the project owner can make, and two are small.
+This used to list five items; the follow-ups plan
+(`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`) closed the
+four that were codeable — see the intro section for what each one did. One
+thing is left, and it is not codeable at all: a decision only the project
+owner can make.
 
 1. **Decide the `wss://` relay architecture.** Not codeable — see open thread 1.
    A page served over HTTPS may not open a `ws://` socket, and the browser
@@ -308,19 +363,6 @@ the project owner can make, and two are small.
    art and this deserves its own. **It blocks Task 8** of
    `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`, which is
    otherwise the next task.
-2. **Close the `peer_addr()` hole in `host.rs`** — open thread 2, which records
-   the mechanism in full. A connection whose `peer_addr()` or `try_clone()`
-   fails is spawned into `serve_client` without ever entering `pending`, so
-   `shutdown`'s drain could never reach it, race or no race. Needs the accept
-   loop restructured so every accepted stream is tracked before any spawn.
-3. **Give CI a whole-tree typecheck**, per the first bullet above. Cheapest
-   shape is a `tsc --noEmit` step beside the existing `run-many`, since the
-   per-project configs are what leave the gaps.
-4. **Import `startRelay`'s type in `harness.ts`** instead of re-declaring it.
-5. **Add a pending guard to `JoinScreen`'s buttons.** The losing join can no
-   longer tear down the winner's session or report into a screen it has left,
-   so this is now ergonomics rather than correctness — but a second tap still
-   opens a second session for no reason.
 
 ## Known flakes
 
@@ -426,12 +468,15 @@ approval before writing code, and verify before claiming completion.
 `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` are done. The
 Task 4/5 Nx split shipped with defects, and a separate remediation plan
 (`docs/superpowers/plans/2026-09-14-nx-split-remediation-plan.md`, eight tasks
-plus a final fix wave, all committed and reviewed) fixed every one of them — see the intro section above
-for the list and open thread 2 for the one Rust gap that plan left open on
-purpose. **Task 8 of the Nx/Nub/PWA plan — the shared relay descriptor and QR
-transport phase — is next**, and it is blocked on open thread 1: the deployed
-PWA cannot reach any relay over `wss://` yet, which is an architecture decision
-(a certificate implies a public host) before it is code.
+plus a final fix wave, all committed and reviewed) fixed every one of them
+except the Rust gap it left open on purpose; a third plan
+(`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`) then
+closed that gap along with the three other codeable follow-ups it left
+behind — see the intro section above for both lists. **Open thread 1 is now
+the only thing standing between here and Task 8 of the Nx/Nub/PWA plan — the
+shared relay descriptor and QR transport phase.** The deployed PWA cannot
+reach any relay over `wss://` yet, which is an architecture decision (a
+certificate implies a public host) before it is code.
 
 Task 2 is next in the plan's order but is **hardware-blocked for a container
 session**: it is host-local Android capture and needs a device, wireless ADB and
@@ -477,7 +522,12 @@ The implementation plan is
 Tasks 1, 3, 4, 5, 6 and 7 of that plan are done, and their checkboxes are
 ticked with completion notes. Task 2 is hardware-blocked and Tasks 8 through 10
 have not started. The Task 4/5 split's defects were fixed by a separate
-remediation plan, which is itself complete, and that thread is retired.
+remediation plan, which is itself complete, and that thread is retired. The
+one Rust gap that remediation plan left open on purpose, and the three other
+codeable follow-ups it recorded, were closed in turn by a third plan
+(`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`), also
+complete. The only thing left on the follow-ups list is open thread 1, which
+is a decision rather than code.
 
 ### The order to pick this up in
 
@@ -489,16 +539,16 @@ remediation plan, which is itself complete, and that thread is retired.
    alone.
 3. Read this file and the design before touching code. The design is committed
    as `f773bf5`.
-4. **Start at open thread 1, then Task 8 of the Nx/Nub/PWA plan.** Open thread
-   2 stays open: the remediation plan closed the timing race in `host.rs` but
-   left a structural hole in the accept loop on purpose, and its entry above
-   says why and what closing it would cost — read it before touching that loop.
-   The Nx split's own defects are closed and that thread is retired. Task 2 is
-   hardware-blocked and cannot be done from a container. Task 8 — the shared
-   relay descriptor and QR transport phase — needs open thread 1 resolved
-   first: a relay the deployed PWA can reach at all is an architecture decision
-   (ADR 0012 and 0013 are the prior art), not a coding task, so expect to write
-   an ADR before touching Task 8's code.
+4. **Start at open thread 1, then Task 8 of the Nx/Nub/PWA plan.** It is the
+   only thing left open: the structural hole in `host.rs`'s accept loop that
+   used to be thread 2 is closed (the follow-ups plan's Task 1 — see the intro
+   section for the fix), and so are the three other codeable follow-ups that
+   plan recorded. The Nx split's own defects are closed and that thread is
+   retired too. Task 2 is hardware-blocked and cannot be done from a
+   container. Task 8 — the shared relay descriptor and QR transport phase —
+   needs open thread 1 resolved first: a relay the deployed PWA can reach at
+   all is an architecture decision (ADR 0012 and 0013 are the prior art), not
+   a coding task, so expect to write an ADR before touching Task 8's code.
 5. Review each task's diff and test output before moving to the next. Keep
    `--auto` restricted to trusted, explicitly scoped prompts.
 
