@@ -1031,7 +1031,7 @@ allocated a `Vec` where an array would do.
 - Produces: no new public API. A client whose first bytes are `GET ` is served
   over WebSocket; anything else keeps the newline-JSON path byte for byte.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to the integration tests, mirroring how the existing ones start a host:
 
@@ -1058,7 +1058,7 @@ fn a_browser_handshake_is_upgraded_and_welcomed() {
 Use the actual `Host::bind` signature and port accessor from `host.rs` — read
 them rather than trusting this sketch.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1067,7 +1067,7 @@ cargo test -p lan-sync a_browser_handshake
 
 Expected: FAIL — today the host answers `{"t":"rejected","reason":"malformed handshake"}`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In the per-client thread in `host.rs`, before the existing handshake read, peek
 the first four bytes. `BufReader::fill_buf` does this without consuming. If they
@@ -1084,7 +1084,7 @@ The writer half is shared with the broadcast path in `Host`, so the branch has t
 live wherever the client's `send` closure is built, not only in the read loop.
 Read `host.rs:240-270` before changing it.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1096,7 +1096,7 @@ cargo fmt --all
 Expected: PASS, including every pre-existing newline-JSON test — the native peer
 path must be untouched.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/lan-sync/src/host.rs crates/lan-sync/tests
@@ -1104,6 +1104,23 @@ git commit -m "feat: accept a browser WebSocket on the host's existing port"
 ```
 
 ---
+
+
+**DONE.** `cargo test -p lan-sync` 39 passed (was 37), clippy clean, fmt applied.
+Every pre-existing native test still passes — the newline-JSON path is untouched.
+
+Two departures from the plan:
+
+- The plan said peek four bytes. It discriminates on **one**: `fill_buf` blocks
+  for the first byte but never waits to accumulate more, so a four-byte check can
+  see a short buffer and misclassify a browser as a native peer. `G` versus `{`
+  separates them unambiguously, and `handshake_response` validates the rest.
+- A second test was added beyond the plan's: a browser and a native peer sharing
+  one ordered log. The handshake test alone would pass even if the two transports
+  ended up in separate rooms, which is the failure that actually matters.
+
+A `GET` that is not a version 13 upgrade gets `400 Bad Request` in plain HTTP,
+since whatever sent it cannot decode a WebSocket frame.
 
 ### Task 9: Point the browser at a native host, and write the ADR
 

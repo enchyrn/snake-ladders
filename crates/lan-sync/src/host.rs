@@ -52,6 +52,9 @@ struct Client {
     name: String,
     stream: TcpStream,
     connected: bool,
+    /// Whether this peer is a browser, and so wants WebSocket frames rather
+    /// than newline-delimited JSON. The payload is identical either way.
+    ws: bool,
     /// Set at registration from `HostState::next_epoch`. A connection that
     /// reaches the exit path only acts on the entry if this still matches —
     /// player_id is reused across a reconnect, so by then the map entry may
@@ -253,7 +256,12 @@ fn broadcast(state: &mut HostState, frame: &Downstream) {
         if !client.connected {
             continue;
         }
-        if client.stream.write_all(payload.as_bytes()).is_err() {
+        let written = if client.ws {
+            crate::ws::write_text(&mut client.stream, payload.trim_end())
+        } else {
+            client.stream.write_all(payload.as_bytes())
+        };
+        if written.is_err() {
             client.connected = false;
             dropped.push(id.clone());
         }
@@ -262,9 +270,49 @@ fn broadcast(state: &mut HostState, frame: &Downstream) {
     let _ = dropped;
 }
 
-fn send(stream: &mut TcpStream, frame: &Downstream) -> std::io::Result<()> {
+fn send(stream: &mut TcpStream, ws: bool, frame: &Downstream) -> std::io::Result<()> {
     let payload = encode(frame).map_err(std::io::Error::other)?;
-    stream.write_all(payload.as_bytes())
+    if ws {
+        // `encode` appends the newline the JSON transport delimits on; a
+        // WebSocket frame carries its own length, so it must not be there.
+        crate::ws::write_text(stream, payload.trim_end())
+    } else {
+        stream.write_all(payload.as_bytes())
+    }
+}
+
+/// Read the HTTP request head, up to and including the blank line that ends
+/// it. Bounded: a real handshake is a few hundred bytes, and an unbounded read
+/// here would let one socket grow the host's memory without ever finishing.
+fn read_http_head(reader: &mut BufReader<TcpStream>) -> Option<String> {
+    let mut head = String::new();
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).ok()? == 0 {
+            return None;
+        }
+        let blank = line == "\r\n" || line == "\n";
+        head.push_str(&line);
+        if blank {
+            return Some(head);
+        }
+        if head.len() > 8192 {
+            return None;
+        }
+    }
+}
+
+/// One frame from a peer, whichever protocol it speaks. `None` is end of
+/// stream, cleanly or otherwise.
+fn read_frame(reader: &mut BufReader<TcpStream>, ws: bool) -> Option<String> {
+    if ws {
+        return crate::ws::read_text(reader).ok().flatten();
+    }
+    let mut buf = String::new();
+    match reader.read_line(&mut buf) {
+        Ok(0) | Err(_) => None,
+        Ok(_) => Some(buf),
+    }
 }
 
 fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
@@ -293,16 +341,42 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
     let mut write_half = stream;
     let mut reader = BufReader::new(read_half);
 
-    // --- handshake -------------------------------------------------------
-    let mut line = String::new();
-    if reader.read_line(&mut line).unwrap_or(0) == 0 {
-        return;
+    // --- protocol detection ----------------------------------------------
+    // Both protocols open with the client speaking, and they cannot be
+    // confused on their first byte: a browser sends `GET /...`, a native peer
+    // sends a JSON object. Discriminating on one byte rather than four matters
+    // because `fill_buf` only guarantees that much — it blocks for the first
+    // byte but never waits to accumulate more. The full request line is
+    // validated below anyway, by `handshake_response`.
+    let ws = match reader.fill_buf() {
+        Ok(buffered) => buffered.first() == Some(&b'G'),
+        Err(_) => return,
+    };
+    if ws {
+        let Some(request) = read_http_head(&mut reader) else {
+            return;
+        };
+        let Some(response) = crate::ws::handshake_response(&request) else {
+            // A `GET` that is not a version 13 upgrade: answer in HTTP, since
+            // whatever sent it cannot decode a WebSocket frame.
+            let _ = write_half.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n");
+            return;
+        };
+        if write_half.write_all(response.as_bytes()).is_err() {
+            return;
+        }
     }
+
+    // --- handshake -------------------------------------------------------
+    let Some(line) = read_frame(&mut reader, ws) else {
+        return;
+    };
     let hello: Upstream = match decode(line.trim()) {
         Ok(frame) => frame,
         Err(_) => {
             let _ = send(
                 &mut write_half,
+                ws,
                 &Downstream::Rejected {
                     reason: "malformed handshake".into(),
                 },
@@ -313,6 +387,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
     let Upstream::Hello { player_id, name } = hello else {
         let _ = send(
             &mut write_half,
+            ws,
             &Downstream::Rejected {
                 reason: "expected hello".into(),
             },
@@ -332,6 +407,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
             drop(state);
             let _ = send(
                 &mut write_half,
+                ws,
                 &Downstream::Rejected {
                     reason: "match already started".into(),
                 },
@@ -342,6 +418,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
             drop(state);
             let _ = send(
                 &mut write_half,
+                ws,
                 &Downstream::Rejected {
                     reason: "room is full".into(),
                 },
@@ -360,6 +437,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
                 name: name.clone(),
                 stream: stream_for_state,
                 connected: true,
+                ws,
                 epoch,
             },
         );
@@ -370,7 +448,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
             room: shared.room.clone(),
             log: state.log.clone(),
         };
-        if send(&mut write_half, &welcome).is_err() {
+        if send(&mut write_half, ws, &welcome).is_err() {
             // A reconnect racing this same failure could already have
             // replaced the entry; only remove the one this call installed.
             if matches!(state.clients.get(&player_id), Some(c) if c.epoch == epoch) {
@@ -387,11 +465,9 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
 
     // --- frame loop ------------------------------------------------------
     loop {
-        let mut buf = String::new();
-        match reader.read_line(&mut buf) {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {}
-        }
+        let Some(buf) = read_frame(&mut reader, ws) else {
+            break;
+        };
         let trimmed = buf.trim();
         if trimmed.is_empty() {
             continue;
@@ -404,7 +480,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
                 commit(&mut state, action);
             }
             Ok(Upstream::Ping) => {
-                if send(&mut write_half, &Downstream::Pong).is_err() {
+                if send(&mut write_half, ws, &Downstream::Pong).is_err() {
                     break;
                 }
             }
