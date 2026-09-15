@@ -1,6 +1,5 @@
 import { Effect } from "effect"
-// @ts-expect-error -- plain .mjs with no type declarations
-import { startRelay } from "@mutation/relay"
+import { startRelay, type RelayHandle } from "@mutation/relay"
 import { makeWebSocketTransport } from "../websocket"
 import type { Committed, ConnectionStatus, TransportService } from "../transport"
 
@@ -13,19 +12,14 @@ import type { Committed, ConnectionStatus, TransportService } from "../transport
  * may depend on `net` — the reverse is the cycle the layer tags forbid.
  */
 export const makeRelayHarness = () => {
-  const servers: Array<{ wss: { close: (cb?: () => void) => void } }> = []
+  const servers: RelayHandle[] = []
   const transports: TransportService[] = []
 
   // `port: 0` asks the OS for a free port, so two relays never fight over one
   // a previous test hasn't released yet — the fixed, incrementing ports this
   // replaced flaked under exactly that race.
-  const relay = async (opts: Record<string, unknown> = {}) => {
-    const started = startRelay({ port: 0, room: "TEST", ...opts }) as {
-      wss: { close: (cb?: () => void) => void }
-      port: number
-      sequencer: { lock: () => void }
-      listening: Promise<void>
-    }
+  const relay = async (opts: { port?: number; room?: string; capacity?: number } = {}) => {
+    const started = startRelay({ port: 0, room: "TEST", ...opts })
     await started.listening
     servers.push(started)
     return started

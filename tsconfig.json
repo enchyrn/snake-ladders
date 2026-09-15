@@ -22,7 +22,7 @@
       "@mutation/render/*": ["./packages/render/src/*"],
       "@mutation/ui/*": ["./packages/ui/src/*"],
       "@mutation/app-shell/*": ["./packages/app-shell/src/*"],
-      "@mutation/relay": ["./apps/relay/lan-relay.mjs"],
+      "@mutation/relay": ["./apps/relay/lan-relay.d.ts"],
       "@mutation/tooling/*": ["./scripts/*"]
     }
   },

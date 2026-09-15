@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import WebSocket from "ws"
-// @ts-expect-error -- a plain .mjs script with no type declarations; the
-// shapes it produces are asserted below rather than typed.
-import { Sequencer, startRelay } from "@mutation/relay"
+import { Sequencer, startRelay, type RelayHandle } from "@mutation/relay"
 
 interface Frame {
   t: string
@@ -13,7 +11,7 @@ interface Frame {
   reason?: string
 }
 
-const servers: Array<{ wss: { close: (cb?: () => void) => void } }> = []
+const servers: RelayHandle[] = []
 const sockets: WebSocket[] = []
 
 afterEach(async () => {
@@ -26,7 +24,7 @@ afterEach(async () => {
 
 // `port: 0` asks the OS for a free port, so two relays never fight over one
 // a previous test hasn't released yet.
-const relay = async (opts: Record<string, unknown> = {}) => {
+const relay = async (opts: { port?: number; room?: string; capacity?: number } = {}) => {
   const started = startRelay({ port: 0, ...opts })
   await started.listening
   servers.push(started)
@@ -138,9 +136,7 @@ describe("Sequencer", () => {
 
     // One unwritable socket must not cost the others their commits.
     expect(commits(good).map((f) => f.seq)).toEqual([0, 1])
-    const flaky = (seq.roster() as Array<{ player_id: string; connected: boolean }>).find(
-      (p) => p.player_id === "flaky",
-    )!
+    const flaky = seq.roster().find((p) => p.player_id === "flaky")!
     expect(flaky.connected).toBe(false)
   })
 })
