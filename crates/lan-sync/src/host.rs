@@ -40,6 +40,10 @@ struct HostState {
     /// invisible to `shutdown`'s drain.
     pending: HashMap<u64, TcpStream>,
     next_pending_id: u64,
+    /// Bumped on every registration under a player_id, so a connection whose
+    /// thread outlives its own registration can tell whether the entry it
+    /// finds is still the one it installed.
+    next_epoch: u64,
     /// Actions committed locally, drained by the host's own UI thread.
     outbox: Vec<Sequenced>,
 }
@@ -48,6 +52,11 @@ struct Client {
     name: String,
     stream: TcpStream,
     connected: bool,
+    /// Set at registration from `HostState::next_epoch`. A connection that
+    /// reaches the exit path only acts on the entry if this still matches —
+    /// player_id is reused across a reconnect, so by then the map entry may
+    /// belong to the connection that replaced this one.
+    epoch: u64,
 }
 
 impl Host {
@@ -170,6 +179,18 @@ impl Host {
             .state
             .lock()
             .map(|s| s.pending.len())
+            .unwrap_or(0)
+    }
+
+    /// Clients currently marked connected. Exposed so a test can observe the
+    /// reconnect-vs-stale-disconnect race on `player_id` without reaching into
+    /// the roster's display fields.
+    #[doc(hidden)]
+    pub fn connected_count(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .map(|s| s.clients.values().filter(|c| c.connected).count())
             .unwrap_or(0)
     }
 
@@ -299,6 +320,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
         return;
     };
 
+    let epoch;
     {
         let Ok(mut state) = shared.state.lock() else {
             return;
@@ -330,12 +352,15 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
         let Ok(stream_for_state) = write_half.try_clone() else {
             return;
         };
+        epoch = state.next_epoch;
+        state.next_epoch += 1;
         state.clients.insert(
             player_id.clone(),
             Client {
                 name: name.clone(),
                 stream: stream_for_state,
                 connected: true,
+                epoch,
             },
         );
 
@@ -346,7 +371,11 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
             log: state.log.clone(),
         };
         if send(&mut write_half, &welcome).is_err() {
-            state.clients.remove(&player_id);
+            // A reconnect racing this same failure could already have
+            // replaced the entry; only remove the one this call installed.
+            if matches!(state.clients.get(&player_id), Some(c) if c.epoch == epoch) {
+                state.clients.remove(&player_id);
+            }
             return;
         }
         let roster = Downstream::Roster {
@@ -387,7 +416,12 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
 
     if let Ok(mut state) = shared.state.lock() {
         if let Some(client) = state.clients.get_mut(&player_id) {
-            client.connected = false;
+            // A reconnect under the same id has already replaced this entry;
+            // marking it disconnected would cut the live socket out of every
+            // broadcast while its owner is still playing.
+            if client.epoch == epoch {
+                client.connected = false;
+            }
         }
         let roster = Downstream::Roster {
             peers: roster_of(&state),

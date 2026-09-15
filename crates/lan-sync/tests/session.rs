@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 
@@ -297,4 +297,102 @@ fn every_accepted_socket_is_tracked_until_its_handshake_completes() {
     );
 
     drop(silent);
+}
+
+/// Connect, complete the handshake, and drain the two frames a freshly
+/// registered client always gets (`welcome` then `roster`). The host only
+/// sends `welcome` once the map entry is installed, so a caller that has read
+/// it back knows registration already happened — ordering established
+/// through the socket rather than through a sleep.
+fn connect_and_register(
+    port: u16,
+    player_id: &str,
+    name: &str,
+) -> (TcpStream, BufReader<TcpStream>) {
+    let mut stream = TcpStream::connect(local(port)).expect("peer should connect");
+    stream
+        .set_read_timeout(Some(TIMEOUT))
+        .expect("read timeout should be set");
+    let hello = json!({"t": "hello", "player_id": player_id, "name": name});
+    writeln!(stream, "{hello}").expect("hello should be sent");
+
+    let mut reader = BufReader::new(stream.try_clone().expect("stream should clone"));
+    let mut welcome = String::new();
+    reader.read_line(&mut welcome).expect("welcome frame");
+    assert!(
+        welcome.contains("welcome"),
+        "expected a welcome frame, got {welcome:?}"
+    );
+    let mut roster = String::new();
+    reader.read_line(&mut roster).expect("roster frame");
+    assert!(
+        roster.contains("roster"),
+        "expected a roster frame, got {roster:?}"
+    );
+    (stream, reader)
+}
+
+/// Reproduces the hazard fixed by `Client::epoch`: `player_id` is supplied by
+/// the client and reused on purpose so a dropped player can reclaim their
+/// seat, but the map is keyed on it too — so the old connection's own thread,
+/// noticing its socket died only after the reconnect has already replaced its
+/// entry, must not touch what it no longer owns.
+///
+/// The ordering is made explicit rather than raced: `connect_and_register`
+/// only returns once it has read the `welcome` frame back, and the host does
+/// not send `welcome` until the registration lock is held and the insert has
+/// already happened. So by the time `second` is registered, `first`'s entry
+/// is already gone from the map. What is left to `drop(first)`'s death being
+/// noticed asynchronously is handled by blocking on the next frame `second`
+/// receives, rather than by polling a count that would read the same either
+/// way before that notice lands — see the comment at that read.
+#[test]
+fn a_reconnect_survives_the_old_connection_noticing_it_died() {
+    let host = lan_sync::Host::bind("ROOM", 0, 6).expect("bind");
+    let port = host.port();
+
+    let first = connect_and_register(port, "p1", "Ada");
+    let (mut second, mut second_reader) = connect_and_register(port, "p1", "Ada");
+
+    // Let the first connection die. Its thread wakes, finds the socket gone,
+    // and must not touch the entry `second` installed under the same id.
+    // Both halves of the pair have to go: `connect_and_register` hands back a
+    // clone of the socket for reading, and that clone alone keeps the file
+    // description open, so the host-side read would never see the close.
+    drop(first);
+
+    // Don't poll `connected_count()` here: right after `drop(first)` it still
+    // reads 1 whether or not the bug exists, because the old connection's
+    // thread has not yet noticed the socket died — polling would just catch
+    // the *pre*-mutation state and pass either way. Block on the roster frame
+    // that exit path unconditionally broadcasts once it has finished (inside
+    // the same lock as the `connected` mutation) instead: that read only
+    // returns after the mutation has happened, and — this is the bug — a
+    // broken guard makes it flip `second`'s own entry to disconnected, so
+    // `broadcast` skips it and this read never completes.
+    let mut roster_after_death = String::new();
+    second_reader
+        .read_line(&mut roster_after_death)
+        .expect("the reconnect should still receive the roster broadcast the exit path sends");
+    assert!(
+        roster_after_death.contains("roster"),
+        "expected a roster frame, got {roster_after_death:?}"
+    );
+    assert_eq!(
+        host.connected_count(),
+        1,
+        "the reconnect must stay connected once the stale connection notices it died"
+    );
+
+    // The decisive assertion: a commit still reaches the live socket.
+    let submit = json!({"t": "submit", "action": {"_tag": "Roll", "playerId": "p1"}});
+    writeln!(second, "{submit}").expect("submit should be sent");
+    let mut frame = String::new();
+    second_reader
+        .read_line(&mut frame)
+        .expect("the reconnected client should still be broadcast to");
+    assert!(
+        frame.contains("commit"),
+        "expected a commit frame, got {frame:?}"
+    );
 }
