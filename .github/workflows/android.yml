@@ -26,6 +26,13 @@ jobs:
           java-version: "17"
 
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's default package list is "tools platform-tools", and
+          # `tools` no longer exists in the SDK repository — sdkmanager fails
+          # the whole job on it before anything of ours has run. Nothing here
+          # used it: the NDK is installed explicitly below and the Gradle
+          # build wants platform-tools.
+          packages: platform-tools
 
       - name: Install Android NDK
         # `tauri android build` cross-compiles the Rust side (see
@@ -36,12 +43,15 @@ jobs:
           sdkmanager --install "ndk;${NDK_VERSION}"
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-node@v4
+      # Drop-in for actions/setup-node: the pinned nub, the Node from
+      # .node-version, and nub's store cached on nub.lock (ADR 0017). It also
+      # fronts that Node's bin dir on PATH, which is where tauri's
+      # beforeBuildCommand finds the toolchain it shells out to.
+      - uses: nubjs/setup-nub@v0
         with:
-          node-version: 22
-          cache: npm
+          nub-version: 0.9.1
 
-      - run: npm ci
+      - run: nub ci
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -55,16 +65,18 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Generate Android project
-        run: npx tauri android init --ci
+        # npx, not nubx, and this is the one place npm survives the migration.
+        # The Tauri CLI bakes the command Gradle will use to re-invoke it into
+        # the generated BuildTask.kt, deriving it from argv[1] and npm_execpath.
+        # It knows npm/npx/pnpm/yarn/bun and does not know nub: under nubx
+        # npm_execpath is unset, so it writes a path-relative `node <path>` that
+        # Gradle then runs from src-tauri, where the path does not resolve. See
+        # ADR 0017; run 34761512711 is the failure.
+        run: nubx nx run tauri:android-init
 
-      - name: Patch generated manifest for LAN networking
-        # tauri android init regenerates gen/android from scratch every time,
-        # so the INTERNET/multicast permissions and cleartext-traffic flag
-        # documented in src-tauri/mobile/README.md must be re-applied after
-        # every init, not just once. See scripts/patch-android-manifest.mjs.
-        run: node scripts/patch-android-manifest.mjs
-
-      - run: npx tauri android build --debug --apk
+      # npx for the same reason as the init step above. The Gradle re-invocation
+      # is baked in at init time and must match how the CLI is launched here.
+      - run: nubx nx run tauri:android-build
 
       - name: List built APKs
         # Diagnoses a failed upload-artifact glob from the log instead of

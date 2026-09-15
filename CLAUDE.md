@@ -5,24 +5,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm install
-npm run dev              # Vite dev server on :1420
-npm run dev -- --host    # also serve on the LAN, so phones can open it
-npm test                 # vitest, all suites
-npm run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
-npm run build            # typecheck + production bundle
+nub install
+nub run dev              # Vite dev server on :1420
+nub run dev -- --host    # also serve on the LAN, so phones can open it
+nub run test             # vitest, all suites
+nub run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
+nub run lint             # the layer boundaries, and nothing else
+nub run build            # typecheck + production bundle
 
 cargo test -p lan-sync   # Rust networking crate (real TCP/UDP sockets)
 cargo clippy -p lan-sync --all-targets -- -D warnings
-cargo fmt --all
+cargo fmt --all           # crates/ only — see below
+(cd src-tauri && cargo fmt)   # src-tauri is its own workspace
 
-npm run relay            # WebSocket relay; prints the join string to paste
-npm run verify:ui        # build first, then drive the app in a real browser
+nub run relay            # WebSocket relay; prints the join string to paste
+nub run verify:ui        # build first, then drive the app in a real browser
+nub run verify:ui:pages  # the same, but served from the /snake-ladders/ subpath
+node scripts/drive-app.mjs --https   # over TLS, where a service worker registers
+
+PUBLIC_BASE_PATH=/snake-ladders nub run build   # what the Pages workflow builds
 ```
+
+**nub, not npm** (ADR 0017). `nub.lock` is the lockfile, there is no
+`package-lock.json`, and `npm ci` therefore fails. `nubx` replaces `npx`.
+`nub install` reuses an existing `node_modules`; `nub ci` is the clean,
+lockfile-strict install CI runs. Node 24 is the floor, pinned in
+`.node-version` and `mise.toml`.
+
+`nub run lint` exists for one rule: `@nx/enforce-module-boundaries`, reading
+the `layer:*` tag on each project against the `depConstraints` in
+`eslint.config.js`. Each layer lists what it may reach *down* to and nothing
+lists a layer above itself, so `engine` importing the HUD, or `ui` importing
+the store, fails as a circular dependency rather than resolving quietly through
+an alias. There are no stylistic rules — tsc owns everything else. Both cycles
+this replaced were invisible until the rule existed, so run it after moving code
+between packages.
+
+nub links `node_modules` in an isolated layout with no hoisting, so a package
+imported but never declared in `package.json` fails to resolve instead of
+silently working. When a build dies on a missing module, the fix is to declare
+the dependency, not to change the linker.
 
 `verify:ui` screenshots the app at phone size and fails on console errors,
 page errors or horizontal overflow. `--base-path /nested/path` reproduces
-being served from a subdirectory. It needs `npx playwright install chromium`
+being served from a subdirectory, and nothing outside that prefix resolves —
+a root-absolute URL that would 404 on GitHub Pages fails here instead. The
+prefix must match the base the bundle was built with, hence the pair of
+`verify:ui:pages` commands above.
+
+`--https` serves over TLS with a throwaway certificate (needs `openssl`). A
+secure origin is not cosmetic: a service worker will not register without one,
+and a page will not refuse an insecure `ws://` without one — so neither the
+offline shell installing nor the LAN-join refusal can be reproduced on plain
+http, however carefully the page is driven. The serving rules are unit-tested
+in `apps/game-web/__tests__/drive-app.test.ts` via the exported `serveDist`. It needs `nubx playwright install chromium`
 once. Run it after any UI change: the clipped board, the not-found router and
 the mis-styled disabled button were all found this way and none of them were
 visible in the source.
@@ -30,23 +66,23 @@ visible in the source.
 One file, or one test by name:
 
 ```bash
-npx vitest run src/engine/__tests__/rules.test.ts
-npx vitest run -t "collapses a ladder into a snake"
+nubx vitest run packages/engine/src/__tests__/rules.test.ts
+nubx vitest run -t "collapses a ladder into a snake"
 cargo test -p lan-sync --test session
 cargo test -p lan-sync a_late_joiner_catches_up
 ```
 
-`mise.toml` wraps the common ones (`mise run test`), but npm and cargo are the
+`mise.toml` wraps the common ones (`mise run test`), but nub and cargo are the
 supported path and CI uses them directly.
 
 `scripts/provision.sh` sets up a fresh environment — mise, the pinned
-toolchain, OpenCode, npm dependencies. A Codespace runs it from
+toolchain, nub, OpenCode, the project dependencies. A Codespace runs it from
 `.devcontainer/devcontainer.json` and a Claude Code web session from the
 `SessionStart` hook in `.claude/settings.json`, so all three environments
 provision identically (ADR 0015). It tolerates tools it cannot fetch and fails
-only on `npm install`.
+only on nub itself and `nub install`.
 
-`npm run delegate -- "<prompt>"` hands a **read-only** task to OpenCode on a
+`nub run delegate -- "<prompt>"` hands a **read-only** task to OpenCode on a
 free Zen model. The `explore` and `review` agents have write, edit, patch and
 bash switched off deliberately: a free model is a reasonable reviewer of the
 determinism contract and a poor author of code that has to honour it
@@ -54,6 +90,13 @@ determinism contract and a poor author of code that has to honour it
 selected by `--agent`, and OpenCode silently falls back to an agent that *can*
 write. Delegation needs `opencode.ai` allowed, which is the default everywhere
 except a cloud environment below **Custom** access.
+
+`cargo fmt --all` from the root formats **`crates/` only**. The root workspace
+is `members = ["crates/*"]` and `src-tauri/Cargo.toml` declares its own
+`[workspace]`, so the root command never reads those files — it is silent
+because it does not look, not because they are clean. `src-tauri` needs its own
+`cargo fmt` run from inside that directory. Two files had drifted unformatted
+for exactly this reason before anyone noticed.
 
 The Tauri app cannot be built in most dev containers: it needs webkit2gtk on
 Linux, an Android SDK+NDK for Android, and macOS with Xcode for iOS. **Do not
@@ -70,7 +113,7 @@ different games.
 
 Consequences that constrain ordinary-looking changes:
 
-- `src/engine/**` must be **pure**. No `Math.random`, no `Date.now`, no
+- `packages/engine/src/**` must be **pure**. No `Math.random`, no `Date.now`, no
   iteration over unordered collections, no floating point where an integer
   will do. The PRNG (`rng.ts`, xoshiro128\*\*) is carried *inside* match state
   and threaded through explicitly.
@@ -82,13 +125,16 @@ Consequences that constrain ordinary-looking changes:
   player leaves.
 - The renderer and the UI never feed anything back into the engine.
 
-`src/engine/__tests__/determinism.test.ts` is the guard: it plays whole random
+`packages/engine/src/__tests__/determinism.test.ts` is the guard: it plays whole random
 matches, folds the log on two independent instances, and asserts identical
 results for every combination of rule modules. Run it after any engine change.
 
 ## Architecture
 
-### Engine (`src/engine/`)
+The tree below is the Nx project split; [ADR 0018](docs/adr/0018-nx-monorepo-adopted.md)
+records why it was adopted and what it cost.
+
+### Engine (`packages/engine/src/`)
 
 A pure reducer. `applyAction(state, action): Effect<MatchState, RuleError>` is
 the only way state changes. `resolve.ts` folds one round; the four twists are
@@ -104,7 +150,7 @@ rules, add a test per combination rather than per module.
 the leaf vocabulary, and Effect schemas are built at module-init time, so a
 cycle leaves one side holding `undefined`.
 
-### Transport (`src/net/`)
+### Transport (`packages/net/src/`)
 
 One interface, `TransportService`, with three implementations chosen by
 `factory.ts`:
@@ -118,7 +164,7 @@ One interface, `TransportService`, with three implementations chosen by
 alone once handed pass-and-play the LAN transport with no room open, and every
 action failed. `factory.test.ts` pins that.
 
-`store/match-client.ts` folds the numbered log: strict sequence order, early
+`packages/app-shell/src/store/match-client.ts` folds the numbered log: strict sequence order, early
 commits buffered, duplicates ignored. It **never applies a local action
 optimistically** — a player's own roll takes the same round trip as everyone
 else's, because applying out of order diverges the PRNG stream.
@@ -128,7 +174,7 @@ desync**: every device rejects it identically and stays consistent (it happens
 when two players act at once). `desync` is reserved for a frame that cannot be
 decoded, which means mismatched builds.
 
-### Networking (`crates/lan-sync/` and `scripts/lan-relay.mjs`)
+### Networking (`crates/lan-sync/` and `apps/relay/lan-relay.mjs`)
 
 Two implementations of one sequencer: Rust for the native app, Node for
 browsers. Both only assign sequence numbers and fan the log out — **no game
@@ -141,11 +187,12 @@ command layer over it; the interesting part (the session pump) is behind the
 `SessionSink` trait so it is testable without a webview.
 
 **The room code is the match seed** — same code, same board, nothing sent. It
-is derived in three places (`crates/lan-sync/src/lib.rs`, `src/app/hooks.ts`,
-`scripts/lan-relay.mjs`) and a test pins the encoding to literals. If they ever
+is derived in three places (`crates/lan-sync/src/lib.rs`,
+`packages/app-shell/src/app/hooks.ts`, `apps/relay/lan-relay.mjs`) and a test
+pins the encoding to literals. If they ever
 diverge, two devices build different boards and desync on the first roll.
 
-### Renderer (`src/render/`)
+### Renderer (`packages/render/src/`)
 
 A pure function of match state plus a replayed timeline the engine already
 produced. An animation that stutters or is skipped cannot change a result.
@@ -184,6 +231,19 @@ the engine. `docs/playing-together.md` covers getting devices connected.
 `docs/handoff.md` is the current state: what is verified, what is not, and the
 open threads in priority order. Read it before starting anything — it records
 what has already been investigated and rejected, which is the expensive part to
-rediscover.
+rediscover. Its "Resuming From This Checkpoint" section names the task to start
+on; trust that over the plan's task order, because some tasks are blocked on
+hardware a container does not have.
+
+Work in progress is driven by the Superpowers skills vendored in
+`.claude/skills/`, and the order matters:
+
+1. `superpowers:using-superpowers` — the bootstrap, before any other action.
+2. `superpowers:executing-plans`, or `subagent-driven-development` where
+   subagents are available. Each plan repeats this requirement in its own
+   first line.
+3. The plan itself, under `docs/superpowers/plans/`. Steps are `- [ ]`
+   checkboxes; tick them as they land and add a short note under the task
+   recording anything the plan did not anticipate.
 
 Designed but unbuilt work lives in `docs/superpowers/specs/`.

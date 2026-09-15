@@ -48,10 +48,18 @@ packages/
   app-shell/      routing, session composition, atoms, app hooks
   tooling/        shared TypeScript, Vitest, and browser test support
 
-native/
+crates/
   lan-sync/       Cargo-owned networking crate
-  tauri/           Tauri-owned native shell and Android project boundary
+
+src-tauri/        Tauri-owned native shell and Android project boundary
+native/           Nx project wrapper for the Cargo targets above
 ```
+
+The Rust tree is the one part of this design that was not carried out: the
+implementation left `crates/lan-sync` and `src-tauri` where Cargo and Tauri
+already expected them, and `native/` holds only an Nx `project.json` pointing
+at both. Moving them would have meant teaching Tauri a new path for a gain
+that is presentational, so the diagram above records where they actually are.
 
 The physical move is intentional: Nx project boundaries should describe real
 ownership and dependency direction rather than merely label folders in the

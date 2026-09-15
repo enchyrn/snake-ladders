@@ -1,0 +1,21 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "native",
+  "sourceRoot": ".",
+  "projectType": "library",
+  "tags": ["layer:native"],
+  "targets": {
+    "cargo-fmt": {
+      "executor": "nx:run-commands",
+      "options": { "command": "cargo fmt --all -- --check" }
+    },
+    "cargo-clippy": {
+      "executor": "nx:run-commands",
+      "options": { "command": "cargo clippy -p lan-sync --all-targets -- -D warnings" }
+    },
+    "cargo-test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "cargo test -p lan-sync" }
+    }
+  }
+}

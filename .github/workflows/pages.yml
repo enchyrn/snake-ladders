@@ -1,0 +1,67 @@
+name: Pages
+
+on:
+  # A project site has exactly one live deployment, so only the default
+  # branch publishes automatically — deploying every `claude/**` branch the
+  # way android.yml builds them would leave whichever pushed last serving as
+  # "the" app. workflow_dispatch is how a branch gets published deliberately.
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+# GITHUB_TOKEN defaults to read-only; deploy-pages needs to write the Pages
+# deployment and mint an OIDC token to prove the artifact came from this run.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages rejects a deployment that starts while another is in flight. Queue
+# rather than cancel: cancelling the in-progress run can leave the site on
+# the older build even though the newer commit reported success.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the PWA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Node version is no longer stated here: .node-version is the pin
+      # and setup-nub reads it, so the deployed bundle cannot be built on a
+      # different runtime from the one the tests ran on (ADR 0017).
+      - uses: nubjs/setup-nub@v0
+        with:
+          nub-version: 0.9.1
+
+      - run: nub ci
+
+      - name: Build for the Pages subpath
+        # A project site is served from https://<owner>.github.io/<repo>/,
+        # never the origin root. Taking the prefix from the repository name
+        # rather than hardcoding it means a rename cannot leave the manifest,
+        # the service worker and the asset URLs pointing at a path that no
+        # longer exists. (A user/org site — a repository literally named
+        # <owner>.github.io — is served from the root and would need "/".)
+        env:
+          PUBLIC_BASE_PATH: ${{ github.event.repository.name }}
+        run: nubx nx run tooling:pages-build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

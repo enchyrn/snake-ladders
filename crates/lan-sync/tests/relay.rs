@@ -267,10 +267,22 @@ fn room_codes_round_trip_to_their_seed() {
     assert_eq!(seed_from_room("!!!!"), None);
 }
 
+#[test]
+fn seed_from_room_refuses_anything_that_is_not_exactly_four_valid_characters() {
+    // The room code IS the seed, so `.take(4)` over a short code silently
+    // built a valid-but-wrong seed instead of refusing it, and a long one had
+    // its extra characters ignored rather than rejected.
+    assert_eq!(seed_from_room("ABC"), None);
+    assert_eq!(seed_from_room("ABCDE"), None);
+    assert_eq!(seed_from_room(""), None);
+    assert_eq!(seed_from_room("AB1D"), None); // 1 is not in the alphabet
+}
+
 /// The room code is the seed, and three implementations derive it: this crate,
-/// `src/app/hooks.ts`, and `scripts/lan-relay.mjs`. If they ever disagree, two
-/// devices in the same room build different boards and desync on the first
-/// roll — so pin the encoding to literals rather than only round-tripping it.
+/// `packages/app-shell/src/app/hooks.ts`, and `apps/relay/lan-relay.mjs`. If
+/// they ever disagree, two devices in the same room build different boards and
+/// desync on the first roll — so pin the encoding to literals rather than only
+/// round-tripping it.
 #[test]
 fn room_codes_match_the_javascript_implementations() {
     assert_eq!(room_code(0), "2222");

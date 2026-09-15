@@ -33,15 +33,19 @@ them up.
 ## Commands
 
 ```bash
-npm test                 # vitest, all suites
-npm run typecheck        # tsc --noEmit
-npm run build            # typecheck + production bundle
+nub install              # nub, not npm — see ADR 0017
+nub run test             # vitest, all suites
+nub run typecheck        # tsc --noEmit
+nub run build            # typecheck + production bundle
 cargo test -p lan-sync   # Rust networking crate
 ```
 
+`nub.lock` is the lockfile and there is no `package-lock.json`, so `npm ci`
+fails. `nubx` replaces `npx`. Node 24 is the floor, pinned in `.node-version`.
+
 ## Determinism
 
-The engine (`src/engine/`) is pure: no `Math.random`, no `Date.now`, no
+The engine (`packages/engine/src/`) is pure: no `Math.random`, no `Date.now`, no
 iteration over unordered collections. Dice are drawn from the shared PRNG
 stream during resolution, never sent by a client. Break this and two phones
 silently play different games.

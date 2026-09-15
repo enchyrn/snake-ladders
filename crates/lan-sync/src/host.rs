@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -33,6 +33,17 @@ struct HostState {
     next_seq: u64,
     log: Vec<Sequenced>,
     clients: HashMap<String, Client>,
+    /// Accepted sockets that have not finished a handshake, keyed by a number
+    /// this host hands out rather than by peer address. Two connections can
+    /// share an address once the OS recycles a source port, and then a
+    /// retiring connection's `Drop` evicts the live one's entry — leaving it
+    /// invisible to `shutdown`'s drain.
+    pending: HashMap<u64, TcpStream>,
+    next_pending_id: u64,
+    /// Bumped on every registration under a player_id, so a connection whose
+    /// thread outlives its own registration can tell whether the entry it
+    /// finds is still the one it installed.
+    next_epoch: u64,
     /// Actions committed locally, drained by the host's own UI thread.
     outbox: Vec<Sequenced>,
 }
@@ -41,6 +52,11 @@ struct Client {
     name: String,
     stream: TcpStream,
     connected: bool,
+    /// Set at registration from `HostState::next_epoch`. A connection that
+    /// reaches the exit path only acts on the entry if this still matches —
+    /// player_id is reused across a reconnect, so by then the map entry may
+    /// belong to the connection that replaced this one.
+    epoch: u64,
 }
 
 impl Host {
@@ -65,8 +81,29 @@ impl Host {
                 }
                 match incoming {
                     Ok(stream) => {
+                        // Registration must not be conditional on anything that
+                        // can fail independently of the connection being live.
+                        // `peer_addr()` and `try_clone()` both can, and either
+                        // one failing used to drop the stream into
+                        // `serve_client` with no entry in `pending` — so
+                        // `shutdown`'s drain could never reach it, race or no
+                        // race, and the peer waited out its own read timeout
+                        // instead of being told the host had gone. A stream
+                        // that cannot be registered is refused here rather than
+                        // served untracked.
+                        let registered = stream.try_clone().ok().and_then(|registry| {
+                            let mut state = listener_inner.state.lock().ok()?;
+                            let id = state.next_pending_id;
+                            state.next_pending_id += 1;
+                            state.pending.insert(id, registry);
+                            Some(id)
+                        });
+                        let Some(id) = registered else {
+                            let _ = stream.shutdown(Shutdown::Both);
+                            continue;
+                        };
                         let per_client = Arc::clone(&listener_inner);
-                        thread::spawn(move || serve_client(per_client, stream));
+                        thread::spawn(move || serve_client(per_client, stream, id));
                     }
                     // A single refused connection must not take the room down.
                     Err(_) => continue,
@@ -133,9 +170,36 @@ impl Host {
         self.inner.state.lock().map(|s| s.log.len()).unwrap_or(0)
     }
 
+    /// Sockets accepted but not yet through a handshake. Exposed so a test can
+    /// pin that every accepted connection is tracked, which is the property
+    /// `shutdown`'s drain rests on.
+    #[doc(hidden)]
+    pub fn pending_count(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .map(|s| s.pending.len())
+            .unwrap_or(0)
+    }
+
+    /// Clients currently marked connected. Exposed so a test can observe the
+    /// reconnect-vs-stale-disconnect race on `player_id` without reaching into
+    /// the roster's display fields.
+    #[doc(hidden)]
+    pub fn connected_count(&self) -> usize {
+        self.inner
+            .state
+            .lock()
+            .map(|s| s.clients.values().filter(|c| c.connected).count())
+            .unwrap_or(0)
+    }
+
     pub fn shutdown(&mut self) {
         self.inner.running.store(false, Ordering::SeqCst);
         if let Ok(mut state) = self.inner.state.lock() {
+            for stream in state.pending.values_mut() {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
             for client in state.clients.values_mut() {
                 let _ = client.stream.shutdown(Shutdown::Both);
             }
@@ -203,9 +267,26 @@ fn send(stream: &mut TcpStream, frame: &Downstream) -> std::io::Result<()> {
     stream.write_all(payload.as_bytes())
 }
 
-fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
-    let peer_addr: Option<SocketAddr> = stream.peer_addr().ok();
-    let _ = peer_addr;
+fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
+    let mut pending = PendingClient {
+        shared: Arc::clone(&shared),
+        id: Some(pending_id),
+    };
+
+    // The accept loop inserts into `pending` and only then spawns this, so a
+    // connection that `shutdown`'s drain missed is necessarily one whose
+    // thread starts after `running` was cleared — `shutdown` stores it before
+    // taking the lock. Checking here is what closes that window: otherwise
+    // this thread parks in `read_line` on a socket nobody will ever shut down,
+    // and the peer waits out its own timeout instead of being told the host
+    // went away. The check sits after the guard so that returning still
+    // retires this connection's `pending` entry, which a `Host` kept alive
+    // past `shutdown` would otherwise hold forever.
+    if !shared.running.load(Ordering::SeqCst) {
+        let _ = stream.shutdown(Shutdown::Both);
+        return;
+    }
+
     let Ok(read_half) = stream.try_clone() else {
         return;
     };
@@ -239,6 +320,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
         return;
     };
 
+    let epoch;
     {
         let Ok(mut state) = shared.state.lock() else {
             return;
@@ -270,12 +352,15 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
         let Ok(stream_for_state) = write_half.try_clone() else {
             return;
         };
+        epoch = state.next_epoch;
+        state.next_epoch += 1;
         state.clients.insert(
             player_id.clone(),
             Client {
                 name: name.clone(),
                 stream: stream_for_state,
                 connected: true,
+                epoch,
             },
         );
 
@@ -286,7 +371,11 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
             log: state.log.clone(),
         };
         if send(&mut write_half, &welcome).is_err() {
-            state.clients.remove(&player_id);
+            // A reconnect racing this same failure could already have
+            // replaced the entry; only remove the one this call installed.
+            if matches!(state.clients.get(&player_id), Some(c) if c.epoch == epoch) {
+                state.clients.remove(&player_id);
+            }
             return;
         }
         let roster = Downstream::Roster {
@@ -294,6 +383,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
         };
         broadcast(&mut state, &roster);
     }
+    pending.complete();
 
     // --- frame loop ------------------------------------------------------
     loop {
@@ -326,11 +416,37 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream) {
 
     if let Ok(mut state) = shared.state.lock() {
         if let Some(client) = state.clients.get_mut(&player_id) {
-            client.connected = false;
+            // A reconnect under the same id has already replaced this entry;
+            // marking it disconnected would cut the live socket out of every
+            // broadcast while its owner is still playing.
+            if client.epoch == epoch {
+                client.connected = false;
+            }
         }
         let roster = Downstream::Roster {
             peers: roster_of(&state),
         };
         broadcast(&mut state, &roster);
+    }
+}
+
+struct PendingClient {
+    shared: Arc<Shared>,
+    id: Option<u64>,
+}
+
+impl PendingClient {
+    fn complete(&mut self) {
+        if let Some(id) = self.id.take() {
+            if let Ok(mut state) = self.shared.state.lock() {
+                state.pending.remove(&id);
+            }
+        }
+    }
+}
+
+impl Drop for PendingClient {
+    fn drop(&mut self) {
+        self.complete();
     }
 }
