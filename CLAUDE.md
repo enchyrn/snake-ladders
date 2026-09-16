@@ -19,7 +19,7 @@ cargo fmt --all           # crates/ only — see below
 (cd src-tauri && cargo fmt)   # src-tauri is its own workspace
 
 nub run relay            # WebSocket relay; prints the join string to paste
-nub run verify:ui        # build first, then drive the app in a real browser
+nub run verify:ui        # drive the built app in a browser — does NOT build first
 nub run verify:ui:pages  # the same, but served from the /snake-ladders/ subpath
 node scripts/drive-app.mjs --https   # over TLS, where a service worker registers
 
@@ -47,7 +47,10 @@ silently working. When a build dies on a missing module, the fix is to declare
 the dependency, not to change the linker.
 
 `verify:ui` screenshots the app at phone size and fails on console errors,
-page errors or horizontal overflow. `--base-path /nested/path` reproduces
+page errors or horizontal overflow. **It drives whatever is already in
+`dist/`: the target declares no dependency on the build.** Run
+`nub run build` immediately before it, or you are testing a stale bundle — a
+session did exactly that and watched a change it had not built pass the gate. `--base-path /nested/path` reproduces
 being served from a subdirectory, and nothing outside that prefix resolves —
 a root-absolute URL that would 404 on GitHub Pages fails here instead. The
 prefix must match the base the bundle was built with, hence the pair of
