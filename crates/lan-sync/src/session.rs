@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::discovery::Advertiser;
@@ -75,8 +75,19 @@ impl Session {
         capacity: u8,
         advertise: bool,
     ) -> std::io::Result<Self> {
+        Self::host_with_assets(seed, display_name, capacity, advertise, None)
+    }
+
+    /// As `host`, but the room also serves the page to browsers.
+    pub fn host_with_assets(
+        seed: u32,
+        display_name: impl Into<String>,
+        capacity: u8,
+        advertise: bool,
+        assets: Option<Arc<dyn crate::assets::AssetSource>>,
+    ) -> std::io::Result<Self> {
         let room = crate::room_code(seed);
-        let host = Host::bind(room.clone(), 0, capacity)?;
+        let host = Host::bind_with_assets(room.clone(), 0, capacity, assets)?;
         let advertiser = if advertise {
             Some(Advertiser::start(Beacon {
                 v: PROTOCOL_VERSION,

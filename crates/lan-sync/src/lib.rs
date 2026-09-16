@@ -58,3 +58,56 @@ pub fn seed_from_room(code: &str) -> Option<u32> {
     }
     Some(seed)
 }
+
+/// The address a guest on this Wi-Fi could reach this host on.
+///
+/// There is no interface enumeration in the standard library, and the discovery
+/// beacon broadcasts rather than enumerating, so nothing here knew its own
+/// address. Connecting a UDP socket sends no packet — it only fixes a route —
+/// so this works with no network and answers with the interface that outbound
+/// traffic would leave by.
+///
+/// It reports one address. A host on two networks may be reachable on the other
+/// one, which is why the lobby also shows the address as text to read out.
+pub fn local_address() -> Option<std::net::IpAddr> {
+    use std::net::{IpAddr, UdpSocket};
+    let socket = UdpSocket::bind(("0.0.0.0", 0)).ok()?;
+    // TEST-NET-1: guaranteed not to be routed anywhere, and never contacted.
+    socket.connect(("192.0.2.1", 9)).ok()?;
+    let addr = socket.local_addr().ok()?.ip();
+    match addr {
+        IpAddr::V4(v4) if v4.is_loopback() || v4.is_unspecified() => None,
+        _ => Some(addr),
+    }
+}
+
+#[cfg(test)]
+mod local_address_tests {
+    use super::*;
+
+    #[test]
+    fn reports_a_usable_non_loopback_address() {
+        // A container with only loopback legitimately has none, so this asserts
+        // the shape of an answer rather than that one exists.
+        if let Some(addr) = local_address() {
+            assert!(
+                !addr.is_unspecified(),
+                "0.0.0.0 is not an address to hand out"
+            );
+            assert!(
+                !addr.is_loopback(),
+                "loopback is unreachable from another device"
+            );
+        }
+    }
+
+    #[test]
+    fn is_cheap_enough_to_call_repeatedly() {
+        // It must not block or hit the network: the lobby may re-render often.
+        let start = std::time::Instant::now();
+        for _ in 0..50 {
+            let _ = local_address();
+        }
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    }
+}
