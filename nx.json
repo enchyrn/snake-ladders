@@ -1,0 +1,80 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "analytics": false,
+  "plugins": [
+    {
+      "plugin": "@nx/vite/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "devServerTargetName": "serve",
+        "previewTargetName": "preview",
+        "testTargetName": "test"
+      }
+    }
+  ],
+  "useInferencePlugins": true,
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.{spec,test}.{js,jsx,ts,tsx}"
+    ],
+    "sharedGlobals": []
+  },
+  "targetDefaults": {
+    "relay": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "icons": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "verify-ui": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "verify-ui-pages": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "pages-build": {
+      "cache": false,
+      "inputs": ["production", "^production"]
+    },
+    "cargo-fmt": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "cargo-clippy": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "cargo-test": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "android-init": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "android-build": {
+      "cache": false,
+      "inputs": ["default"]
+    },
+    "lint": {
+      "cache": false,
+      "inputs": ["default", "^default"]
+    },
+    "typecheck": {
+      "inputs": ["default", "^default"]
+    },
+    "test": {
+      "inputs": ["default", "^default"]
+    },
+    "build": {
+      "inputs": ["production", "^production"],
+      "dependsOn": ["^build"]
+    }
+  }
+}

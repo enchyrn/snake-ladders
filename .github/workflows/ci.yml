@@ -11,18 +11,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # Drop-in for actions/setup-node. It installs the pinned nub, provisions
+      # the Node in .node-version, and caches nub's store keyed on nub.lock.
+      # npm is not a supported interface here any more — see ADR 0017.
+      - uses: nubjs/setup-nub@v0
         with:
-          node-version: 22
-          cache: npm
+          nub-version: 0.9.1
 
-      - run: npm ci
+      - run: nub ci
 
-      - run: npx tsc --noEmit
+      # `lint` is the boundary rule, and it reads the whole graph rather than
+      # one project's files, so it runs across every project rather than being
+      # scoped like the rest.
+      - run: nub run lint
 
-      - run: npm test
+      # `run-many -t typecheck` runs each project's own tsconfig, so anything
+      # outside every project's include list has no typechecker at all. This is
+      # the root config, which covers the tree as one program — including
+      # vitest.config.ts, where every alias the suite resolves through lives.
+      # It also covers scripts/: packages/tooling declares sourceRoot: scripts,
+      # but Nx attributes files to a project by root, not sourceRoot, so
+      # scripts/ (drive-app.d.ts among them) belongs to no Nx project and is
+      # invisible to run-many and its cache. This uncached step is the only
+      # thing that typechecks it — do not drop it as redundant with run-many below.
+      - run: nub run typecheck
 
-      - run: npx vite build
+      # Every project's typecheck runs, and the whole suite with it: vitest
+      # transpiles without checking, so a test file left out of the tsconfig
+      # that covers it has no typechecker at all and an error in it reaches
+      # nobody. Scoping this to one project reintroduces that hole.
+      - run: nubx nx run-many -t typecheck,test,build
 
   rust:
     name: Rust (lan-sync)
@@ -32,7 +50,7 @@ jobs:
     # requires the platform webview toolchain (webkit2gtk, etc.) plus, for
     # mobile targets, the Android NDK/SDK — that's handled by android.yml
     # instead, which builds the full app. Keeping this job to lan-sync means
-    # fast, toolchain-free feedback on every push/PR.
+    # feedback on every push/PR without the platform webview toolchain.
     steps:
       - uses: actions/checkout@v4
 
@@ -45,8 +63,17 @@ jobs:
           # Root Cargo.toml's workspace is "." (members = ["crates/*"]).
           workspaces: "."
 
-      - run: cargo fmt --all -- --check
+      # The cargo checks are invoked through Nx targets, so this job needs the
+      # JS toolchain even though it compiles no JavaScript: nubx ships with
+      # nub, and nx resolves out of node_modules.
+      - uses: nubjs/setup-nub@v0
+        with:
+          nub-version: 0.9.1
 
-      - run: cargo clippy -p lan-sync --all-targets -- -D warnings
+      - run: nub ci
 
-      - run: cargo test -p lan-sync
+      - run: nubx nx run native:cargo-fmt
+
+      - run: nubx nx run native:cargo-clippy
+
+      - run: nubx nx run native:cargo-test

@@ -12,9 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use lan_sync::{
-    seed_from_room, Browser, PeerInfo, Sequenced, Session, SessionSink, SessionStatus,
-};
+use lan_sync::{seed_from_room, Browser, PeerInfo, Sequenced, Session, SessionSink, SessionStatus};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -31,7 +29,10 @@ const EVENT_STATUS: &str = "lan://status";
 struct NetState {
     session: Mutex<Option<Arc<Session>>>,
     browser: Mutex<Option<Browser>>,
-    pumping: Arc<AtomicBool>,
+    /// One flag per pump. Sharing a single flag let a replaced pump observe
+    /// the *next* pump's `true` during its sleep and carry on running, holding
+    /// its session — listener, beacon and all — alive behind the slot.
+    pumping: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 type Net = Arc<NetState>;
@@ -107,8 +108,12 @@ impl SessionSink for WebviewSink {
 
 /// Run one pump thread per session, ending when the session is replaced.
 fn start_pump(app: AppHandle, net: Net, session: Arc<Session>) {
-    net.pumping.store(true, Ordering::SeqCst);
-    let running = Arc::clone(&net.pumping);
+    let running = Arc::new(AtomicBool::new(true));
+    if let Ok(mut slot) = net.pumping.lock() {
+        if let Some(previous) = slot.replace(Arc::clone(&running)) {
+            previous.store(false, Ordering::SeqCst);
+        }
+    }
     thread::spawn(move || {
         let mut sink = WebviewSink(app);
         while running.load(Ordering::SeqCst) {
@@ -119,7 +124,11 @@ fn start_pump(app: AppHandle, net: Net, session: Arc<Session>) {
 }
 
 fn teardown(net: &Net, app: &AppHandle) {
-    net.pumping.store(false, Ordering::SeqCst);
+    if let Ok(mut slot) = net.pumping.lock() {
+        if let Some(previous) = slot.take() {
+            previous.store(false, Ordering::SeqCst);
+        }
+    }
     if let Ok(mut slot) = net.session.lock() {
         slot.take();
     }
@@ -189,14 +198,21 @@ fn net_rooms(net: State<'_, Net>) -> CmdResult<Vec<RoomView>> {
     Ok(browser
         .rooms()
         .into_iter()
-        .map(|found| RoomView {
-            seed: seed_from_room(&found.beacon.room).unwrap_or(0),
-            room: found.beacon.room,
-            host: found.beacon.host,
-            addr: found.addr.to_string(),
-            players: found.beacon.players,
-            capacity: found.beacon.capacity,
-            locked: found.beacon.locked,
+        // A beacon's room code is always one this crate encoded, so this
+        // never actually fails — but `unwrap_or(0)` would silently offer a
+        // real, joinable room for the wrong board instead. Drop it instead:
+        // an omitted room is a lobby that looks a little sparse, not a
+        // desync with no banner to explain it.
+        .filter_map(|found| {
+            Some(RoomView {
+                seed: seed_from_room(&found.beacon.room)?,
+                room: found.beacon.room,
+                host: found.beacon.host,
+                addr: found.addr.to_string(),
+                players: found.beacon.players,
+                capacity: found.beacon.capacity,
+                locked: found.beacon.locked,
+            })
         })
         .collect())
 }
@@ -204,7 +220,12 @@ fn net_rooms(net: State<'_, Net>) -> CmdResult<Vec<RoomView>> {
 /// Join a room found by discovery, or one whose address was typed in by hand
 /// because the network blocks broadcast traffic.
 #[tauri::command]
-fn net_join(app: AppHandle, net: State<'_, Net>, addr: String, identity: Identity) -> CmdResult<()> {
+fn net_join(
+    app: AppHandle,
+    net: State<'_, Net>,
+    addr: String,
+    identity: Identity,
+) -> CmdResult<()> {
     let socket: SocketAddr = addr
         .parse()
         .map_err(|_| format!("`{addr}` is not a host address"))?;

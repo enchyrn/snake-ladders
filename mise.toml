@@ -2,8 +2,11 @@
 # Pins toolchain versions to ensure consistent development and CI environments
 
 [tools]
-# Node 22 (LTS) for React frontend and npm ecosystem
-node = "22"
+# Node 24 (LTS) — the runtime floor for the Nx/Nub migration (ADR 0017).
+# `.node-version` carries the same pin, because that is the file Nub reads
+# when it decides which Node to run a script on; mise.toml wins for mise.
+# Change them together.
+node = "24"
 
 # Rust stable for Tauri app and lan-sync library compilation
 rust = "stable"
@@ -26,13 +29,20 @@ java = "21"
 # OpenCode CLI with the project-level Superpowers plugin in opencode.json
 opencode = "1.18.30"
 
+# Nub is the package manager and script runner (ADR 0017). Pinned exactly
+# because it is pre-1.0: an upgrade should be a commit that re-runs the clean
+# bootstrap, not something a fresh checkout picks up on its own. mise resolves
+# it through its own registry entry, `npm:@nubjs/nub`, so it needs no host the
+# npm registry does not already cover.
+nub = "0.9.1"
+
 [tasks.test]
-description = "Run all tests (npm + cargo)"
-run = ["npm test", "cargo test -p lan-sync"]
+description = "Run all tests (nub + cargo)"
+run = ["nub run test", "cargo test -p lan-sync"]
 
 [tasks.typecheck]
 description = "TypeScript type checking"
-run = "npx tsc --noEmit"
+run = "nubx tsc --noEmit"
 
 [tasks.lint]
 description = "Run Rust linter"
@@ -43,8 +53,8 @@ description = "Format Rust code"
 run = "cargo fmt --all"
 
 [tasks.build]
-description = "Build the project (npm)"
-run = "npm run build"
+description = "Build the project"
+run = "nub run build"
 
 [tasks.provision]
 description = "Install the toolchain and project dependencies (same path CI, Codespaces and Claude Code use)"

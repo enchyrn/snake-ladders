@@ -267,13 +267,157 @@ fn room_codes_round_trip_to_their_seed() {
     assert_eq!(seed_from_room("!!!!"), None);
 }
 
+#[test]
+fn seed_from_room_refuses_anything_that_is_not_exactly_four_valid_characters() {
+    // The room code IS the seed, so `.take(4)` over a short code silently
+    // built a valid-but-wrong seed instead of refusing it, and a long one had
+    // its extra characters ignored rather than rejected.
+    assert_eq!(seed_from_room("ABC"), None);
+    assert_eq!(seed_from_room("ABCDE"), None);
+    assert_eq!(seed_from_room(""), None);
+    assert_eq!(seed_from_room("AB1D"), None); // 1 is not in the alphabet
+}
+
 /// The room code is the seed, and three implementations derive it: this crate,
-/// `src/app/hooks.ts`, and `scripts/lan-relay.mjs`. If they ever disagree, two
-/// devices in the same room build different boards and desync on the first
-/// roll — so pin the encoding to literals rather than only round-tripping it.
+/// `packages/app-shell/src/app/hooks.ts`, and `apps/relay/lan-relay.mjs`. If
+/// they ever disagree, two devices in the same room build different boards and
+/// desync on the first roll — so pin the encoding to literals rather than only
+/// round-tripping it.
 #[test]
 fn room_codes_match_the_javascript_implementations() {
     assert_eq!(room_code(0), "2222");
     assert_eq!(room_code(1234), "UA32");
     assert_eq!(room_code(923_520), "ZZZZ");
+}
+
+// --- a browser joining a natively hosted room -------------------------------
+
+/// Frame a text payload the way a browser does: FIN + text, always masked.
+fn client_frame(text: &str) -> Vec<u8> {
+    let mask = [0x21u8, 0x09, 0x7f, 0x3c];
+    let payload = text.as_bytes();
+    let mut frame = vec![0x81];
+    if payload.len() < 126 {
+        frame.push(0x80 | payload.len() as u8);
+    } else {
+        frame.push(0x80 | 126);
+        frame.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+    }
+    frame.extend_from_slice(&mask);
+    for (i, byte) in payload.iter().enumerate() {
+        frame.push(byte ^ mask[i % 4]);
+    }
+    frame
+}
+
+/// Read one unmasked server text frame. Only the forms the host actually
+/// writes: the test is checking the host, not re-testing the codec.
+fn server_frame(stream: &mut std::net::TcpStream) -> String {
+    use std::io::Read;
+    let mut head = [0u8; 2];
+    stream.read_exact(&mut head).expect("frame header");
+    assert_eq!(head[0], 0x81, "expected a final text frame");
+    let length = match head[1] & 0x7f {
+        126 => {
+            let mut ext = [0u8; 2];
+            stream.read_exact(&mut ext).expect("extended length");
+            u16::from_be_bytes(ext) as usize
+        }
+        127 => panic!("unexpectedly large frame"),
+        short => short as usize,
+    };
+    let mut payload = vec![0u8; length];
+    stream.read_exact(&mut payload).expect("payload");
+    String::from_utf8(payload).expect("utf-8")
+}
+
+#[test]
+fn a_browser_handshake_is_upgraded_and_welcomed() {
+    use std::io::{Read, Write};
+
+    let host = Host::bind("WSROOM", 0, 4).expect("host should bind");
+    let mut stream = std::net::TcpStream::connect(local(host.port())).expect("connect");
+    stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+
+    let request = format!(
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
+         Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+         Sec-WebSocket-Version: 13\r\n\r\n",
+        host.port()
+    );
+    stream.write_all(request.as_bytes()).expect("write request");
+
+    // The response head ends at the blank line; read exactly that far so the
+    // first WebSocket frame is left in the socket for `server_frame`.
+    let mut head = Vec::new();
+    let mut byte = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") {
+        stream.read_exact(&mut byte).expect("response head");
+        head.push(byte[0]);
+    }
+    let head = String::from_utf8(head).expect("utf-8 head");
+    assert!(head.starts_with("HTTP/1.1 101 "), "got: {head}");
+    assert!(
+        head.contains("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo="),
+        "got: {head}"
+    );
+
+    stream
+        .write_all(&client_frame(
+            r#"{"t":"hello","player_id":"web","name":"Web"}"#,
+        ))
+        .expect("write hello");
+
+    let welcome = server_frame(&mut stream);
+    assert!(welcome.contains(r#""t":"welcome""#), "got: {welcome}");
+    assert!(welcome.contains(r#""room":"WSROOM""#), "got: {welcome}");
+}
+
+#[test]
+fn a_browser_and_a_native_peer_share_one_ordered_log() {
+    use std::io::{Read, Write};
+
+    let host = Host::bind("MIXED", 0, 4).expect("host should bind");
+    let native = join(&host, "native");
+    wait_for_join(&native);
+
+    let mut stream = std::net::TcpStream::connect(local(host.port())).expect("connect");
+    stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+    let request = format!(
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
+         Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+         Sec-WebSocket-Version: 13\r\n\r\n",
+        host.port()
+    );
+    stream.write_all(request.as_bytes()).expect("write request");
+    let mut head = Vec::new();
+    let mut byte = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") {
+        stream.read_exact(&mut byte).expect("response head");
+        head.push(byte[0]);
+    }
+    stream
+        .write_all(&client_frame(
+            r#"{"t":"hello","player_id":"web","name":"Web"}"#,
+        ))
+        .expect("write hello");
+    let welcome = server_frame(&mut stream);
+    assert!(welcome.contains(r#""t":"welcome""#), "got: {welcome}");
+
+    // The browser submits; the native peer must see it, numbered, like any
+    // other action. Neither can tell the other is on a different transport.
+    stream
+        .write_all(&client_frame(
+            r#"{"t":"submit","action":{"_tag":"Commit","playerId":"web"}}"#,
+        ))
+        .expect("write submit");
+
+    let commits = collect_commits(&native, 1);
+    assert_eq!(
+        commits.len(),
+        1,
+        "native peer never saw the browser's action"
+    );
+    assert_eq!(commits[0].0, 0);
+    assert_eq!(commits[0].1, json!({"_tag": "Commit", "playerId": "web"}));
 }

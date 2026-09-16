@@ -25,6 +25,9 @@ node_modules
 dist
 *.log
 
+# What `npm run verify:ui` draws — evidence for a single run, not source
+screenshots
+
 # Tauri
 src-tauri/gen
 
@@ -37,3 +40,7 @@ mise.local.toml
 
 # Linked agent worktrees
 .worktrees/
+
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs
