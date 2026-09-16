@@ -870,16 +870,25 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-**Checkpoint written 2026-09-16.** Everything below is committed and pushed;
-nothing lives only in a conversation.
+**Checkpoint written 2026-09-16, updated after the merge.** Everything below is
+committed and on `main`; nothing lives only in a conversation.
 
 ### Where the work stands
 
-**The host-served join is implemented — all six tasks of
+**The host-served join is implemented and merged.** PR #3 went into `main` as
+the merge commit `03e1cd1`; all six tasks of
 `docs/superpowers/plans/2026-09-16-host-served-join-plan.md` are done and
-ticked.** A guest scans a QR on the host's lobby, the host serves them the game
+ticked. A guest scans a QR on the host's lobby, the host serves them the game
 over plain HTTP on the port it was already listening on, and they join the room.
 No install, no relay machine, no certificate.
+
+`main` is the branch to start from. `claude/snake-ladders-cross-device-3uu177`
+has been merged and carries nothing unmerged — **do not stack new work on it.**
+Restart it from `main` (same name is fine) or use a fresh branch; a merged
+branch cannot track new work.
+
+The gates below were re-run **on the merged `main`**, not only on the branch:
+a green feature branch does not prove a green merge.
 
 | Commit | What |
 |---|---|
@@ -961,7 +970,7 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-Run on `3c1f0fc`, working tree clean apart from these docs:
+Re-run on the merged `main` (`03e1cd1`), working tree clean apart from this file:
 
 | Gate | Result |
 |---|---|
@@ -972,7 +981,11 @@ Run on `3c1f0fc`, working tree clean apart from these docs:
 | `nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow |
 | `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session; was 39) |
 | `cargo clippy -p lan-sync --all-targets -- -D warnings` | clean |
-| CI Android APK | **green** on `9b6f3be` (run 91) |
+| CI Android APK | **green** on `9b6f3be` (run 91) and `7e9ec94` (run 92) |
+| CI on the PR head | **green** — run 116, pull_request event |
+
+`nub run build` and `nub run verify:ui` were last run on `3c1f0fc`, the tree the
+merge carried unchanged; the merge added no code, only the merge commit.
 
 Two traps this session hit that the next one will too:
 
@@ -988,9 +1001,10 @@ Two traps this session hit that the next one will too:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. There is no plan in flight. The host-served join plan is fully ticked, with
-   an execution note under each task recording what it did not anticipate.
-   Read those notes before assuming the plan text is what shipped.
+2. There is no plan in flight and no open PR. The host-served join plan is
+   fully ticked, with an execution note under each task recording what it did
+   not anticipate. Read those notes before assuming the plan text is what
+   shipped.
 3. For hardware work, `docs/android-debugging.md`. For the design behind what
    just shipped, `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
    and ADR 0019, whose consequences section now records that the listener
