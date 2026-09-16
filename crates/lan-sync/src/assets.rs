@@ -30,14 +30,31 @@ pub fn request_path(request_line: &str) -> Option<String> {
     let target = target.split('#').next()?;
     let target = target.split('?').next()?;
 
-    // Reject before decoding, and reject the decoded form too. Deciding on the
-    // decoded string alone is the classic traversal bug; deciding on the raw
-    // one alone misses `%2e%2e`.
-    let decoded = percent_decode(target);
-    for candidate in [target, decoded.as_str()] {
-        if candidate.contains("..") || candidate.contains('\\') || candidate.contains('\0') {
+    // Reject before decoding, and reject every decoded form too. Deciding on
+    // the decoded string alone is the classic traversal bug; deciding on the
+    // raw one alone misses `%2e%2e`.
+    //
+    // Decoding to a fixpoint rather than once is what makes the answer safe to
+    // hand to a consumer that decodes again — Tauri's asset resolver does
+    // exactly that, so a single decode here would let `%252e%252e` through as
+    // the literal `%2e%2e` and let the resolver turn it back into `..`.
+    let mut decoded = target.to_string();
+    if !is_safe(&decoded) {
+        return None;
+    }
+    for _ in 0..DECODE_ROUNDS {
+        let next = percent_decode(&decoded);
+        if next == decoded {
+            break;
+        }
+        if !is_safe(&next) {
             return None;
         }
+        decoded = next;
+    }
+    // Still changing after the cap: pathological, and not worth reasoning about.
+    if percent_decode(&decoded) != decoded {
+        return None;
     }
 
     let trimmed = decoded.trim_start_matches('/');
@@ -45,6 +62,15 @@ pub fn request_path(request_line: &str) -> Option<String> {
         return Some("index.html".to_string());
     }
     Some(trimmed.to_string())
+}
+
+/// How many times a path may decode to something new before it is refused.
+/// A real asset URL decodes once; anything needing more is an attempt.
+const DECODE_ROUNDS: usize = 4;
+
+/// The segments that let a path leave the root, in any encoding stage.
+fn is_safe(candidate: &str) -> bool {
+    !candidate.contains("..") && !candidate.contains('\\') && !candidate.contains('\0')
 }
 
 /// Minimal percent-decoding. Only needs to be good enough to spot an escape
@@ -132,6 +158,25 @@ mod tests {
         // %2e%2e is "..", and decoding before checking is the classic bug.
         assert_eq!(request_path("GET /%2e%2e/etc/passwd HTTP/1.1"), None);
         assert_eq!(request_path("GET /%2E%2E%2Fetc/passwd HTTP/1.1"), None);
+    }
+
+    #[test]
+    fn refuses_a_double_encoded_climb() {
+        // The consumer decodes again: Tauri's asset resolver percent-decodes
+        // whatever it is handed, so a single decode here would hand it
+        // `%2e%2e` and let it produce `..` itself.
+        assert_eq!(request_path("GET /%252e%252e/etc/passwd HTTP/1.1"), None);
+        assert_eq!(request_path("GET /%25252e%25252e/x HTTP/1.1"), None);
+    }
+
+    #[test]
+    fn leaves_a_safe_path_fully_decoded() {
+        // Decoding to a fixpoint means the consumer's own decode is a no-op,
+        // which is the property that makes the double decode harmless.
+        assert_eq!(
+            request_path("GET /assets/a%20b.js HTTP/1.1").as_deref(),
+            Some("assets/a b.js")
+        );
     }
 
     #[test]
