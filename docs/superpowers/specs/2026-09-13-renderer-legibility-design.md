@@ -389,7 +389,13 @@ Target: the board goes from roughly a third of the viewport to around 60%.
 
 ## ADRs
 
-One ADR: **the board may crop outside a protected region.** It reverses a
+**Superseded in part by ADR 0020** (2026-09-16), which this spec predates.
+"A boardgame, not a number game" is now the governing premise this design was
+arguing towards independently — it makes the board the primary channel and text
+the fallback, so the sections below no longer have to justify that from scratch.
+Where the two disagree, 0020 wins.
+
+One ADR of its own: **the board may crop outside a protected region.** It reverses a
 previous decision, which is exactly what an ADR is for, and its cost is worth
 recording — the guarantee that the whole board is always visible is gone, and
 what replaces it is only as good as the protected region's definition. Get that

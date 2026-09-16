@@ -874,7 +874,8 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-**Checkpoint written 2026-09-16, updated after the two quick wins.**
+**Checkpoint written 2026-09-16, updated after the two quick wins and again
+after ADR 0020 — the feel ADR — was written.**
 Everything below is committed and on `main`; nothing lives only in a
 conversation.
 
@@ -980,6 +981,27 @@ because it governs three specs (settings, renderer-legibility, and the mode
 designs) and each would otherwise re-derive it. Its honest cost: showing takes
 longer than telling, so it trades speed for weight, and some things genuinely
 read better as digits.
+
+> **Written 2026-09-16 as [ADR 0020](adr/0020-a-boardgame-not-a-number-game.md),
+> Accepted.** It states the thesis as four rules — every `TimelineEvent` owes a
+> board-visible depiction; text is demoted rather than deleted (the `aria-live`
+> log is how a screen-reader player receives a round at all); digits stay where
+> a digit is the honest unit; and *showing never implies agency the engine does
+> not grant*, which is the rule that decides flick-to-throw rather than leaving
+> it to taste. Two things the brainstorm had not separated came out while
+> writing it. First, the depiction is free on the wire and automatically
+> consistent across devices, because `TimelineEvent` is already a semantic
+> stream folded identically everywhere (ADR 0001) — the ask is a presentation
+> cost, not a protocol one. Second, the worst cost is not the pace trade: it is
+> that **a missing depiction fails silently in the direction of withholding
+> information from a player while every engine test stays green**, since the
+> engine is right. That moves verification onto screenshots permanently. The
+> ADR also records the standing tax on ADR 0002 — each new rule module now owes
+> a visual vocabulary as well as a reducer — and closes the venom question by
+> classifying it as a defect rather than a quirk.
+>
+> `renderer-legibility` predates the ADR and now carries a pointer to it in its
+> own §ADRs, since it was arguing towards the same premise independently.
 
 | Question | Decision |
 |---|---|
@@ -1100,10 +1122,22 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
-1. **Write the feel ADR** — "boardgame, not number game". It governs the
-   settings spec, `renderer-legibility` and the mode designs, and each would
-   otherwise re-derive it. It is the next thing to write, not to build.
-2. **Then the settings spec**, which the ADR unblocks.
+1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
+   "A boardgame, not a number game", Accepted. See the brainstorm table above
+   for what writing it turned up that the brainstorm had not. Docs only; no
+   code changed, so no gate moved.
+2. **Write the settings spec**, which the ADR now unblocks. **This is the task
+   to start on.** ADR 0020 decides several of its open questions by
+   construction rather than by taste, so read it first and do not re-argue
+   them: flick-to-throw is out under rule 4 (a gesture whose apparent physics
+   appears to determine an outcome lies about ADR 0001); an always-tappable
+   dice tray is in; animation speed is a legitimate setting because ADR 0007
+   already guarantees a skipped animation cannot change a result — but it
+   **needs a floor**, and the floor is the part the spec has to defend, since
+   a fast enough animation is a teleport and the causal beats (rolled, moved,
+   bitten) must stay separable at every speed. Camera pan is *not* in this
+   spec; ADR 0020 leaves it where the brainstorm put it, in
+   `renderer-legibility`, because `fitCamera` owns the target.
 3. **Fix `verify-ui` so it builds first** — see the trap below. It is a
    deliberate non-fix in this pass and it is small, but it is an Nx graph
    edit, and this repo has already been bitten once by an Nx attribution
