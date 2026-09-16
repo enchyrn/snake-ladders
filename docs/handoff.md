@@ -954,14 +954,125 @@ never blocked by TLS — mixed content does not govern `RTCPeerConnection` — i
 real blocker is mDNS obfuscation, every candidate returning `<uuid>.local`. Do
 not write code for it before that is observed on hardware.
 
+### Design decisions taken 2026-09-16 (brainstorm), none of them implemented
+
+These came out of a brainstorming session and are recorded here because they
+existed only in a conversation. Nothing below is code yet.
+
+**The governing decision: "boardgame, not number game."** The owner's stated
+thesis, and it reaches the *rules*, not only presentation. Today the game tells
+you what happened in text and digits — the log narrates "Python rolled 6",
+momentum is integer arithmetic (ADR 0003), minesweeper is counts. A boardgame
+shows you instead. **This is to be written as an ADR, not a spec section**,
+because it governs three specs (settings, renderer-legibility, and the mode
+designs) and each would otherwise re-derive it. Its honest cost: showing takes
+longer than telling, so it trades speed for weight, and some things genuinely
+read better as digits.
+
+| Question | Decision |
+|---|---|
+| Snake/ladder/mine visibility toggles | **Deferred.** Fix `renderer-legibility` first — its layering contract, entry-end badges, tap-to-trace and per-link tint may dissolve the overlap problem. Revisit toggles after, not before. |
+| Avatar customization | **Honour the existing deferral.** `renderer-legibility` §Token variety already routes player-visible customization through class choice, so `Join` is extended once by the RPG layer rather than twice by two designs. Token shape as a pure function of `(seed, seat)` ships with legibility. |
+| Seat colour | **Decouple from seat.** A `colour` field travels in `Join`; seat assignment stays join-order and untouched, because seat is the deterministic tiebreaker and the dice draw order. Conflicts resolve by log order. |
+| Dice as trigger | The dice tray is **always tappable**; whether the Roll button is shown, and on which side, becomes the setting (hidden / left / right). |
+| Flick-to-throw | **Rejected.** Dice are drawn from the shared PRNG during resolution and `Commit` carries no value, so a throw gesture would imply agency the architecture forbids. |
+| Animation speed control | **Yes**, with a floor, and never skipping the causal beats. Safe by construction: an animation that stutters or is skipped cannot change a result. |
+| Haptics | `navigator.vibrate` — **Android only**. iOS Safari has never shipped the Vibration API. Verify on device. |
+| Camera pan | **Belongs to `renderer-legibility`, not settings.** `fitCamera` owns the target, and the spec already concedes control when the player orbits manually; pan follows the identical rule, with `⟲ Reset view` handing it back. Bounded so the board cannot be lost. |
+| Gold as a second currency | **Not yet.** See the venom finding below. |
+
+**A constraint that falls out of the colour decision.** `renderer-legibility`
+reserves the green family for link tinting and gives hue to seats. If players
+pick their own hue, someone picks green and fights the snakes. The selectable
+palette must exclude the link band.
+
+### The venom coupling defect, confirmed in the tree
+
+`venom` is core player state — `match.ts:39` initialises it, `:105` checks the
+cost, `:163` spends it — but it is **earned in exactly one place**,
+`venomForBite` in `rules/mutation.ts`. So venom is core state fed exclusively
+by one optional module: with `mutation` off it is permanently 0 and anything
+priced in it is dead for that match.
+
+This is not hypothetical and it is not a style issue. It is the reason a second
+currency ("gold") was declined for now, and it is the same shape as the worry
+that tying minesweeper scoring to venom would trap sessions without `mutation`.
+`reactive-decisions` independently diagnoses the other half — the economy funds
+reactions the game never gives anyone a chance to make. **Fix venom's two
+defects (stranded without `mutation`, nothing worth buying) before adding any
+second currency.**
+
+### Where the outstanding requests were placed
+
+The owner's wish list decomposed into four clusters, not one:
+
+1. **Quick wins** (bounded, approved, not yet done) — the QR arrival prefill and
+   the avatar teleport, both detailed below.
+2. **Settings, input and feel** (architectural) — the table above. Blocked on
+   the feel ADR being written first.
+3. **Lobby and seating UX** — "Add People" is cramped; overlaps
+   `share-and-start-menu` §"The start menu", designed and unbuilt. Now also
+   carries a real requirement: colour picking needs lobby UI.
+4. **Mode design** (architectural, largest) — minesweeper integration, more
+   mutation cards, ladder-expiry and rearrange animations, momentum transfer,
+   the simultaneous tiebreak, a skip mechanic with snake attraction, gold.
+   Several of these are currency questions that the venom fix answers first,
+   and the feel ADR governs all of them.
+
+**A skip mechanic would need a new action.** The vocabulary is
+`Join | Leave | Configure | Start | PlayCard | Commit | Flag` — there is no
+`Skip`. And ADR 0002 says a match with no modules is classic Snakes & Ladders,
+so snakes hunting idle players must live in a module rather than the core.
+
+### The two approved quick wins, specified
+
+Both are defects rather than features, and both will be hit the moment anyone
+tests on hardware.
+
+**1. The QR lands nowhere useful.** `lobby.tsx:85` encodes a bare
+`http://${address}:${port}/`, which opens the app at the home screen. The join
+screen (`join.tsx`) reads no URL parameter at all and hides its address field
+behind `<summary>Join by address</summary>`. So scanning gets you the page and
+then abandons you. Encode room and address — `…/#/join?room=W3SZ&at=IP:PORT` —
+and have the join route read it and pre-fill. The room code is the seed, but
+that is already true of the code read aloud, so this exposes nothing new.
+`share-and-start-menu` §"The link, and what happens on arrival" is the design.
+
+**2. The avatar teleports before it moves.** `BoardCanvas.tsx:78` calls
+`scene.sync(state)` unconditionally *before* `scene.play(...)`, and
+`syncTokens` (`scene.ts:351`) snaps a token whenever `clips.length === 0` —
+which is exactly true at that moment, because the previous timeline has ended.
+So the token snaps to its destination, then animates from its origin. Fix: do
+not snap token positions while a timeline is pending; `play`'s existing
+`onDone` already re-syncs. This is also the clearest instance of the number
+game leaking through the presentation, which is why the feel ADR promotes it
+above polish.
+
 ### The task to start on
 
-**Play a match on two real devices.** That is the highest-value next action and
-the only one a container cannot do. `docs/android-debugging.md` is the written
+**Start with the two quick wins above** — the QR arrival prefill and the avatar
+teleport. Both are approved, both are specified in full above, and both are
+defects that a hardware test will hit immediately. Use TDD; they are small
+enough that the failing test comes first cheaply. Then write the feel ADR,
+then the settings spec.
+
+**Then: play a match on two real devices.** That remains the highest-value
+action nothing in a container can do, and the quick wins are worth landing
+first precisely because they change what that test will show. `docs/android-debugging.md` is the written
 procedure and has never been executed against hardware — whoever runs it first
 should correct whatever turns out to be wrong. Install the APK on an Android
 phone, host a match, scan the QR from a laptop or second phone, and play a
 round. Then come back and make the "Not proven" column above shorter.
+
+**iOS is in scope for that test as a guest, and the docs understate this.**
+`refuseInsecure` (`packages/net/src/websocket.ts:63`) only refuses when the
+page's own protocol is `https:`, so a host-served page — plain HTTP — lets an
+iPhone open `ws://` and join. That fell out of the host-served join as a side
+effect nobody wrote down. What iOS still cannot do is host (no browser can) and
+install to the home screen from that origin (installation needs HTTPS). Those
+two needs pull in opposite directions on origin, and the honest resolution is
+two entry points: install the Pages build for pass-and-play, scan the QR for
+multiplayer.
 
 Task 8 of `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` (the
 shared relay descriptor and QR transport phase) is **no longer blocked** — open
