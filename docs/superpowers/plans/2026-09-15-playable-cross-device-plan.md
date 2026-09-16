@@ -811,6 +811,12 @@ hence the `admit` helper rather than reaching into the result directly.
 
 ### Task 6: Update the handoff and reconcile the pull request
 
+> **Ticked retroactively on 2026-09-16.** All five steps had been done by later
+> sessions — the checkpoint was rewritten more than once, the multi-seat
+> controls are documented under "Whose turn it is" in `playing-together.md`,
+> the gates were run with real numbers, and the pull request is reconciled:
+> PR #2 merged as `4a1eefc` and PR #3 as `03e1cd1`.
+
 Milestone A ends at a playable state: pass-and-play is complete, the inherited
 Criticals are closed with regressions, and the browser-to-browser relay path is
 unchanged and green. This is the point to reconcile PR #2 and merge.
@@ -819,7 +825,7 @@ unchanged and green. This is the point to reconcile PR #2 and merge.
 - Modify: `docs/handoff.md:7-52` (replace the stale checkpoint block)
 - Modify: `docs/playing-together.md` (document removing a player and seat switching)
 
-- [ ] **Step 1: Rewrite the checkpoint block**
+- [x] **Step 1: Rewrite the checkpoint block**
 
 Replace "## Current checkpoint (2026-09-15)" in `docs/handoff.md`. It currently
 says the branch must not be merged because of two Criticals and cites commit
@@ -828,12 +834,12 @@ the other session and is now `25a09ac`. State: both Criticals closed and which
 test pins each; what Milestone A added; the exact gate output; and that
 `verify:ui` is blocked by the container's missing `libnspr4.so` if it still is.
 
-- [ ] **Step 2: Document the new controls**
+- [x] **Step 2: Document the new controls**
 
 In `docs/playing-together.md`, under pass-and-play: adding a player, removing
 one, and that the device names whose turn it is. Keep it to what a player does.
 
-- [ ] **Step 3: Run every gate and record the real numbers**
+- [x] **Step 3: Run every gate and record the real numbers**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -843,7 +849,7 @@ cargo test -p lan-sync
 
 Copy the actual counts into the handoff. Do not carry forward "152 tests".
 
-- [ ] **Step 4: Commit and push**
+- [x] **Step 4: Commit and push**
 
 ```bash
 git add docs/handoff.md docs/playing-together.md
@@ -851,7 +857,7 @@ git commit -m "docs: record the playable pass-and-play checkpoint"
 git push -u origin claude/snake-ladders-cross-device-3uu177
 ```
 
-- [ ] **Step 5: Reconcile the pull request**
+- [x] **Step 5: Reconcile the pull request**
 
 Re-read PR #2's body against the branch as it now stands: commit count, file
 count, test counts, and every claim about what works. The body has drifted

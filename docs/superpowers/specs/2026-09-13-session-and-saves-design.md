@@ -1,6 +1,12 @@
 # Session lifecycle and save files — design
 
-**Status:** approved in conversation, not implemented. No code exists yet.
+**Status:** **partly implemented as of 2026-09-16.** The device-local profiles
+and pass-and-play seating half is built and shipped — `loadProfiles`, adding
+and removing guests, and seat ownership all landed in the playable-cross-device
+plan. **The saves half was never built:** there is no `localStorage` use and no
+save or resume path anywhere in `app-shell`, so a match cannot be persisted or
+picked up again. Read the seating sections as history and the save sections as
+outstanding design.
 **Date:** 2026-09-13
 
 **Paths remapped at 1d36bde.** This spec was written against the flat `src/`

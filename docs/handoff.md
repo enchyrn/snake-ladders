@@ -345,24 +345,24 @@ elsewhere in this file names a thread rather than citing its number, because a
 number that was right when it was written silently points at something else
 after the next closure.
 
+A closed thread is struck through in place rather than deleted, so that prose
+citing it still resolves and nobody re-opens a question that was answered.
 
-1. **A relay the deployed PWA can reach at all.** This was thread 6 and is now
-  the top of the list, because deploying the site is what made it blocking
-  rather than desirable. A page served over HTTPS — which is precisely what
-  makes it installable — may not open a `ws://` socket, and the browser refuses
-  it before the connection leaves the tab, so it fails identically whether or
-  not a relay is running. `apps/relay/lan-relay.mjs` serves plain `ws` with no
-  TLS, and the native host is a raw TCP listener no browser can dial under any
-  scheme. So on the deployed site pass-and-play works and joining another device
-  cannot, and no amount of fixing the client changes that. Closing it needs a
-  relay reachable over `wss://`, which is an architecture decision before it is
-  code: a certificate means a public host, which cuts against the promise that
-  the game never touches the internet. ADR 0012 and 0013 are the prior art.
-  **Now designed:** `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
-  answers this thread differently than it was framed — the blocker is the
-  page's origin, not the socket, so the host serves the page instead and no
-  `wss://` relay is needed. ADR 0013 carries an addendum correcting why
-  WebRTC was deferred.
+
+1. ~~**A relay the deployed PWA can reach at all.**~~ **Closed 2026-09-16**,
+  implemented and merged as `03e1cd1`. It was framed as needing a `wss://`
+  relay; that framing was wrong. The browser's mixed-content rule is about the
+  *page's* origin, not the socket, so the host serves the guest its page over
+  plain HTTP on the port it already listens on, and the rule never applies. No
+  certificate, no public machine. ADR 0019 carries the amendment (one listener,
+  three protocols) and ADR 0013 the correction to why WebRTC was deferred —
+  mDNS obfuscation, not TLS.
+
+  **What genuinely remains** is narrower than this thread claimed: the
+  *deployed* HTTPS page still cannot join a room, and only a `wss://` relay
+  would change that — a public machine, against "never touches the internet",
+  a trade still un-taken. It blocks nothing: the host-served path covers the
+  cases this thread existed for, iOS included.
 2. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
