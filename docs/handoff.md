@@ -685,16 +685,19 @@ four that were codeable — see the intro section for what each one did. One
 thing is left, and it is not codeable at all: a decision only the project
 owner can make.
 
-1. **Decide the `wss://` relay architecture.** Not codeable — see open thread 1.
-   A page served over HTTPS may not open a `ws://` socket, and the browser
-   refuses before the connection leaves the tab, so on the deployed PWA
-   pass-and-play works and joining another device cannot, whether or not a
-   relay is running. Closing it needs a relay reachable over `wss://`, which
-   means a certificate, which means a public host — cutting against the promise
-   that the game never touches the internet. ADR 0012 and 0013 are the prior
-   art and this deserves its own. **It blocks Task 8** of
-   `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`, which is
-   otherwise the next task.
+1. ~~**Decide the `wss://` relay architecture.**~~ **Closed 2026-09-16** by the
+   host-served join, which dissolved the question rather than answering it: the
+   guest's page now comes from the host over plain HTTP, so there is no HTTPS
+   origin to satisfy and no certificate to obtain. A `wss://` relay would still
+   be the only way to make *the deployed PWA* join a room, and that trade — a
+   public machine, against "never touches the internet" — is unchanged and
+   still un-taken. It is no longer blocking: Task 8 of
+   `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` can proceed
+   on the host-served path.
+
+2. **Play it on two real devices.** The one thing nothing here proves — see
+   "What is unproven" below. This is now the highest-value next action and it
+   needs hardware, not a container.
 
 ## Known flakes
 
@@ -819,11 +822,16 @@ plus a final fix wave, all committed and reviewed) fixed every one of them
 except the Rust gap it left open on purpose; a third plan
 (`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`) then
 closed that gap along with the three other codeable follow-ups it left
-behind — see the intro section above for both lists. **Open thread 1 is now
-the only thing standing between here and Task 8 of the Nx/Nub/PWA plan — the
-shared relay descriptor and QR transport phase.** The deployed PWA cannot
-reach any relay over `wss://` yet, which is an architecture decision (a
-certificate implies a public host) before it is code.
+behind — see the intro section above for both lists.
+
+**Open thread 1 is closed, and not in the way it was framed.** It asked for a
+`wss://` relay so the deployed PWA could reach a room. The framing was wrong:
+the browser's mixed-content rule is about the *page's origin*, not the socket,
+so the fix was to stop handing the guest an HTTPS page at all. The host serves
+the page itself over plain HTTP on its existing port, page and socket share one
+origin, and the rule never applies. No certificate, no public machine, and the
+promise that the game never touches the internet survives intact. That is the
+host-served join, implemented 2026-09-16 — see below.
 
 Task 2 is next in the plan's order but is **hardware-blocked for a container
 session**: it is host-local Android capture and needs a device, wireless ADB and
@@ -867,131 +875,126 @@ nothing lives only in a conversation.
 
 ### Where the work stands
 
-PR #2 is **merged** into `main` as `4a1eefc` — the Nx/nub/PWA migration,
-multi-seat pass-and-play, and the native host that also speaks WebSocket. The
-branch `claude/snake-ladders-cross-device-3uu177` was restarted from `main`
-afterwards and now carries two commits of design work on top:
+**The host-served join is implemented — all six tasks of
+`docs/superpowers/plans/2026-09-16-host-served-join-plan.md` are done and
+ticked.** A guest scans a QR on the host's lobby, the host serves them the game
+over plain HTTP on the port it was already listening on, and they join the room.
+No install, no relay machine, no certificate.
 
 | Commit | What |
 |---|---|
-| `1dbfe06` | The spec: `docs/superpowers/specs/2026-09-16-host-served-join-design.md`, plus an addendum to ADR 0013 |
-| `f9ae0e4` | The plan: `docs/superpowers/plans/2026-09-16-host-served-join-plan.md` |
+| `a976cd7` | Task 1 — the serving rules as pure functions (`crates/lan-sync/src/assets.rs`) |
+| `fb02bf4` | Task 2 — the host's third request branch, and six socket tests |
+| `d7fdbdc` | Task 3 — `local_address()`, and assets threaded through `Session::host` |
+| `c03f82a` | A correction to what the address probe's target range guarantees |
+| `7487e22` | A traversal fix the plan's own security claim did not survive — see below |
+| `9b6f3be` | Task 4 — the Tauri adapter. **CI's Android APK job is green on this sha** |
+| `3c1f0fc` | Task 5 — the lobby QR, its quiet zone, and the `.tsx` test gap |
 
-**Start on Task 1 of that plan.** Nothing in it has been implemented — the
-whole plan is unticked. Task 1 is self-contained (pure functions, nine tests,
-no socket) and is the right place to begin cold.
+### Two defects found while implementing, both worth remembering
 
-### What the design decided, so it is not re-litigated
+**1. The plan's security claim was false, and only reading the consumer caught
+it.** Task 4's comment said `request_path` had already refused any `..`, so
+Tauri's resolver could never look outside the bundle. But `get_asset`
+percent-decodes *again*, and `request_path` returned an already-decoded path —
+so `%252e%252e` passed the check as the literal `%2e%2e` and the resolver
+turned it back into `..`. Production was saved only because the embedded bundle
+is a lookup table rather than a filesystem; Tauri's `#[cfg(dev)]` branch does a
+real `fs::read`. `request_path` now decodes to a **fixpoint**, so the
+consumer's own decode is a no-op. Two regressions pin it.
 
-Open thread 1 asked for a `wss://` relay. **That framing was wrong.** The
-browser's mixed-content rule is about the *page's origin*, not the socket, so
-the fix is to stop serving the guest an HTTPS page: the host serves it over
-plain HTTP on the LAN and the two share one origin. No certificate, no public
-server, and the promise that the game never touches the internet survives.
+The general lesson: a sanitiser is only safe against the decoding its consumer
+actually does. Check the consumer.
 
-A probe on 2026-09-16 also corrected ADR 0013: WebRTC was never blocked by TLS.
-Mixed content does not govern `RTCPeerConnection`, and a data channel opens
-fine from an `https://` origin. Its only real blocker is mDNS obfuscation —
-now observed rather than suspected, every candidate returning as `<uuid>.local`.
-WebRTC is therefore **phase 2, gated** on two physical devices resolving each
-other's mDNS. Do not write code for it before that is observed.
+**2. The QR's quiet zone was CSS padding, which is the wrong unit.** `padding:
+0.5rem` is a fixed 8px; module size shrinks as the encoded URL grows. At 180px
+that rendered ~1 module of margin where the format asks for 4 — on a code that
+has to be read off a screen by a phone camera. It is now drawn **inside the
+SVG** (`QUIET_ZONE = 4`), where no stylesheet can remove it, and pinned by a
+test. Invisible in the source; obvious in a screenshot. That is the fourth time
+on this branch that looking at the rendered page found what reading it did not.
 
-Both of the spec's open questions are already resolved in the plan:
-`qrcode-generator@2.0.4` (no dependencies, ships its own types) over `qrcode`
-(pulls `pngjs`, `yargs`, `dijkstrajs`), and the port stays ephemeral because a
-QR makes it invisible.
+### What is unproven, and it is the important part
 
-### Two traps waiting in that plan
+**Nothing here has been played on real hardware.** Be precise about what the
+green gates do and do not mean:
 
-- **Task 4 cannot be compiled here.** `src-tauri` needs webkit2gtk, and Tauri
-  is not vendored in this container, so `AssetResolver`'s real shape must be
-  read from the installed crate rather than assumed. CI's Android job is the
-  only thing that confirms that task.
-- **A locally clean `cargo clippy` proves little.** CI resolves whatever
-  `stable` is that day; this branch already went red after passing locally
-  because the container's Rust was six months behind. Run `rustup update
-  stable` first. `mise` cannot resolve `rust@stable` here (403), but `rustup`
-  can.
+| Proven | Not proven |
+|---|---|
+| The host answers a browser's HTTP framing on loopback | That an Android build serves it over real Wi-Fi |
+| The serving rules refuse every traversal we could think of | That a real phone camera scans the rendered QR |
+| `src-tauri` compiles for Android (CI, run 91) | That the APK *runs*; CI builds it and never starts it |
+| The lobby's host block renders correctly at 390x844 | That it renders on a real device, at a real DPI |
+
+`local_address()` is the piece most likely to disappoint on contact. It reports
+**one** address, from whichever interface an outbound route would leave by. A
+host on two networks may be reachable on the other one, and a host with **no
+default route** gets `None` and shows the "no Wi-Fi address" branch even though
+it has one. The lobby prints the address as text beside the QR for exactly this
+reason.
+
+A container quirk worth knowing before you debug it: this environment's `eth0`
+is `192.0.2.2/24` — inside TEST-NET-1, the range the probe targets as
+"unrouted". It does not break the answer (a connected UDP socket sends no
+packet), but it means the loopback-only branch of that test is never exercised
+here.
+
+**WebRTC stays phase 2 and stays gated** on two physical devices resolving each
+other's mDNS candidates. A probe on 2026-09-16 corrected ADR 0013: WebRTC was
+never blocked by TLS — mixed content does not govern `RTCPeerConnection` — its
+real blocker is mDNS obfuscation, every candidate returning `<uuid>.local`. Do
+not write code for it before that is observed on hardware.
+
+### The task to start on
+
+**Play a match on two real devices.** That is the highest-value next action and
+the only one a container cannot do. `docs/android-debugging.md` is the written
+procedure and has never been executed against hardware — whoever runs it first
+should correct whatever turns out to be wrong. Install the APK on an Android
+phone, host a match, scan the QR from a laptop or second phone, and play a
+round. Then come back and make the "Not proven" column above shorter.
+
+Task 8 of `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md` (the
+shared relay descriptor and QR transport phase) is **no longer blocked** — open
+thread 1 is closed. Task 2 of that plan remains hardware-blocked for the same
+reason as above.
 
 ### State of the gates, as of this checkpoint
 
-`nub run test` 166 passed · `nub run typecheck` clean · `nub run lint` clean ·
-`cargo test -p lan-sync` 39 passed · `nub run verify:ui` clean. Working tree
-clean, branch pushed, no divergence from its remote.
+Run on `3c1f0fc`, working tree clean apart from these docs:
 
-`verify:ui` **does** run in this container, contrary to what an earlier
-checkpoint claimed — the driver falls back to any Chromium under
-`PLAYWRIGHT_BROWSERS_PATH`. Run it; do not assume it is unavailable.
+| Gate | Result |
+|---|---|
+| `nub run test` | **170 passed**, 17 files (was 166 in 16) |
+| `nub run typecheck` | clean |
+| `nub run lint` | clean |
+| `nub run build` | clean |
+| `nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow |
+| `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session; was 39) |
+| `cargo clippy -p lan-sync --all-targets -- -D warnings` | clean |
+| CI Android APK | **green** on `9b6f3be` (run 91) |
+
+Two traps this session hit that the next one will too:
+
+- **`vitest.config.ts` included only `*.test.ts`.** A `.tsx` test file was
+  collected by nothing and would have "passed" by never running. Now
+  `*.test.{ts,tsx}`. If you add a component test, confirm it actually ran.
+- **clippy rejected the plan's own test code** (`single_match`). The container's
+  stable was current this time (1.98.1, 2026-09-01), so the usual
+  stale-toolchain trap did not apply — but run `rustup update stable` before
+  trusting a clean clippy anyway.
 
 ### The order to pick this up in
 
-1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and it
-   sets the rule that skills come before any other action.
-2. Then `superpowers:executing-plans` (or `subagent-driven-development`, which
-   the plan's own header prefers where subagents are available). The plan file
-   carries that requirement in its first line; do not start from the task list
-   alone.
-3. Read this file and the design before touching code. The design is committed
-   as `f773bf5`.
-4. **Start at open thread 1, then Task 8 of the Nx/Nub/PWA plan.** It is the
-   only thing left open: the structural hole in `host.rs`'s accept loop that
-   used to be thread 2 is closed (the follow-ups plan's Task 1 — see the intro
-   section for the fix), and so are the three other codeable follow-ups that
-   plan recorded. The Nx split's own defects are closed and that thread is
-   retired too. Task 2 is hardware-blocked and cannot be done from a
-   container. Task 8 — the shared relay descriptor and QR transport phase —
-   needs open thread 1 resolved first: a relay the deployed PWA can reach at
-   all is an architecture decision (ADR 0012 and 0013 are the prior art), not
-   a coding task, so expect to write an ADR before touching Task 8's code.
-5. Review each task's diff and test output before moving to the next. Keep
-   `--auto` restricted to trusted, explicitly scoped prompts.
-
-### Running OpenCode, and the one command that does not work
-
-**`mise exec -- opencode` fails here, and so does `mise exec -- <anything>`.**
-`mise exec` installs every tool in `mise.toml` before it runs anything, so the
-java pin — unreachable in a cloud container — aborts a command that has nothing
-to do with java:
-
-```text
-mise ERROR Failed to install tools: aqua:anomalyco/opencode@1.18.30, core:java@21
-```
-
-This trap has now cost two debugging sessions: once in `scripts/provision.sh`
-and once in `scripts/delegate.mjs`. Both now resolve the *path* from
-`mise which <tool>` and run that directly, which mise answers without
-installing anything. Use the same shape yourself:
-
-```bash
-opencode --version            # provision.sh installs it globally from npm
-"$(mise which nub)" run test  # when mise owns the tool
-```
-
-Verified on 2026-09-13:
-
-- `opencode --version` resolves `1.18.30`, installed globally from npm by
-  `scripts/provision.sh`.
-- `mise which opencode` exits non-zero in a cloud session, because mise cannot
-  fetch it there (the GitHub releases API is scoped to this repository), so
-  `scripts/delegate.mjs` falls through to that global binary. The mise-owned
-  branch of that fallback is therefore **unexercised here** — it is the one
-  `mise which` path no cloud session can reach.
-- `opencode.ai` answers 200 through the proxy in this environment.
-- The OpenCode project plugin loads the vendored Superpowers bootstrap and
-  exposes the native `skill` tool.
-- OpenCode logs duplicate skill names because Claude's project-scoped vendor
-  and the OpenCode plugin both register Superpowers skills. This is currently
-  non-blocking, but should be resolved before treating the integration as
-  warning-free.
-- **Delegation works, and it is slow.**
-  `nub run delegate -- "Reply with exactly DELEGATE_OK…"` answered
-  `DELEGATE_OK` from `explore` on `mimo-v2.5-free`, exit 0 — after more than
-  three minutes. A 180s timeout killed it mid-flight and looked exactly like a
-  blocked host or a broken binary. Give a free Zen model **five minutes** before
-  concluding anything is wrong; it is a free tier and it queues.
-- Free Zen models still need an account (`opencode auth login`). This container
-  already had one, which is why the run above succeeded; a fresh container that
-  has never authenticated will not delegate however reachable the host is.
+1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
+   the rule that skills come before any other action.
+2. There is no plan in flight. The host-served join plan is fully ticked, with
+   an execution note under each task recording what it did not anticipate.
+   Read those notes before assuming the plan text is what shipped.
+3. For hardware work, `docs/android-debugging.md`. For the design behind what
+   just shipped, `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
+   and ADR 0019, whose consequences section now records that the listener
+   speaks three protocols rather than two.
 
 ## Continuing locally
 

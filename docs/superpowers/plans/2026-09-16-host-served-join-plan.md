@@ -77,7 +77,7 @@ the rules before wiring them to anything.
   - `pub fn http_response(asset: &Asset) -> Vec<u8>` and
     `pub fn not_found() -> Vec<u8>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/lan-sync/src/assets.rs` containing only this test module, so it
 compiles to a named failure rather than a parse error:
@@ -155,7 +155,7 @@ mod tests {
 
 Add `pub mod assets;` to `crates/lan-sync/src/lib.rs`, beside `pub mod ws;`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -165,7 +165,7 @@ cargo test -p lan-sync assets::
 Expected: FAIL to compile — `request_path`, `Asset`, `http_response` and
 `not_found` are not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Write above the test module in `crates/lan-sync/src/assets.rs`:
 
@@ -261,7 +261,7 @@ pub fn not_found() -> Vec<u8> {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -270,7 +270,7 @@ cargo test -p lan-sync assets::
 
 Expected: PASS, 9 tests.
 
-- [ ] **Step 5: Lint and format**
+- [x] **Step 5: Lint and format**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -282,7 +282,7 @@ cargo fmt --all
 Expected: clean. Fix anything clippy raises before committing — CI runs a
 newer toolchain than a container usually has.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/lan-sync/src/assets.rs crates/lan-sync/src/lib.rs
@@ -306,7 +306,7 @@ git commit -m "feat: add the host's asset-serving rules"
   - `Host::bind` keeps its exact current signature and delegates with `None`,
     so every existing call site and test is untouched.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/lan-sync/tests/relay.rs`:
 
@@ -420,7 +420,7 @@ fn an_asset_request_does_not_occupy_a_room_slot() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -429,7 +429,7 @@ cargo test -p lan-sync --test relay serves_ 2>&1 | tail -20
 
 Expected: FAIL to compile — `Host::bind_with_assets` does not exist.
 
-- [ ] **Step 3: Carry the assets on `Shared`**
+- [x] **Step 3: Carry the assets on `Shared`**
 
 In `crates/lan-sync/src/host.rs`, add to `struct Shared`:
 
@@ -470,7 +470,7 @@ Replace `Host::bind`'s signature and body head with:
 
 The rest of the original `bind` body follows unchanged.
 
-- [ ] **Step 4: Add the serve branch**
+- [x] **Step 4: Add the serve branch**
 
 In `serve_client`, replace the 400 branch (currently at ~line 359):
 
@@ -496,7 +496,7 @@ In `serve_client`, replace the 400 branch (currently at ~line 359):
 Note the `return`: an asset request closes the connection and never reaches the
 handshake, which is why it cannot occupy a room slot.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -506,7 +506,7 @@ cargo test -p lan-sync
 Expected: PASS, including every pre-existing test. The newline-JSON path and
 the WebSocket path must both be untouched.
 
-- [ ] **Step 6: Lint, format, commit**
+- [x] **Step 6: Lint, format, commit**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -539,7 +539,7 @@ traffic, which is the one a guest on that Wi-Fi can reach.
   - `Session::host_with_assets(seed: u32, display_name: impl Into<String>, capacity: u8, advertise: bool, assets: Option<Arc<dyn AssetSource>>) -> std::io::Result<Session>`;
     `Session::host` keeps its signature and delegates with `None`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `crates/lan-sync/src/lib.rs`:
 
@@ -573,7 +573,7 @@ mod local_address_tests {
 }
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -582,7 +582,7 @@ cargo test -p lan-sync local_address
 
 Expected: FAIL to compile — `local_address` is not defined.
 
-- [ ] **Step 3: Implement `local_address`**
+- [x] **Step 3: Implement `local_address`**
 
 Add to `crates/lan-sync/src/lib.rs`:
 
@@ -610,7 +610,7 @@ pub fn local_address() -> Option<std::net::IpAddr> {
 }
 ```
 
-- [ ] **Step 4: Thread assets through `Session::host`**
+- [x] **Step 4: Thread assets through `Session::host`**
 
 In `crates/lan-sync/src/session.rs`:
 
@@ -639,7 +639,7 @@ In `crates/lan-sync/src/session.rs`:
 The rest of the original `host` body follows unchanged. Add `use std::sync::Arc;`
 to the file's imports if it is not already there.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -650,7 +650,7 @@ cargo fmt --all
 
 Expected: PASS and clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/lan-sync/src/lib.rs crates/lan-sync/src/session.rs
@@ -658,6 +658,19 @@ git commit -m "feat: let the host report the address a guest can reach it on"
 ```
 
 ---
+
+
+**Note (execution):** clippy's `single_match` rejected Step 1's test as written
+(`match local_address() { Some(..) => .., None => {} }`). Rewritten as `if let`;
+the intent — a loopback-only container legitimately has no address — is
+unchanged and still commented. `local_address()` answers `Some(192.0.2.2)` in
+this container: its `eth0` sits on `192.0.2.0/24` with `192.0.2.1` as the
+gateway, so the TEST-NET-1 probe target the plan called "guaranteed not to be
+routed anywhere" is in fact this container's own subnet. The answer is still
+correct — a connected UDP socket sends nothing and reports the egress
+interface — but the code comment was corrected to stop claiming otherwise.
+The real failure mode is a machine with *no* default route, where `connect`
+fails and the lobby shows the no-address branch.
 
 ### Task 4: Wire Tauri's embedded assets to the host
 
@@ -675,7 +688,7 @@ before pushing, and expect the APK job to be the thing that confirms it.
   `address: Option<String>` — the host's LAN IP as a string, `None` when it has
   none (loopback only, no Wi-Fi).
 
-- [ ] **Step 1: Confirm the Tauri asset API before writing against it**
+- [x] **Step 1: Confirm the Tauri asset API before writing against it**
 
 Tauri is not vendored in this container, so the exact shape of `AssetResolver`
 must be read, not assumed. Check the installed crate:
@@ -692,7 +705,7 @@ returns an `AssetResolver`, whose `get(&self, path: String)` returns an
 names differ, adapt Step 2 and say so in the task note — do not force the code
 to match this plan.
 
-- [ ] **Step 2: Implement the adapter**
+- [x] **Step 2: Implement the adapter**
 
 In `src-tauri/src/lib.rs`:
 
@@ -746,7 +759,7 @@ And in `net_host`, replace the `Session::host` call and the `hosted` value:
     };
 ```
 
-- [ ] **Step 3: Format**
+- [x] **Step 3: Format**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -756,7 +769,7 @@ export PATH="$HOME/.local/share/mise/shims:$PATH"
 `cargo fmt --all` from the root does **not** reach `src-tauri` — it is its own
 workspace, and the root command is silent because it does not look.
 
-- [ ] **Step 4: Commit and let CI compile it**
+- [x] **Step 4: Commit and let CI compile it**
 
 ```bash
 git add src-tauri/src/lib.rs
@@ -768,6 +781,23 @@ Watch `.github/workflows/android.yml`. A compile error here surfaces only
 there; do not move on until the APK job is green.
 
 ---
+
+
+**Note (execution):** the Tauri API matched the plan's assumed shape exactly
+(tauri 2.11.5): `asset_resolver()` is on `AppHandle` via `shared_app_impl!`,
+`get(path: String) -> Option<Asset>`, `Asset { bytes: Vec<u8>, mime_type:
+String }`, and `get_asset` strips the leading `/`, so `format!("/{path}")`
+is right. `AppHandle: Send + Sync + 'static` holds, which `AssetSource`
+requires.
+
+The plan's claim that `request_path` leaves the resolver unable to look
+outside the bundle was **false as written**, and reading the resolver is
+what caught it: `get_asset` percent-decodes again, and `request_path`
+returned an already-decoded path, so `%252e%252e` survived as the literal
+`%2e%2e` for Tauri to decode into `..`. Production is saved only because
+the embedded bundle is a lookup table, but Tauri's `#[cfg(dev)]` branch
+does a real `fs::read`. `request_path` now decodes to a fixpoint. Fixed in
+`7487e22`, with two regressions.
 
 ### Task 5: The lobby shows a QR and a readable address
 
@@ -784,7 +814,7 @@ there; do not move on until the APK job is green.
 - Produces: `QrCode({ value, size }: { value: string; size?: number })` — an
   SVG element. No app knowledge; it encodes whatever string it is given.
 
-- [ ] **Step 1: Add the dependency**
+- [x] **Step 1: Add the dependency**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -795,7 +825,7 @@ Chosen over `qrcode`, which pulls in `pngjs`, `yargs` and `dijkstrajs` — the
 wrong trade for a bundle that ships to phones. `qrcode-generator` has no
 dependencies and ships its own types at `dist/qrcode.d.ts`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `packages/ui/src/__tests__/QrCode.test.tsx`:
 
@@ -828,7 +858,7 @@ describe("QrCode", () => {
 })
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -837,7 +867,7 @@ nubx vitest run packages/ui/src/__tests__/QrCode.test.tsx
 
 Expected: FAIL — `../QrCode` does not resolve.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Create `packages/ui/src/QrCode.tsx`:
 
@@ -886,7 +916,7 @@ export const QrCode = ({ value, size = 180 }: { readonly value: string; readonly
 If `packages/ui/package.json` exists, declare `qrcode-generator` there too —
 nub's isolated layout fails an undeclared import rather than resolving it.
 
-- [ ] **Step 5: Add `address` to the transport type**
+- [x] **Step 5: Add `address` to the transport type**
 
 In `packages/net/src/transport.ts`:
 
@@ -900,7 +930,7 @@ export interface HostedRoom {
 }
 ```
 
-- [ ] **Step 6: Render it in the lobby**
+- [x] **Step 6: Render it in the lobby**
 
 In `packages/app-shell/src/routes/lobby.tsx`, replace the `role === "host"`
 hint block with:
@@ -936,7 +966,7 @@ hint block with:
 Import `QrCode` from `@mutation/ui/QrCode`, matching how `BoardCanvas` and
 `HUD` are already imported in this package.
 
-- [ ] **Step 7: Style it**
+- [x] **Step 7: Style it**
 
 Append to `apps/game-web/styles.css`:
 
@@ -959,7 +989,7 @@ Append to `apps/game-web/styles.css`:
 }
 ```
 
-- [ ] **Step 8: Run every gate**
+- [x] **Step 8: Run every gate**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -969,14 +999,14 @@ nub run build && nub run verify:ui
 
 Expected: all pass, including no console errors and no horizontal overflow.
 
-- [ ] **Step 9: Look at it**
+- [x] **Step 9: Look at it**
 
 `verify:ui` screenshots the home, lobby, and match screens. The lobby shot is
 pass-and-play, which renders no QR, so drive the host path yourself and look at
 the result before claiming it works — a QR that renders as a black square, or
 overflows a phone, is invisible in the source and obvious in a screenshot.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add packages/ui/src/QrCode.tsx packages/ui/src/__tests__/QrCode.test.tsx \
@@ -987,6 +1017,28 @@ git commit -m "feat: show a scannable join code in the host lobby"
 
 ---
 
+
+**Note (execution):** three things the plan did not anticipate.
+
+1. `vitest.config.ts` included only `*.test.ts`, so `QrCode.test.tsx` would
+   have been collected by nothing and "passed" by never running. The include
+   is now `*.test.{ts,tsx}`.
+2. `packages/ui/package.json` does not exist, so the plan's conditional
+   step to declare the dependency there does not apply; the root
+   `package.json` carries it.
+3. `packages/net/src/local.ts` constructs a `HostedRoom` and had to gain
+   `address: null` — pass-and-play is one device, so there is nothing for a
+   guest to reach. The plan listed only `transport.ts`.
+
+**On Step 9 (look at it):** a browser can never host — `websocket.ts`'s
+`host` is `unsupported` — so the host lobby is unreachable by driving the
+web build, and `verify:ui`'s lobby shot is pass-and-play as the plan said.
+The lobby's host block was instead rendered with the real stylesheet at
+390x844 and inspected. That caught a real defect: the quiet zone was CSS
+`padding: 0.5rem`, a fixed 8px against a module size that shrinks as the
+URL grows, giving ~1 module of margin where the format asks for 4. It is
+now drawn inside the SVG and pinned by a test.
+
 ### Task 6: Documentation, and what is still unproven
 
 **Files:**
@@ -994,7 +1046,7 @@ git commit -m "feat: show a scannable join code in the host lobby"
 - Modify: `docs/handoff.md`
 - Modify: `docs/adr/0019-the-native-host-speaks-websocket-on-its-own-port.md`
 
-- [ ] **Step 1: Rewrite the player-facing instructions**
+- [x] **Step 1: Rewrite the player-facing instructions**
 
 In `docs/playing-together.md`, the "A browser joining an installed host" section
 currently tells the player to read an `address:port@CODE` line and type it. That
@@ -1004,21 +1056,21 @@ satisfied automatically because the host serves the page.
 
 Also update the device matrix row for "An Android host and a browser".
 
-- [ ] **Step 2: Note the consequence nobody will expect**
+- [x] **Step 2: Note the consequence nobody will expect**
 
 Add, in the same section: the guest's page comes from the host, so if the host
 leaves the match or closes the app, a guest who reloads has nothing to reload
 from. That is inherent to this design, not a bug, and a player who hits it
 without warning will report it as one.
 
-- [ ] **Step 3: Extend ADR 0019's consequences**
+- [x] **Step 3: Extend ADR 0019's consequences**
 
 ADR 0019 said one listener, two protocols. It is now three — newline JSON,
 WebSocket, and HTTP. Add a short paragraph recording that the failure domain
 widened accordingly: a bug in the request branch now breaks native peers too,
 which is why detection is a `fill_buf` peek that consumes nothing.
 
-- [ ] **Step 4: Update the handoff**
+- [x] **Step 4: Update the handoff**
 
 Replace open thread 1 with what actually happened: it asked for a `wss://`
 relay, and the answer was that the blocker is the page's origin rather than the
@@ -1027,7 +1079,7 @@ and that **nothing here has been played on real hardware** — the Rust tests
 prove the host answers a browser's framing on loopback; they do not prove an
 Android build serves it over real Wi-Fi to a real phone.
 
-- [ ] **Step 5: Run every gate and record real numbers**
+- [x] **Step 5: Run every gate and record real numbers**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1038,7 +1090,7 @@ cargo test -p lan-sync
 Copy the actual counts into the handoff. Do not carry forward a number from
 this plan.
 
-- [ ] **Step 6: Commit and push**
+- [x] **Step 6: Commit and push**
 
 ```bash
 git add docs/
@@ -1047,6 +1099,18 @@ git push -u origin claude/snake-ladders-cross-device-3uu177
 ```
 
 ---
+
+
+**Note (execution):** `docs/playing-together.md` carried a whole section —
+"A browser and an installed app cannot join each other" — asserting that a
+browser can never join a native host. ADR 0019 had already made that false,
+and the rewrite this task asked for would have left the file contradicting
+itself two screens apart. It is rewritten around what is *still* true: the
+deployed HTTPS page is the one origin that cannot join, and the missing
+direction is the installed app joining a browser's relay, which really does
+have no WebSocket client.
+
+Gate numbers in the handoff are the real ones from this run, not the plan's.
 
 ## Out of scope
 
