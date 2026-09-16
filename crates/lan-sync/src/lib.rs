@@ -11,6 +11,7 @@
 //! another phone within a second of being opened, over any shared Wi-Fi or a
 //! phone hotspot.
 
+pub mod assets;
 pub mod discovery;
 pub mod host;
 pub mod peer;
