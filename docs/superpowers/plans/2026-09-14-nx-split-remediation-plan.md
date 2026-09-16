@@ -20,6 +20,16 @@ open thread 2 (the residual host-shutdown race), plus
 `docs/audits/2026-09-13-rust-audit.md`. Those threads are the requirements;
 this plan is their remediation.
 
+> **Checkboxes ticked retroactively on 2026-09-16.** The work landed in
+> `1b498ec`..`4bfb495` but the boxes were never ticked, so this plan read as
+> untouched for two days. Each of the eight tasks was verified against the tree
+> before ticking — the type gate on `game-web:build`, CI's unscoped typecheck,
+> the 10s handshake bound, `makeClientSlot` held in a ref, `serve_client`
+> observing `running` first, ADR 0018 with 0014 superseded, no pre-split paths
+> left in docs, and the `mise` tasks implemented. Nobody re-did the work; the
+> record was corrected to match it.
+
+
 ## Global Constraints
 
 - **nub, not npm** (ADR 0017). `nub.lock` is the lockfile. `nubx` replaces
@@ -60,7 +70,7 @@ production bundle".
 - Produces: `game-web:build` and `tooling:pages-build` both fail on a type
   error. Task 2 relies on `game-web:typecheck` continuing to exist unchanged.
 
-- [ ] **Step 1: Prove the gate is missing**
+- [x] **Step 1: Prove the gate is missing**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -71,7 +81,7 @@ nubx nx run game-web:build --skip-nx-cache; echo "build exit=$?"
 
 Expected: `build exit=0` — a type error ships.
 
-- [ ] **Step 2: Add the gate**
+- [x] **Step 2: Add the gate**
 
 In `apps/game-web/project.json`, change the `build` target's command to run
 the typecheck first:
@@ -86,7 +96,7 @@ In `packages/tooling/project.json`, the same for `pages-build`:
 "pages-build": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p apps/game-web/tsconfig.json && PUBLIC_BASE_PATH=\"${PUBLIC_BASE_PATH:-${GITHUB_REPOSITORY#*/}}\" vite build --config apps/game-web/vite.config.ts" } }
 ```
 
-- [ ] **Step 3: Verify the gate now bites**
+- [x] **Step 3: Verify the gate now bites**
 
 ```bash
 nubx nx run game-web:build --skip-nx-cache; echo "build exit=$?"
@@ -95,7 +105,7 @@ nubx nx run tooling:pages-build --skip-nx-cache; echo "pages exit=$?"
 
 Expected: both non-zero, with `type-probe.ts` named in the tsc output.
 
-- [ ] **Step 4: Remove the probe and confirm green**
+- [x] **Step 4: Remove the probe and confirm green**
 
 ```bash
 rm apps/game-web/type-probe.ts
@@ -106,7 +116,7 @@ nub run build; echo "nub build exit=$?"
 
 Expected: both 0, and the build log still reports `precache 13 entries`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/game-web/project.json packages/tooling/project.json
@@ -139,7 +149,7 @@ type error in any test file is currently invisible everywhere.
 - Consumes: Task 1's `build` target (now typechecking) — unchanged here.
 - Produces: CI covers every project's typecheck, not just `game-web`'s.
 
-- [ ] **Step 1: Prove the hole**
+- [x] **Step 1: Prove the hole**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -153,7 +163,7 @@ nubx nx run-many -t typecheck,test,build --projects=game-web --skip-nx-cache; ec
 
 Expected: exit 0 — CI would go green on a type error in a test.
 
-- [ ] **Step 2: Confirm the root typecheck does catch it**
+- [x] **Step 2: Confirm the root typecheck does catch it**
 
 ```bash
 nub run typecheck; echo "root typecheck exit=$?"
@@ -162,7 +172,7 @@ nub run typecheck; echo "root typecheck exit=$?"
 Expected: non-zero, naming `type-probe.test.ts`. This is why the fix is to
 widen CI's scope rather than change any tsconfig.
 
-- [ ] **Step 3: Widen the CI step**
+- [x] **Step 3: Widen the CI step**
 
 In `.github/workflows/ci.yml`, replace the single run-many line with:
 
@@ -174,7 +184,7 @@ In `.github/workflows/ci.yml`, replace the single run-many line with:
       - run: nubx nx run-many -t typecheck,test,build
 ```
 
-- [ ] **Step 4: Verify the widened command catches the probe**
+- [x] **Step 4: Verify the widened command catches the probe**
 
 ```bash
 nubx nx run-many -t typecheck,test,build --skip-nx-cache; echo "exit=$?"
@@ -182,7 +192,7 @@ nubx nx run-many -t typecheck,test,build --skip-nx-cache; echo "exit=$?"
 
 Expected: non-zero, naming `type-probe.test.ts`.
 
-- [ ] **Step 5: Remove the probe and confirm green**
+- [x] **Step 5: Remove the probe and confirm green**
 
 ```bash
 rm packages/engine/src/__tests__/type-probe.test.ts
@@ -192,7 +202,7 @@ nub run typecheck; echo "typecheck exit=$?"
 
 Expected: both 0; run-many reports 7 projects.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -231,7 +241,7 @@ is no timeout at any call site.
   `"the relay accepted the connection but never answered"` after 10 seconds.
   No signature change — `join` stays `(address, identity) => Effect<void, TransportError>`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `packages/net/src/__tests__/websocket.test.ts`, inside the
 `describe("WebSocket transport against a live relay", ...)` block:
@@ -263,7 +273,7 @@ Add to `packages/net/src/__tests__/websocket.test.ts`, inside the
   }, 30_000)
 ```
 
-- [ ] **Step 2: Run it and watch it hang out**
+- [x] **Step 2: Run it and watch it hang out**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -272,7 +282,7 @@ nubx vitest run packages/net -t "never answers"
 
 Expected: FAIL on the 30s test timeout — the effect never settles.
 
-- [ ] **Step 3: Bound the handshake**
+- [x] **Step 3: Bound the handshake**
 
 In `packages/net/src/websocket.ts`, immediately after the `fail` helper is
 defined (just before `ws.onopen = ...`), add the timer, and clear it in both
@@ -315,7 +325,7 @@ and clear it in both settle helpers:
       }
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 ```bash
 nubx vitest run packages/net -t "never answers"
@@ -323,7 +333,7 @@ nubx vitest run packages/net -t "never answers"
 
 Expected: PASS in a little over 10 seconds.
 
-- [ ] **Step 5: Run the whole suite, to prove the timer never fires on a good relay**
+- [x] **Step 5: Run the whole suite, to prove the timer never fires on a good relay**
 
 ```bash
 nub run test
@@ -333,7 +343,7 @@ nub run lint
 
 Expected: all 0, test count 103 (102 + this one).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/net/src/websocket.ts packages/net/src/__tests__/websocket.test.ts
@@ -379,7 +389,7 @@ The lifecycle moves into a module of its own so the test drives the real code.
 A test that models the bug locally would pass before and after the fix and
 guard nothing.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/app-shell/src/app/__tests__/client-slot.test.ts`:
 
@@ -427,7 +437,7 @@ describe("makeClientSlot", () => {
 })
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -436,7 +446,7 @@ nubx vitest run packages/app-shell -t "makeClientSlot"
 
 Expected: FAIL — `Cannot find module '../client-slot'`.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 Create `packages/app-shell/src/app/client-slot.ts`:
 
@@ -476,7 +486,7 @@ export const makeClientSlot = <T extends { dispose: () => void }>(): ClientSlot<
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 nubx vitest run packages/app-shell -t "makeClientSlot"
@@ -484,7 +494,7 @@ nubx vitest run packages/app-shell -t "makeClientSlot"
 
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Use the slot in the provider**
+- [x] **Step 5: Use the slot in the provider**
 
 In `packages/app-shell/src/app/session.tsx`, import it and hold one in a ref:
 
@@ -531,7 +541,7 @@ and change the two handlers to go through it:
 `ClientSlot` itself (the ref's value), and `slot.current.current` would be the
 held client — the provider never needs the latter.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```bash
 nub run typecheck
@@ -541,7 +551,7 @@ nub run lint
 
 Expected: all 0. Test count rises by 3.
 
-- [ ] **Step 7: Drive the real join path**
+- [x] **Step 7: Drive the real join path**
 
 ```bash
 nub run build && nub run verify:ui
@@ -550,7 +560,7 @@ nub run build && nub run verify:ui
 Expected: `No console errors, no page errors, no horizontal overflow.`
 CLAUDE.md requires this after any UI change, and the Effect audit skipped it.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/app-shell/src/app/client-slot.ts packages/app-shell/src/app/__tests__/client-slot.test.ts packages/app-shell/src/app/session.tsx
@@ -595,7 +605,7 @@ after the store.
 - Consumes: `Shared.running: AtomicBool`, already present at `host.rs:26`.
 - Produces: no API change. `serve_client` gains an early return.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `crates/lan-sync/tests/session.rs`:
 
@@ -642,7 +652,7 @@ fn host_shutdown_closes_a_socket_accepted_during_the_drain() {
 }
 ```
 
-- [ ] **Step 2: Run it in a loop — a single pass may pass by luck**
+- [x] **Step 2: Run it in a loop — a single pass may pass by luck**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -655,7 +665,7 @@ echo "failures: $fails / 40"
 
 Expected: a non-zero failure count. Record it — Step 5 compares against it.
 
-- [ ] **Step 3: Have `serve_client` observe `running`**
+- [x] **Step 3: Have `serve_client` observe `running`**
 
 In `crates/lan-sync/src/host.rs`, at the very top of `serve_client` — before
 the `PendingClient` guard is built:
@@ -677,7 +687,7 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, peer_addr: Option<Socket
     let mut pending = PendingClient {
 ```
 
-- [ ] **Step 4: Run the loop again**
+- [x] **Step 4: Run the loop again**
 
 ```bash
 fails=0; for i in $(seq 1 40); do "$BIN" host_shutdown_closes_a_socket_accepted_during_the_drain --exact >/dev/null 2>&1 || fails=$((fails+1)); done
@@ -687,7 +697,7 @@ echo "failures after fix: $fails / 40"
 Rebuild first (`cargo test -p lan-sync --test session --no-run`) so `$BIN` is
 the fixed binary. Expected: 0.
 
-- [ ] **Step 5: Confirm the original test is still honest**
+- [x] **Step 5: Confirm the original test is still honest**
 
 ```bash
 cargo test -p lan-sync
@@ -700,7 +710,7 @@ Expected: all green, no `FAIL` lines. Do **not** touch the
 `pump_until(&peer, &mut sink, 0)` no-ops at `session.rs:32` and `:109` — the
 fix belongs in `host.rs` and the test keeps its race.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/lan-sync/src/host.rs crates/lan-sync/tests/session.rs
@@ -739,7 +749,7 @@ costs, and the boundary lint added on top of it has none either.
 - Consumes: nothing.
 - Produces: ADR 0018, referenced by Task 7's doc refresh.
 
-- [ ] **Step 1: Check the next free number and the house format**
+- [x] **Step 1: Check the next free number and the house format**
 
 ```bash
 ls docs/adr/ | sort | tail -5
@@ -749,7 +759,7 @@ head -30 docs/adr/0017-*.md
 Expected: 0017 is the highest, so 0018 is free. Match 0017's section headings
 exactly — Status / Context / Decision / Consequences, with costs stated plainly.
 
-- [ ] **Step 2: Write ADR 0018**
+- [x] **Step 2: Write ADR 0018**
 
 Create `docs/adr/0018-nx-monorepo-adopted.md`. It must record, as costs and
 not as achievements:
@@ -762,7 +772,7 @@ not as achievements:
 - The boundary lint (`eslint.config.js`) is what makes the `layer:*` tags real, with one declared exception, `allow: ["@mutation/relay"]`, because Nx forbids importing an application and `lan-relay.mjs` is both the runnable relay and the sequencer the tests run against.
 - **What it bought:** per-project test/typecheck/lint targets, and a graph that mechanically rejects the cycles that were previously invisible.
 
-- [ ] **Step 3: Supersede 0014**
+- [x] **Step 3: Supersede 0014**
 
 Change only the Status line of `docs/adr/0014-nx-monorepo-not-adopted-yet.md`:
 
@@ -776,7 +786,7 @@ split was deferred at the time; it was carried out later under that ADR.
 Leave the rest of 0014 intact — its reasoning is the record of why the delay
 was right when it was written.
 
-- [ ] **Step 4: Verify the links resolve**
+- [x] **Step 4: Verify the links resolve**
 
 ```bash
 grep -n "0018" docs/adr/0014-nx-monorepo-not-adopted-yet.md
@@ -786,7 +796,7 @@ grep -c "Cost" docs/adr/0018-nx-monorepo-adopted.md
 
 Expected: the reference, the file, and at least five costs.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/adr/
@@ -826,7 +836,7 @@ every checkbox unticked.
 - Consumes: ADR 0018 from Task 6, cited by the CLAUDE.md architecture section.
 - Produces: nothing later tasks depend on.
 
-- [ ] **Step 1: Find every stale path**
+- [x] **Step 1: Find every stale path**
 
 ```bash
 grep -rn "src/engine\|src/net/\|src/render\|src/app/\|src/store\|src/ui\|src/__tests__\|scripts/lan-relay" \
@@ -847,7 +857,7 @@ scripts/lan-relay.mjs -> apps/relay/lan-relay.mjs
 scripts/drive-app.mjs -> UNCHANGED        crates/lan-sync/** -> UNCHANGED
 ```
 
-- [ ] **Step 2: Rewrite the paths, and the one command that fails**
+- [x] **Step 2: Rewrite the paths, and the one command that fails**
 
 Apply the map. `CLAUDE.md:68` documents a command that currently exits 1:
 
@@ -859,7 +869,7 @@ Also fix the heading text: `### Engine (src/engine/)` →
 `### Engine (packages/engine/src/)`, and the same for Transport and Renderer.
 Add a pointer to ADR 0018 in the Architecture preamble.
 
-- [ ] **Step 3: Fix the tooling.md command table**
+- [x] **Step 3: Fix the tooling.md command table**
 
 `docs/tooling.md:295-302` claims `mise run typecheck` is
 `nubx nx run game-web:typecheck`. `mise.toml:45` actually runs
@@ -867,7 +877,7 @@ Add a pointer to ADR 0018 in the Architecture preamble.
 sets. Make the table match `mise.toml`, and note that the mise `typecheck` task
 is the whole-tree one.
 
-- [ ] **Step 4: Verify every documented command actually runs**
+- [x] **Step 4: Verify every documented command actually runs**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -879,7 +889,7 @@ grep -rn "src/engine\|scripts/lan-relay" CLAUDE.md .github/copilot-instructions.
 
 Expected: three zeros and the "no stale paths" line.
 
-- [ ] **Step 5: Tick the plan's Tasks 4–7**
+- [x] **Step 5: Tick the plan's Tasks 4–7**
 
 In `docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`, change
 every `- [ ]` to `- [x]` under Tasks 4, 5, 6 and 7, and add a
@@ -890,7 +900,7 @@ its own verification step was never run; for Task 5: the `nubx`-on-a-bare-runner
 CI break; for Tasks 6 and 7: the defects each audit left unflagged, naming this
 plan as where they were fixed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add CLAUDE.md .github/copilot-instructions.md docs/tooling.md docs/superpowers/plans/
@@ -927,7 +937,7 @@ The leftovers, each small and each verified rather than assumed.
 - Consumes: every earlier task — this one records them.
 - Produces: the handoff a fresh session reads first.
 
-- [ ] **Step 1: Collapse the duplicate relay targets**
+- [x] **Step 1: Collapse the duplicate relay targets**
 
 `apps/relay/project.json` defines `serve` and `relay` as byte-identical
 commands. `package.json:19` calls `nx run relay:serve`. Keep `serve`, drop
@@ -937,7 +947,7 @@ commands. `package.json:19` calls `nx run relay:serve`. Keep `serve`, drop
 grep -rn "relay:relay" . --include=*.json --include=*.yml --include=*.md --include=*.toml | grep -v node_modules || echo "nothing referenced relay:relay"
 ```
 
-- [ ] **Step 2: Close the tsconfig alias asymmetry**
+- [x] **Step 2: Close the tsconfig alias asymmetry**
 
 `tsconfig.json` declares only the wildcard `@mutation/engine/*`, while Vite and
 Vitest key on the bare `@mutation/engine` — so `import x from "@mutation/engine"`
@@ -966,7 +976,7 @@ inert — record that in the handoff and move on rather than inventing entry
 points. Keep `@mutation/relay` as it is: deliberately a bare specifier for one
 file.
 
-- [ ] **Step 3: Define each command once**
+- [x] **Step 3: Define each command once**
 
 `package.json` already delegates `icons` to `tooling:icons` and `relay` to
 `relay:serve`, but `verify:ui` and `verify:ui:pages` still spell the raw
@@ -982,12 +992,12 @@ keeping the documented `nub run verify:ui` interface intact:
 
 Leave `preview` alone: it has no Nx target and adding one buys nothing.
 
-- [ ] **Step 4: Tidy .gitignore**
+- [x] **Step 4: Tidy .gitignore**
 
 `.gitignore:43-45` gained three blank lines and `:48` lost its trailing
 newline. Collapse to one blank line and restore the newline.
 
-- [ ] **Step 5: Verify everything still runs**
+- [x] **Step 5: Verify everything still runs**
 
 ```bash
 export PATH="$HOME/.local/share/mise/shims:$PATH"
@@ -1003,7 +1013,7 @@ nub run relay & sleep 2; kill %1
 Expected: every one 0. The `verify:ui:pages` base must match the bundle's — a
 root-base `dist` served at `/snake-ladders` fails for that reason alone.
 
-- [ ] **Step 6: Rewrite handoff thread 3 and the resume pointer**
+- [x] **Step 6: Rewrite handoff thread 3 and the resume pointer**
 
 Move every item this plan fixed out of "still open", leaving only what genuinely
 remains. Update the "Resuming From This Checkpoint" section: with threads 2 and
@@ -1011,7 +1021,7 @@ remains. Update the "Resuming From This Checkpoint" section: with threads 2 and
 descriptor and QR transport phase), and open thread 1 — a relay the deployed PWA
 can reach over `wss://` — is its blocking prerequisite.
 
-- [ ] **Step 7: Commit and push**
+- [x] **Step 7: Commit and push**
 
 ```bash
 git add -A

@@ -1,6 +1,18 @@
 # Share, join and the start menu — design
 
-**Status:** approved in conversation, not implemented. No code exists yet.
+**Status:** **partly implemented as of 2026-09-16.** The host-served join
+(`03e1cd1`) built §"The host knows its own address" and the QR — but as a
+singular `HostedRoom.address` derived from a UDP route probe, **not** the
+`addresses: ReadonlyArray<string>` this spec specifies. That divergence is
+deliberate to record rather than hide: enumeration is exactly right where
+binding `0.0.0.0` makes every non-loopback address genuinely reachable, and a
+single probed address picks one interface, so a host on Wi-Fi plus VPN may be
+reachable on the other one.
+
+§"The link, and what happens on arrival" is **not** built: the QR encodes a
+bare `http://address:port/`, which lands on the home screen with nothing
+pre-filled. That is an approved quick win — see `docs/handoff.md`. The start
+menu and capability-model sections are unbuilt.
 **Date:** 2026-09-13
 
 **Paths remapped at 1d36bde.** This spec was written against the flat `src/`
