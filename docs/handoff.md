@@ -1126,18 +1126,53 @@ is left, in order:
    "A boardgame, not a number game", Accepted. See the brainstorm table above
    for what writing it turned up that the brainstorm had not. Docs only; no
    code changed, so no gate moved.
-2. **Write the settings spec**, which the ADR now unblocks. **This is the task
-   to start on.** ADR 0020 decides several of its open questions by
-   construction rather than by taste, so read it first and do not re-argue
-   them: flick-to-throw is out under rule 4 (a gesture whose apparent physics
-   appears to determine an outcome lies about ADR 0001); an always-tappable
-   dice tray is in; animation speed is a legitimate setting because ADR 0007
-   already guarantees a skipped animation cannot change a result — but it
-   **needs a floor**, and the floor is the part the spec has to defend, since
-   a fast enough animation is a teleport and the causal beats (rolled, moved,
-   bitten) must stay separable at every speed. Camera pan is *not* in this
-   spec; ADR 0020 leaves it where the brainstorm put it, in
-   `renderer-legibility`, because `fitCamera` owns the target.
+2. ~~**Write the settings spec**~~ — **done 2026-09-16**, as
+   `docs/superpowers/specs/2026-09-16-settings-and-input-design.md`. It became
+   **spec A of two**: the owner asked mid-brainstorm to revisit every menu and
+   HUD and to consider new assets, which is a second subsystem, so it was
+   decomposed rather than absorbed. **Spec B — the chrome and layout pass — is
+   the task to start on**, and it needs a screenshot survey of the current
+   screens before anything else. It must absorb `renderer-legibility` §Chrome
+   and `share-and-start-menu` §"The start menu" rather than compete with them,
+   and it inherits the asset question: the game has **no assets at all** today
+   — no `public/`, no icons, no fonts, 784 lines of CSS in one stylesheet with
+   a single media query, and every glyph an emoji in a text node.
+
+   Five things the settings brainstorm established that spec B or its plan
+   will need:
+
+   - **The layer rule decides the architecture, not taste.** `layer:ui` may
+     depend only on `engine` and `render`, so `BoardCanvas`, `EventLog` and
+     `HUD` cannot import a settings store. Settings live in `app-shell` and
+     every lower layer takes its slice as an explicit parameter. The dangling
+     `quality` prop on `BoardCanvas` was that pattern, half-built.
+   - **Settings is an overlay, not a route.** A `/settings` route replaces the
+     match screen, unmounting `BoardCanvas` and discarding the clip queue of a
+     round mid-replay.
+   - **There is no tappable dice tray.** `Scene.pick` raycasts the board plane
+     only; the dice are WebGL objects nothing picks. The tray has to be built,
+     and as a DOM control — `RollButton` is currently the only
+     keyboard-reachable path to `Commit`, so hiding it behind a raycast would
+     be an accessibility regression.
+   - **iOS haptics are feasible but unreachable.** WebKit has never shipped the
+     Vibration API, so no web path reaches them; a Tauri v2 plugin would, but
+     only in the installed iOS app, which ADR 0011 keeps manual and which is
+     not the path iOS actually takes here (guest in Safari). Hence a capability
+     probe rather than a platform check — which also covers `wakeLock`, absent
+     on exactly the guest phones that scanned in, because the host-served join
+     is plain HTTP and `wakeLock` is `[SecureContext]`.
+   - **ADR 0020 rule 1 already fails in eight places.** `Scene.play` clips six
+     of the fifteen `TimelineEvent` variants. `LinkCollapsed`, `Revealed`,
+     `MineDefused`, `CardPlayed`, `VenomGained`, `BoardBreathed`, `Stunned` and
+     `Finished` have no board depiction at all.
+
+   The floor ADR 0020 demanded is settled and derived rather than chosen:
+   speed scales each clip's duration and every clip clamps to
+   `max(150ms, duration / speed)`. 150ms because `step` already clamps `delta`
+   to 64ms, so a 150ms clip renders at least three frames on a phone dropping
+   them. Presets are 1× / 1.5× / 2.5×; the clamp, not the multiplier, is what
+   keeps a beat visible, which is why `quick` can be 2.5×.
+
 3. **Fix `verify-ui` so it builds first** — see the trap below. It is a
    deliberate non-fix in this pass and it is small, but it is an Nx graph
    edit, and this repo has already been bitten once by an Nx attribution
