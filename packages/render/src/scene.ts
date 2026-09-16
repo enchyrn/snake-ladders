@@ -281,13 +281,16 @@ export class BoardScene {
    * State sync
    * ---------------------------------------------------------------- */
 
-  sync(state: MatchState): void {
+  /** `snapTokens: false` leaves token positions alone: the caller is about to
+   *  `play` a round, and the state it is handing over is that round's outcome
+   *  rather than where the tokens should stand while it plays. */
+  sync(state: MatchState, options: { readonly snapTokens?: boolean } = {}): void {
     if (state.board.size !== this.size) {
       this.size = state.board.size
     }
     this.boardTexture.update(state.board)
     this.syncLinks(state.board)
-    this.syncTokens(state.players)
+    this.syncTokens(state.players, options.snapTokens ?? true)
   }
 
   /** Rebuild snakes and ladders, but only when the layout actually moved —
@@ -326,7 +329,7 @@ export class BoardScene {
     }
   }
 
-  private syncTokens(players: ReadonlyArray<Player>): void {
+  private syncTokens(players: ReadonlyArray<Player>, snap: boolean): void {
     const seen = new Set<string>()
     for (const player of players) {
       seen.add(player.id)
@@ -347,8 +350,10 @@ export class BoardScene {
         this.tokenGroup.add(token)
         token.position.copy(this.tileOf(player.position))
       }
-      // Only snap when nothing is animating; mid-replay the clips own the token.
-      if (this.clips.length === 0) token.position.copy(this.tileOf(player.position))
+      // Only snap when nothing is animating and no round is waiting to play:
+      // between the two the clips own the token, and `clips` alone cannot see
+      // the second case — it is empty right up until `play` fills it.
+      if (snap && this.clips.length === 0) token.position.copy(this.tileOf(player.position))
     }
 
     for (const [id, token] of this.tokens) {
@@ -358,11 +363,11 @@ export class BoardScene {
       ;(token.material as THREE.Material).dispose()
       this.tokens.delete(id)
     }
-    this.spreadOverlaps(players)
+    this.spreadOverlaps(players, snap)
   }
 
   /** Nudge co-located tokens apart so a stack is still countable. */
-  private spreadOverlaps(players: ReadonlyArray<Player>): void {
+  private spreadOverlaps(players: ReadonlyArray<Player>, snap: boolean): void {
     const byTile = new Map<number, Player[]>()
     for (const player of players) {
       const list = byTile.get(player.position) ?? []
@@ -373,7 +378,7 @@ export class BoardScene {
       if (group.length < 2) continue
       group.forEach((player, i) => {
         const token = this.tokens.get(player.id)
-        if (!token || this.clips.length > 0) return
+        if (!token || !snap || this.clips.length > 0) return
         const angle = (i / group.length) * Math.PI * 2
         token.position.x += Math.cos(angle) * 0.21
         token.position.z += Math.sin(angle) * 0.21

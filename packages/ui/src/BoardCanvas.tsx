@@ -7,6 +7,8 @@ import {
 } from "react"
 import { BoardScene } from "@mutation/render/scene"
 import type { MatchState } from "@mutation/engine/types"
+import type { TimelineEvent } from "@mutation/engine/events"
+import { showRound } from "./round-playback"
 import { MineLegend } from "./HUD"
 
 interface Props {
@@ -45,7 +47,7 @@ interface Press {
 export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<BoardScene | null>(null)
-  const playedRef = useRef<unknown>(null)
+  const playedRef = useRef<ReadonlyArray<TimelineEvent> | null>(null)
   const settledRef = useRef(onSettled)
   settledRef.current = onSettled
   const pressRef = useRef<Press | null>(null)
@@ -75,16 +77,9 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
   useEffect(() => {
     const scene = sceneRef.current
     if (!scene) return
-    scene.sync(state)
-
-    // Replay a round exactly once, however many times React re-renders it.
-    if (state.timeline.length > 0 && playedRef.current !== state.timeline) {
-      playedRef.current = state.timeline
-      scene.play(state.timeline, () => {
-        scene.sync(state)
-        settledRef.current?.()
-      })
-    }
+    // Replays a round exactly once however many times React re-renders it,
+    // and holds the tokens still while one is pending — see round-playback.ts.
+    playedRef.current = showRound(scene, state, playedRef.current, () => settledRef.current?.())
   }, [state])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
