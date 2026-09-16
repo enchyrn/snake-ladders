@@ -255,3 +255,23 @@ Work in progress is driven by the Superpowers skills vendored in
    recording anything the plan did not anticipate.
 
 Designed but unbuilt work lives in `docs/superpowers/specs/`.
+
+## Checkpointing
+
+The owner works in long sessions and clears context deliberately. Treat
+`docs/handoff.md`'s "Resuming From This Checkpoint" section as the thing a cold
+session reads first, and keep it true: it names the plan, the task to start on,
+and the traps waiting in it.
+
+**Checkpoint at every task boundary, not at the end.** A plan's checkboxes are
+committed and a task ends in a commit, so a context clear mid-plan should cost
+nothing. What makes that work is writing state to disk rather than carrying it
+in the conversation — a finding that exists only in chat is lost on the next
+clear, which is how the 58 unticked checkboxes happened once already.
+
+The owner's stated preference is a **soft cap of roughly 200k context**, then a
+soft stop: finish the task in hand, checkpoint, and say so, rather than starting
+something new. Claude cannot read its own context size directly, so treat this
+as a standing instruction to checkpoint early and often rather than a threshold
+anything can measure — at each task boundary, ask whether the session has run
+long, and if in doubt, checkpoint and offer the stop.

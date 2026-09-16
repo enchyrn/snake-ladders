@@ -862,19 +862,66 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-The approved design is committed as `f773bf5` in
-`docs/superpowers/specs/2026-09-13-wholesale-nx-nub-and-pwa-design.md`.
-The implementation plan is
-`docs/superpowers/plans/2026-09-13-wholesale-nx-nub-pwa-plan.md`.
-Tasks 1, 3, 4, 5, 6 and 7 of that plan are done, and their checkboxes are
-ticked with completion notes. Task 2 is hardware-blocked and Tasks 8 through 10
-have not started. The Task 4/5 split's defects were fixed by a separate
-remediation plan, which is itself complete, and that thread is retired. The
-one Rust gap that remediation plan left open on purpose, and the three other
-codeable follow-ups it recorded, were closed in turn by a third plan
-(`docs/superpowers/plans/2026-09-15-outstanding-followups-plan.md`), also
-complete. The only thing left on the follow-ups list is open thread 1, which
-is a decision rather than code.
+**Checkpoint written 2026-09-16.** Everything below is committed and pushed;
+nothing lives only in a conversation.
+
+### Where the work stands
+
+PR #2 is **merged** into `main` as `4a1eefc` — the Nx/nub/PWA migration,
+multi-seat pass-and-play, and the native host that also speaks WebSocket. The
+branch `claude/snake-ladders-cross-device-3uu177` was restarted from `main`
+afterwards and now carries two commits of design work on top:
+
+| Commit | What |
+|---|---|
+| `1dbfe06` | The spec: `docs/superpowers/specs/2026-09-16-host-served-join-design.md`, plus an addendum to ADR 0013 |
+| `f9ae0e4` | The plan: `docs/superpowers/plans/2026-09-16-host-served-join-plan.md` |
+
+**Start on Task 1 of that plan.** Nothing in it has been implemented — the
+whole plan is unticked. Task 1 is self-contained (pure functions, nine tests,
+no socket) and is the right place to begin cold.
+
+### What the design decided, so it is not re-litigated
+
+Open thread 1 asked for a `wss://` relay. **That framing was wrong.** The
+browser's mixed-content rule is about the *page's origin*, not the socket, so
+the fix is to stop serving the guest an HTTPS page: the host serves it over
+plain HTTP on the LAN and the two share one origin. No certificate, no public
+server, and the promise that the game never touches the internet survives.
+
+A probe on 2026-09-16 also corrected ADR 0013: WebRTC was never blocked by TLS.
+Mixed content does not govern `RTCPeerConnection`, and a data channel opens
+fine from an `https://` origin. Its only real blocker is mDNS obfuscation —
+now observed rather than suspected, every candidate returning as `<uuid>.local`.
+WebRTC is therefore **phase 2, gated** on two physical devices resolving each
+other's mDNS. Do not write code for it before that is observed.
+
+Both of the spec's open questions are already resolved in the plan:
+`qrcode-generator@2.0.4` (no dependencies, ships its own types) over `qrcode`
+(pulls `pngjs`, `yargs`, `dijkstrajs`), and the port stays ephemeral because a
+QR makes it invisible.
+
+### Two traps waiting in that plan
+
+- **Task 4 cannot be compiled here.** `src-tauri` needs webkit2gtk, and Tauri
+  is not vendored in this container, so `AssetResolver`'s real shape must be
+  read from the installed crate rather than assumed. CI's Android job is the
+  only thing that confirms that task.
+- **A locally clean `cargo clippy` proves little.** CI resolves whatever
+  `stable` is that day; this branch already went red after passing locally
+  because the container's Rust was six months behind. Run `rustup update
+  stable` first. `mise` cannot resolve `rust@stable` here (403), but `rustup`
+  can.
+
+### State of the gates, as of this checkpoint
+
+`nub run test` 166 passed · `nub run typecheck` clean · `nub run lint` clean ·
+`cargo test -p lan-sync` 39 passed · `nub run verify:ui` clean. Working tree
+clean, branch pushed, no divergence from its remote.
+
+`verify:ui` **does** run in this container, contrary to what an earlier
+checkpoint claimed — the driver falls back to any Chromium under
+`PLAYWRIGHT_BROWSERS_PATH`. Run it; do not assume it is unavailable.
 
 ### The order to pick this up in
 
