@@ -1170,6 +1170,44 @@ Three traps, and the first is the one that matters:
   bitten by an Nx attribution change that looked like a one-liner (see
   `packages/tooling`'s `sourceRoot` below). It is worth doing, deliberately.
 
+  **Analysed 2026-09-16, not yet implemented or approved.** The caution above
+  is right, and there are two concrete reasons rather than a general unease.
+  Anyone doing this should read both before editing, because the obvious fix
+  is wrong in a way that looks right:
+
+  1. **The pages build has no base path outside CI.** `tooling:pages-build`
+     resolves it as `${PUBLIC_BASE_PATH:-${GITHUB_REPOSITORY#*/}}`. In Actions
+     `GITHUB_REPOSITORY` supplies `snake-ladders`; on a laptop both are unset,
+     so it builds with an **empty** base while `drive-app.mjs` serves it under
+     `--base-path /snake-ladders`. A bare `dependsOn` therefore turns the pages
+     gate red locally and green in CI, which reads as a real failure. The pages
+     dependency has to pin `PUBLIC_BASE_PATH=/snake-ladders`.
+
+  2. **Neither build declares `outputs`, and both write to the same `dist/`.**
+     Nx caches the *target* but, with no `outputs`, restores no files — so a
+     cache hit skips `vite build` and leaves whatever is already in `dist/`.
+     Because `game-web:build` and `tooling:pages-build` share one output
+     directory, that can be the *other* variant's bundle. So adding `dependsOn`
+     **alone** produces a gate that looks fixed and can still drive the wrong
+     bundle: the same defect, one layer down. Both builds need
+     `outputs: ["{workspaceRoot}/dist"]` for a cache hit to restore correctly.
+
+  This is the "two projects whose Nx inputs are fictional" cost that ADR 0018
+  already records, surfacing in the place it does the most damage.
+
+  The shape of the fix, then: `verify-ui` dependsOn `game-web:build`;
+  `verify-ui-pages` dependsOn `tooling:pages-build` with the base path pinned;
+  `outputs` declared on both builds; CLAUDE.md's command block updated, since
+  it documents the current behaviour as though it were permanent. Verify it
+  behaviourally rather than with a unit test — change a visible string, run
+  `nub run verify:ui` **without** building, and confirm the screenshot shows
+  the change; then run it twice to confirm the cached second run restores
+  `dist/` rather than skipping it.
+
+  Worth knowing either way: **CI never runs this gate.** `ci.yml` runs
+  `typecheck,test,build` only, which is why nothing but a human catches a
+  stale bundle today.
+
 
 - **`vitest.config.ts` included only `*.test.ts`.** A `.tsx` test file was
   collected by nothing and would have "passed" by never running. Now
