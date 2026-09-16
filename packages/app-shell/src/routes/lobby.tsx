@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import { roomCode } from "../app/hooks"
+import { joinLink } from "../app/join-link"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
 import { QrCode } from "@mutation/ui/QrCode"
@@ -82,7 +83,7 @@ export const LobbyScreen = () => {
           <div className="join-invite">
             {room.address ? (
               <>
-                <QrCode value={`http://${room.address}:${room.port}/`} />
+                <QrCode value={joinLink(room.address, room.port, roomCode(match.config.seed))} />
                 <p className="hint">
                   Scan this to join from a phone or laptop — no install needed.
                   Or open <code>{room.address}:{room.port}</code> in a browser on
