@@ -765,3 +765,20 @@ button.start {
     min-width: 4.5rem;
   }
 }
+
+.join-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* White quiet zone around the code: a scanner needs the border, and the dark
+   page background would otherwise run right up to the modules. */
+.qr {
+  padding: 0.5rem;
+  background: #fff;
+  border-radius: 0.5rem;
+  max-width: 60vw;
+  height: auto;
+}

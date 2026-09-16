@@ -55,6 +55,28 @@ struct HostedRoom {
     room: String,
     port: u16,
     seed: u32,
+    /// The LAN address a browser can load the page from, when there is one.
+    address: Option<String>,
+}
+
+/// Serves the app's own embedded bundle to browsers on the LAN.
+///
+/// This is the only place that knows both Tauri and `lan-sync`; the crate
+/// itself stays Tauri-free so it keeps building and testing anywhere.
+struct EmbeddedAssets {
+    app: AppHandle,
+}
+
+impl lan_sync::assets::AssetSource for EmbeddedAssets {
+    fn get(&self, path: &str) -> Option<lan_sync::assets::Asset> {
+        // `request_path` has already refused anything with a `..` segment, so
+        // the resolver is never asked to look outside the bundle.
+        let asset = self.app.asset_resolver().get(format!("/{path}"))?;
+        Some(lan_sync::assets::Asset {
+            bytes: asset.bytes,
+            content_type: asset.mime_type,
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -157,11 +179,15 @@ fn net_host(
     let net = Arc::clone(net.inner());
     teardown(&net, &app);
 
-    let session = Arc::new(Session::host(seed, name, capacity, true).map_err(err)?);
+    let assets: Arc<dyn lan_sync::assets::AssetSource> =
+        Arc::new(EmbeddedAssets { app: app.clone() });
+    let session =
+        Arc::new(Session::host_with_assets(seed, name, capacity, true, Some(assets)).map_err(err)?);
     let hosted = HostedRoom {
         room: session.room().unwrap_or_default().to_string(),
         port: session.port().unwrap_or(0),
         seed,
+        address: lan_sync::local_address().map(|ip| ip.to_string()),
     };
 
     *net.session.lock().map_err(err)? = Some(Arc::clone(&session));

@@ -421,3 +421,111 @@ fn a_browser_and_a_native_peer_share_one_ordered_log() {
     assert_eq!(commits[0].0, 0);
     assert_eq!(commits[0].1, json!({"_tag": "Commit", "playerId": "web"}));
 }
+
+// --- serving the page ------------------------------------------------------
+
+struct FakeAssets;
+
+impl lan_sync::assets::AssetSource for FakeAssets {
+    fn get(&self, path: &str) -> Option<lan_sync::assets::Asset> {
+        match path {
+            "index.html" => Some(lan_sync::assets::Asset {
+                bytes: b"<!doctype html><title>game</title>".to_vec(),
+                content_type: "text/html".into(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// Send one raw request and read everything the host writes back.
+fn raw_request(port: u16, request: &str) -> String {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(local(port)).expect("connect");
+    stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+    stream.write_all(request.as_bytes()).expect("write");
+    let mut out = Vec::new();
+    let _ = stream.read_to_end(&mut out);
+    String::from_utf8_lossy(&out).to_string()
+}
+
+#[test]
+fn serves_the_index_at_the_root() {
+    let host = Host::bind_with_assets("PAGE", 0, 4, Some(std::sync::Arc::new(FakeAssets)))
+        .expect("host should bind");
+    let response = raw_request(host.port(), "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "got: {response}");
+    assert!(response.contains("<title>game</title>"), "got: {response}");
+}
+
+#[test]
+fn answers_404_for_an_asset_it_does_not_have() {
+    let host = Host::bind_with_assets("PAGE", 0, 4, Some(std::sync::Arc::new(FakeAssets)))
+        .expect("host should bind");
+    let response = raw_request(host.port(), "GET /nope.js HTTP/1.1\r\nHost: x\r\n\r\n");
+
+    assert!(response.starts_with("HTTP/1.1 404"), "got: {response}");
+}
+
+#[test]
+fn refuses_a_traversal_without_consulting_the_source() {
+    let host = Host::bind_with_assets("PAGE", 0, 4, Some(std::sync::Arc::new(FakeAssets)))
+        .expect("host should bind");
+    let response = raw_request(
+        host.port(),
+        "GET /../../etc/passwd HTTP/1.1\r\nHost: x\r\n\r\n",
+    );
+
+    assert!(response.starts_with("HTTP/1.1 404"), "got: {response}");
+    assert!(!response.contains("root:"), "got: {response}");
+}
+
+#[test]
+fn a_plain_get_is_still_400_when_there_are_no_assets() {
+    // The pre-ADR-0019 contract: a host with nothing to serve does not
+    // suddenly start answering 404s as if it were a web server.
+    let host = Host::bind("PAGE", 0, 4).expect("host should bind");
+    let response = raw_request(host.port(), "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+
+    assert!(response.starts_with("HTTP/1.1 400"), "got: {response}");
+}
+
+#[test]
+fn a_websocket_upgrade_still_works_alongside_assets() {
+    use std::io::{Read, Write};
+
+    let host = Host::bind_with_assets("PAGE", 0, 4, Some(std::sync::Arc::new(FakeAssets)))
+        .expect("host should bind");
+    let mut stream = std::net::TcpStream::connect(local(host.port())).expect("connect");
+    stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+    let request = format!(
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
+         Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+         Sec-WebSocket-Version: 13\r\n\r\n",
+        host.port()
+    );
+    stream.write_all(request.as_bytes()).expect("write");
+
+    let mut head = Vec::new();
+    let mut byte = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") {
+        stream.read_exact(&mut byte).expect("response head");
+        head.push(byte[0]);
+    }
+    let head = String::from_utf8(head).expect("utf-8");
+    assert!(head.starts_with("HTTP/1.1 101 "), "got: {head}");
+}
+
+#[test]
+fn an_asset_request_does_not_occupy_a_room_slot() {
+    let host = Host::bind_with_assets("PAGE", 0, 1, Some(std::sync::Arc::new(FakeAssets)))
+        .expect("host should bind");
+    // Capacity one: if fetching the page consumed the only seat, this join
+    // would be refused.
+    for _ in 0..3 {
+        let _ = raw_request(host.port(), "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+    }
+    let peer = join(&host, "alice");
+    wait_for_join(&peer);
+}

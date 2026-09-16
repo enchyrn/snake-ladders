@@ -32,20 +32,34 @@ Pick the row that matches what you have.
 | Android phones only | **Install the app** on each — native Wi-Fi, nothing else running |
 | An iPhone in the mix | **Run the relay** on a computer |
 | A computer and any phones | **Run the relay** — simplest, no installs |
-| An Android host and a browser | **Install the app** on the Android, and open the game over `http://` on the other device — no relay needed |
+| An Android host and a browser | **Install the app** on the Android, then **scan the QR** on its lobby — the page comes from the host, so nothing else is needed |
 
 ### A browser joining an installed host
 
-The installed app's host accepts browsers directly, so an Android phone can be
-the host for someone on a laptop with nothing else running. On the host, read
-the `address:port@CODE` line off the lobby screen; on the laptop, pick **Join a
-game** and type it in.
+The installed app's host serves the game itself, so an Android phone can be the
+host for someone on a laptop with nothing installed and nothing else running.
 
-One hard limit, and no setting changes it: **the page has to have been opened
-over `http://`.** A page served over HTTPS — which is what the deployed site is
-— is forbidden by the browser from opening an insecure connection to a device on
-your Wi-Fi, and it refuses before anything reaches the network. Use a dev server
-on the LAN (`nub run dev -- --host`), or the installed app. See ADR 0019.
+**Scan the QR on the host's lobby.** That is the whole flow: the code points at
+the host's own address, the browser loads the game from it, and the room is
+joined. If the camera is awkward, the same address is printed under the code —
+type it into a browser's address bar on the same Wi-Fi.
+
+The `address:port@CODE` line is still there and still works, for a device that
+already has the game open and would rather type than scan.
+
+The old limit — **the page has to have been opened over `http://`** — is
+unchanged and is now satisfied for you. A page served over HTTPS, which is what
+the deployed site is, is forbidden by the browser from opening an insecure
+connection to a device on your Wi-Fi, and refuses before anything reaches the
+network. Because the host serves the page itself over plain HTTP, the page and
+the room share one origin and the rule never bites. See ADR 0019.
+
+**One consequence worth knowing.** The guest's copy of the game came from the
+host. If the host leaves the match or closes the app, a guest who reloads the
+page has nothing to reload from — the tab goes dead, and it will look like a
+crash. It is inherent to serving the page off the host rather than a bug: nobody
+else is holding a copy. Finish the match before the host closes the app, or have
+the guest use the deployed site with the relay instead.
 
 ### Native Wi-Fi (installed app)
 
@@ -119,38 +133,36 @@ browser refuses to open the plain `ws://` connection the relay
 network, so it fails the same way whether or not a relay is running. Closing
 that needs a relay reachable over `wss://`; until then, serve the game over
 plain HTTP from a computer on the same network with `nub run dev -- --host`,
-where `ws://` is allowed. Pass-and-play works on the deployed site regardless:
-it never opens a socket.
+where `ws://` is allowed — or, if one device has the app installed, host on
+that and scan its QR, which puts every guest on a plain-HTTP origin without a
+computer or a relay at all. Pass-and-play works on the deployed site
+regardless: it never opens a socket.
 
-### A browser and an installed app cannot join each other
+### A browser joining an installed app: what still does not work
 
-This is a property of the architecture, not a bug or a missing flag, and no
-amount of `wss://` changes it.
+A browser **can** join a natively hosted room — the host answers a WebSocket
+upgrade on its own port (ADR 0019) and serves the page itself, which is the
+QR flow above. This section used to say the opposite; it was written before
+that and was wrong from ADR 0019 onwards.
 
-The two sequencers speak different wire protocols at the transport layer:
+What is still true is narrower, and it is about the *page*, not the socket:
 
-| | speaks | can a browser open it? |
-|---|---|---|
-| `crates/lan-sync` (native host) | newline-delimited JSON over a raw `TcpListener` | **no** — a browser has no raw TCP |
-| `apps/relay/lan-relay.mjs` | WebSocket | yes |
+| The guest's page was opened from | Can it join a native host? |
+|---|---|
+| The host's QR, or any `http://` address | **yes** |
+| `https://enchyrn.github.io/snake-ladders/` | **no** — an HTTPS page may not open a `ws://` socket |
 
-Point a browser at a natively hosted room and the host answers
-`{"t":"rejected","reason":"malformed handshake"}` — it reads the browser's
-`GET / HTTP/1.1 … Upgrade: websocket` request as a `Hello` frame, fails to
-parse it as JSON, and refuses. Verified directly against `Host::bind`, not
-inferred. The reverse fails too: the installed app joins through `net_join`,
-a Tauri command into the Rust TCP client, which has no WebSocket in it either
-(`crates/lan-sync` depends only on `serde` and `serde_json`).
+The deployed site is the one case that fails, and serving the page from the
+host is precisely what sidesteps it: the guest is then on a plain-HTTP origin,
+so the mixed-content rule never applies. A LAN host cannot present a
+certificate anyone trusts, so making the deployed page work instead would mean
+a relay reachable over `wss://` — a public machine, and the end of "the game
+never touches the internet".
 
-So a match is **either all-native or all-browser**:
-
-- every device on the installed app → native LAN, no relay, nothing to run;
-- every device in a browser → one relay on a computer, everyone joins that.
-
-Mixing them needs a bridge that does not exist yet: either the Rust host also
-answering a WebSocket upgrade, or the native app being able to join a relay as
-a WebSocket client. Both are real work and neither is what the `wss://`
-decision is about — that one only makes an HTTPS *page* able to reach a relay.
+The other direction is still genuinely missing: the installed app joins through
+`net_join`, a Tauri command into the Rust TCP client, which has no WebSocket
+client in it. **An installed app cannot join a browser's relay.** So a relay
+match is all-browser, while a native host now takes both.
 
 It updates by asking rather than reloading underneath you: a new version
 precaches in the background and the app offers it between matches, because

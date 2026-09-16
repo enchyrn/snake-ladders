@@ -16,5 +16,5 @@ export default defineConfig({
       "@mutation/tooling": fileURLToPath(new URL("./scripts", import.meta.url)),
     },
   },
-  test: { environment: "node", include: ["apps/**/*.test.ts", "packages/**/*.test.ts"] },
+  test: { environment: "node", include: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"] },
 })

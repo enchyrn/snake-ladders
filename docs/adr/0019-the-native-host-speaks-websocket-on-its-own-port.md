@@ -60,6 +60,28 @@ implementations.
   too, not just browsers. This is why the branch is a peek rather than a
   consuming read — a misjudged first byte must not eat data the JSON path needs.
 
+**Amended 2026-09-16: one listener, three protocols.**
+
+The host-served join (`crates/lan-sync/src/assets.rs`) added a third branch to
+the same listener: a `GET` that is *not* an upgrade is answered with a page
+asset instead of a 400. The listener now speaks newline-delimited JSON, the
+WebSocket handshake, and plain HTTP.
+
+The failure domain widened to match, and in the direction that matters least
+obviously: the request branch is now reached by *every* browser request, not
+just the one join attempt, so a bug there is hit far more often than before —
+and it still sits in front of the native peers' JSON path. The peek is what
+keeps that contained, and it is now load-bearing for three protocols rather
+than two. A host built with no `AssetSource` answers a plain `GET` with 400
+exactly as this ADR specified, and a test pins that, so adding the branch did
+not change what an unserved host does.
+
+The serving rules live in their own module with no socket in them because that
+is where a mistake publishes a file nobody meant to publish. One already
+surfaced: the path had to be decoded to a fixpoint rather than once, because
+Tauri's asset resolver decodes again and would otherwise turn a surviving
+`%2e%2e` back into `..`.
+
 **What it does not buy.**
 
 The deployed PWA on GitHub Pages still cannot join an Android host, and nothing

@@ -50,3 +50,36 @@ not reach each other on this network and suggest a hotspot, rather than hanging.
 
 The reproduction lives in the session history rather than the repository; it is
 about forty lines of Playwright and is cheaper to rewrite than to maintain.
+
+## Addendum, 2026-09-16: it was never TLS
+
+A later probe corrected the reason this sat deferred while the PWA went to
+GitHub Pages. It is worth stating because the wrong reason led to the wrong
+remedy — an open thread asking for a `wss://` relay, which would have bought a
+public server this project does not want.
+
+**Mixed content does not govern `RTCPeerConnection`.** It blocks WebSocket. So
+a page served over HTTPS, which may never open a `ws://`, *can* open a data
+channel to a peer on the local network. Measured in headless Chromium with
+`iceServers: []` from a genuine `https://` origin (`isSecureContext: true`):
+the channel opened and reached `connectionState: "connected"`.
+
+Re-measured signalling sizes, smaller than the original spike recorded:
+
+| | Raw | Gzipped |
+|---|---|---|
+| Offer | 458 bytes | 358 |
+| Answer | 457 bytes | 360 |
+
+Both sit far inside the 2,953-byte QR byte-mode ceiling, and the answer is the
+same size as the offer — so a two-way exchange is size-feasible. The friction
+is the number of scans, not the payload.
+
+**The mDNS risk is unchanged, and now observed rather than suspected.** Every
+host candidate came back as `<uuid>.local`; the interface address never
+appeared. Both peers in that probe shared one browser and therefore one
+resolver, so resolution succeeded trivially and proved nothing about two
+devices. That remains the gate, and it needs hardware.
+
+See `docs/superpowers/specs/2026-09-16-host-served-join-design.md`, which takes
+a different route for now and records what would unblock this one.

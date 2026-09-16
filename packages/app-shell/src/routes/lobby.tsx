@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { roomCode } from "../app/hooks"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
+import { QrCode } from "@mutation/ui/QrCode"
 import { seatColour } from "@mutation/render/palette"
 import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "../store/atoms"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
@@ -78,14 +79,29 @@ export const LobbyScreen = () => {
         <span className="room-share-label">Room code</span>
         <span className="room-code-display">{roomCode(match.config.seed)}</span>
         {role === "host" && room && (
-          <p className="hint">
-            Port {room.port}. Nearby devices find this automatically on the
-            Join screen; if one doesn't see it, it can enter this device's own
-            Wi-Fi address as <code>address:{room.port}@{roomCode(match.config.seed)}</code>.
-            A browser on the same Wi-Fi can join with that same address, as long
-            as the page it's on was opened over <code>http://</code> — a page
-            served over HTTPS is not allowed to reach this room.
-          </p>
+          <div className="join-invite">
+            {room.address ? (
+              <>
+                <QrCode value={`http://${room.address}:${room.port}/`} />
+                <p className="hint">
+                  Scan this to join from a phone or laptop — no install needed.
+                  Or open <code>{room.address}:{room.port}</code> in a browser on
+                  this Wi-Fi.
+                </p>
+              </>
+            ) : (
+              <p className="hint">
+                This device has no Wi-Fi address, so browsers cannot reach it.
+                Nearby installed apps can still join with the room code.
+              </p>
+            )}
+            <p className="hint">
+              Port {room.port}. Nearby devices find this automatically on the
+              Join screen; if one doesn't see it, it can enter this device's own
+              Wi-Fi address as{" "}
+              <code>address:{room.port}@{roomCode(match.config.seed)}</code>.
+            </p>
+          </div>
         )}
         {role === "local" && (
           <p className="hint">Pass this device to the next player when it's their turn.</p>

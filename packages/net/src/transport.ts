@@ -21,6 +21,8 @@ export interface HostedRoom {
   readonly room: string
   readonly port: number
   readonly seed: number
+  /** The LAN address a browser can load the page from, if the host has one. */
+  readonly address: string | null
 }
 
 export interface RosterEntry {

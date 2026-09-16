@@ -29,7 +29,8 @@ export const makeLocalTransport = (): TransportService => {
       Effect.sync((): HostedRoom => {
         seq = 0
         statuses.emit({ connected: true, reason: null })
-        return { room: "LOCAL", port: 0, seed }
+        // Pass-and-play is one device: there is nothing for a guest to reach.
+        return { room: "LOCAL", port: 0, seed, address: null }
       }),
     browse: Effect.void,
     rooms: Effect.succeed([] as ReadonlyArray<RoomView>),
