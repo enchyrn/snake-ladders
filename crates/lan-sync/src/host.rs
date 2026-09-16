@@ -26,6 +26,9 @@ struct Shared {
     running: AtomicBool,
     locked: AtomicBool,
     state: Mutex<HostState>,
+    /// `None` when nothing is being served, which keeps a bare host answering
+    /// a plain GET with 400 exactly as it did before.
+    assets: Option<Arc<dyn crate::assets::AssetSource>>,
 }
 
 #[derive(Default)]
@@ -66,6 +69,18 @@ impl Host {
     /// Bind a listener. Port 0 asks the OS for a free port, which is then
     /// published in the discovery beacon.
     pub fn bind(room: impl Into<String>, port: u16, capacity: u8) -> std::io::Result<Self> {
+        Self::bind_with_assets(room, port, capacity, None)
+    }
+
+    /// As `bind`, but also serve the game's own page to browsers on this port.
+    /// One origin for the page and the socket is the entire point: a browser
+    /// will not open a `ws://` from an `https://` page, but will from `http://`.
+    pub fn bind_with_assets(
+        room: impl Into<String>,
+        port: u16,
+        capacity: u8,
+        assets: Option<Arc<dyn crate::assets::AssetSource>>,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("0.0.0.0", port))?;
         let inner = Arc::new(Shared {
             room: room.into(),
@@ -73,6 +88,7 @@ impl Host {
             running: AtomicBool::new(true),
             locked: AtomicBool::new(false),
             state: Mutex::new(HostState::default()),
+            assets,
         });
 
         let listener_inner = Arc::clone(&inner);
@@ -357,9 +373,19 @@ fn serve_client(shared: Arc<Shared>, stream: TcpStream, pending_id: u64) {
             return;
         };
         let Some(response) = crate::ws::handshake_response(&request) else {
-            // A `GET` that is not a version 13 upgrade: answer in HTTP, since
-            // whatever sent it cannot decode a WebSocket frame.
-            let _ = write_half.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n");
+            // Not an upgrade. If this host has a page, this is a browser asking
+            // for it; otherwise keep the old contract and refuse.
+            let reply = match (&shared.assets, request.lines().next()) {
+                (Some(source), Some(line)) => match crate::assets::request_path(line) {
+                    Some(path) => match source.get(&path) {
+                        Some(asset) => crate::assets::http_response(&asset),
+                        None => crate::assets::not_found(),
+                    },
+                    None => crate::assets::not_found(),
+                },
+                _ => b"HTTP/1.1 400 Bad Request\r\n\r\n".to_vec(),
+            };
+            let _ = write_half.write_all(&reply);
             return;
         };
         if write_half.write_all(response.as_bytes()).is_err() {
