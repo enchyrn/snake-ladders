@@ -357,8 +357,12 @@ after the next closure.
   cannot, and no amount of fixing the client changes that. Closing it needs a
   relay reachable over `wss://`, which is an architecture decision before it is
   code: a certificate means a public host, which cuts against the promise that
-  the game never touches the internet. ADR 0012 and 0013 are the prior art and
-  this deserves its own ADR. Plan Tasks 8 and 9 cover the work.
+  the game never touches the internet. ADR 0012 and 0013 are the prior art.
+  **Now designed:** `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
+  answers this thread differently than it was framed — the blocker is the
+  page's origin, not the socket, so the host serves the page instead and no
+  `wss://` relay is needed. ADR 0013 carries an addendum correcting why
+  WebRTC was deferred.
 2. **Run host-local Android capture.** The Codespace cannot see the device.
   Use wireless ADB and a host-local OpenCode session to install the latest
   debug APK, inspect the WebView, capture `logcat`, and record evidence.
