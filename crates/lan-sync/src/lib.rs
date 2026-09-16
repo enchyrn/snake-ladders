@@ -72,7 +72,10 @@ pub fn seed_from_room(code: &str) -> Option<u32> {
 pub fn local_address() -> Option<std::net::IpAddr> {
     use std::net::{IpAddr, UdpSocket};
     let socket = UdpSocket::bind(("0.0.0.0", 0)).ok()?;
-    // TEST-NET-1: guaranteed not to be routed anywhere, and never contacted.
+    // TEST-NET-1, a documentation range no real service answers on. No packet
+    // is sent either way — connecting a UDP socket only fixes a route — which
+    // is what makes this safe even where the range *is* routed: this very
+    // container sits on 192.0.2.0/24, and the answer was still its own address.
     socket.connect(("192.0.2.1", 9)).ok()?;
     let addr = socket.local_addr().ok()?.ip();
     match addr {
