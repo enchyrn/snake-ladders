@@ -1,3 +1,5 @@
+@layer reset, base, tokens, recipes, utilities;
+
 /*
  * Mirrors src/render/palette.ts so the DOM overlay and the WebGL board never
  * drift into two different dark themes. Anything not in that palette (surface

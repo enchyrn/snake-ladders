@@ -74,14 +74,14 @@ cleanly. The steps below are the stable path; the evidence is in ADR 0021.
 - Consumes: nothing.
 - Produces: a working `panda codegen` and a Vite build that includes Panda's CSS. Later tasks assume `styled-system/css` and `styled-system/patterns` resolve.
 
-- [ ] **Step 1: Add the dependencies, pinned exactly**
+- [x] **Step 1: Add the dependencies, pinned exactly**
 
 ```bash
 nub add -D -E @pandacss/dev@1.12.1
 nub add -E lucide-react@1.46.0
 ```
 
-- [ ] **Step 2: Confirm the versions landed without a caret**
+- [x] **Step 2: Confirm the versions landed without a caret**
 
 ```bash
 grep -n "pandacss\|lucide-react" package.json
@@ -90,7 +90,7 @@ grep -n "pandacss\|lucide-react" package.json
 Expected: `"@pandacss/dev": "1.12.1"` and `"lucide-react": "1.46.0"`, no `^`.
 If either shows a `^`, re-add with `-E`.
 
-- [ ] **Step 3: Write a minimal Panda config**
+- [x] **Step 3: Write a minimal Panda config**
 
 Tokens come in Task 3. This one only has to prove the toolchain runs.
 
@@ -107,14 +107,14 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Wire PostCSS**
+- [x] **Step 4: Wire PostCSS**
 
 ```js
 // postcss.config.cjs
 module.exports = { plugins: { "@pandacss/dev/postcss": {} } }
 ```
 
-- [ ] **Step 5: Ignore the generated output**
+- [x] **Step 5: Ignore the generated output**
 
 Append to `.gitignore`:
 
@@ -122,7 +122,7 @@ Append to `.gitignore`:
 styled-system
 ```
 
-- [ ] **Step 6: Run codegen and confirm it produces the entrypoints**
+- [x] **Step 6: Run codegen and confirm it produces the entrypoints**
 
 ```bash
 nubx panda codegen
@@ -134,7 +134,7 @@ Expected: the directory exists and contains an `index.mjs` (or `index.js`) plus
 **If this fails on a missing module:** declare the dependency — do not change the
 linker. That is CLAUDE.md's standing rule for nub's no-hoist layout.
 
-- [ ] **Step 7: Add Panda's layers to the stylesheet**
+- [x] **Step 7: Add Panda's layers to the stylesheet**
 
 At the very top of `apps/game-web/styles.css`, above the existing comment:
 
@@ -142,7 +142,7 @@ At the very top of `apps/game-web/styles.css`, above the existing comment:
 @layer reset, base, tokens, recipes, utilities;
 ```
 
-- [ ] **Step 8: Build, and confirm the toolchain survives it**
+- [x] **Step 8: Build, and confirm the toolchain survives it**
 
 ```bash
 nub run build
@@ -153,12 +153,44 @@ Vite 8.3 or TS 6.0.3, stop here and report it — do not work around it silently
 because ADR 0021 was accepted on the assumption that this step is cheap to
 reverse.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add package.json nub.lock panda.config.ts postcss.config.cjs .gitignore apps/game-web/styles.css
 git commit -m "build: adopt Panda CSS 1.12.1 and Lucide, and prove they build"
 ```
+
+> **Executed 2026-09-17.** Gates on the commit: `nub run build` clean,
+> `nub run test` 185 passed in 19 files, `nub run typecheck` clean,
+> `nub run lint` clean. Four things the plan did not anticipate.
+>
+> **The version changed under this task.** `2.0.0-beta.17` is not installable:
+> `nub` refuses it because the transitive `@pandacss/cli` lost its provenance
+> attestation at `beta.11`, and `trustPolicy=no-downgrade` reads that as a
+> supply-chain downgrade. Keeping it needed a `trustPolicyExclude` bypass. The
+> tarball was verified clean anyway (ADR 0021, "Supply-chain verification") and
+> the owner reversed the version to stable `1.12.1`, which has no
+> `@pandacss/cli` dependency. ADR 0021 is amended; this plan's Task 1 is now the
+> stable path.
+>
+> **"It built" is not the same as "Panda ran".** With `preflight: false` and no
+> utilities authored yet, Panda contributes almost nothing visible, so a green
+> build proves less than it looks. What actually proves the PostCSS plugin ran
+> is `--made-with-panda:"🐼"` and Panda's `@layer base` variable block in
+> `dist/assets/*.css`. Check the built CSS, not the exit code.
+>
+> **The `@layer` line does not survive verbatim, and that is fine.** The
+> minifier splits `@layer reset, base, tokens, recipes, utilities;` into
+> `@layer reset; @layer base{…} @layer tokens{…} @layer recipes,utilities;`.
+> Grepping the built CSS for the original line returns zero. Order is what
+> matters and it is preserved — first appearance is reset → base → tokens →
+> recipes → utilities, so recipes still beat base in Task 9.
+>
+> **nub's vulnerability scan is silently degraded in this environment.** Every
+> `nub add` printed `WARN OSV advisory check failed` because `api.osv.dev` is
+> not on the egress allowlist. The install still succeeds, so it is easy to miss
+> in the scroll: no advisory check ran for either dependency. The trust-policy
+> check is independent of it and did run.
 
 ---
 
