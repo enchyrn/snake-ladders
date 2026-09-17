@@ -111,3 +111,93 @@ requires for other reasons.
 symbol. The hand-drawn glyphs must match its stroke weight and optical sizing
 or the two halves read as two sets, and that matching is re-done every time
 Lucide's own style shifts under an upgrade.
+
+## Supply-chain verification, 2026-09-17
+
+Implementing Task 1 of the chrome-and-layout plan hit a wall the ADR did not
+anticipate. `nub add -D -E @pandacss/dev@2.0.0-beta.17` **fails outright**, and
+not on a compatibility problem:
+
+```
+trust downgrade for @pandacss/cli@2.0.0-beta.17 (trustPolicy=no-downgrade):
+earlier published version 2.0.0-beta.0 had provenance attestation but this
+version has no trust evidence
+```
+
+`nub`'s default `trustPolicy=no-downgrade` refuses a package that *used* to
+carry SLSA provenance and no longer does. The gate is real: it cannot be
+satisfied by pinning, and it is the transitive `@pandacss/cli`, not
+`@pandacss/dev` itself, that trips it.
+
+### What the registry says
+
+Queried against `registry.npmjs.org` directly, so this is not a mirror
+stripping metadata:
+
+| | `@pandacss/dev` | `@pandacss/cli` |
+|---|---|---|
+| `2.0.0-beta.0` … `beta.10` | attested | **attested** |
+| `2.0.0-beta.11` … `beta.17` | attested, published by `GitHub Actions` | **no attestation**, published by `segunadebayo` |
+
+The two packages diverge at exactly `beta.11` (2026-07-24). `dev` moved *onto*
+a trusted CI workflow at that boundary; `cli` stayed on manual publishing and
+lost its provenance there. Seven consecutive releases over seven weeks, from
+the project's sole maintainer — the same account that published the attested
+ones. That is the shape of a split release process, not of a hijack.
+
+### What the tarball says
+
+The owner asked for evidence rather than inference, so
+`@pandacss/cli@2.0.0-beta.17` was compared against `2.0.0-beta.10` — the last
+release whose attestation is cryptographic — and against its own source tag.
+
+- Both tarballs match their registry `integrity` hashes.
+- **Identical file lists.** No file added, and no install hook in either
+  (`preinstall`/`install`/`postinstall`/`prepare` are all absent; the `scripts`
+  block holds build-time entries npm never runs for a consumer).
+- **Published `package.json` matches `packages/cli/package.json` at the tag**
+  `@pandacss/cli@2.0.0-beta.17` (commit `2991686`), modulo key ordering and the
+  `workspace:*` → `2.0.0-beta.17` rewrite that a pnpm/changesets publish always
+  performs. No added dependency, no added script.
+- **Dangerous-pattern counts are identical to the attested beta.10** —
+  `eval`, `new Function`, `atob`, base64 `Buffer.from`, `XMLHttpRequest`,
+  `fetch`, `https.request`, `os.homedir`, `.ssh`, `.npmrc`, `AWS_`, `TOKEN`:
+  **zero in both**.
+- `process.env` is read for `FORCE_COLOR`, `TERM` and `NO_COLOR`. Nothing else.
+- The only `child_process` use is `execSync(installCommand(pm, missing))` in
+  `src/commands/init.ts`, a four-way switch over pnpm/yarn/bun/npm, identical
+  in source and in the attested beta.10. It is reachable only through
+  `panda init`, which this repo never runs — the plan writes `panda.config.ts`
+  by hand and invokes `panda codegen` only.
+- **Every external import is a Node builtin or a declared dependency.** No
+  `net`, `http`, `https`, `dns` or `tls` anywhere in the bundle: the CLI has no
+  network capability at all.
+- The tarball is 51 KB against beta.10's 81 KB. That is fully explained: the
+  `build:report` step and the `report-ui/` analyze-report bundle were removed
+  upstream, and `report-ui/` is genuinely absent from the source tree at the
+  tag. A shrinking bundle is the opposite of an injection.
+
+**Conclusion: benign release-process drift, not a compromised release.** Two
+limits on that, stated rather than buried. A clean diff is not an attestation —
+it proves this tarball's contents, not the pipeline that made them. And the
+finding does not transfer: the next beta bump carries no automated guarantee
+either, so each one needs this check again until upstream restores provenance.
+
+### The cost this adds to the decision
+
+Installing `beta.17` requires a `trustPolicyExclude` entry in `nub.jsonc`,
+pinned to the exact version (`@pandacss/cli@2.0.0-beta.17` — a bare
+`@pandacss/cli` would exempt every future version, including one published
+after a real compromise). That entry is a standing exception in a repository
+whose CI pins stable toolchains, and it must be re-reviewed on every bump.
+
+Worth recording alongside it: the Decision above states that stable `1.12.1`
+"would have covered every finding above", and lists costs for the beta without
+naming a benefit it buys. Stable `1.12.1` was probed and **installs cleanly** —
+the 1.x line has no `@pandacss/cli` dependency at all, so the trust failure does
+not arise, and its `defineConfig`, `defineRecipe`, `defineTokens`,
+`defineSemanticTokens` and `@pandacss/dev/postcss` entrypoint all cover what the
+plan's Task 1 config uses. Reversing the version is therefore an option that
+costs one ADR edit and removes both the exception and the unhedged beta-breakage
+risk. It is an architectural decision and so belongs to the owner, not to the
+session that found this.
