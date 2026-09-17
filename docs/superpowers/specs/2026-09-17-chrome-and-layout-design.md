@@ -4,8 +4,8 @@
 **Date:** 2026-09-17
 **Governed by:** [ADR 0020](../../adr/0020-a-boardgame-not-a-number-game.md)
 (the board is the primary channel) and
-[ADR 0021](../../adr/0021-panda-css-and-lucide-adopted-on-a-beta.md)
-(Panda CSS `2.0.0-beta.17` and Lucide).
+[ADR 0021](../../adr/0021-panda-css-and-lucide.md)
+(Panda CSS `1.12.1` and Lucide).
 
 This is **spec B of two**. Spec A
 (`2026-09-16-settings-and-input-design.md`) covers the settings subsystem —
@@ -279,7 +279,7 @@ hardware run.
 
 ## Build order
 
-1. **Install Panda `2.0.0-beta.17` and build.** ADR 0021 requires this first:
+1. **Install Panda `1.12.1` and build.** ADR 0021 requires this first:
    it is unverified against React 19.3, Vite 8.3, TS 6.0.3 and nub's
    non-hoisting linker. Nothing else starts until it does.
 2. The Nx codegen target, with `inputs` and `outputs` declared, and a cache-hit

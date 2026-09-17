@@ -1,8 +1,10 @@
-# 0021. Panda CSS and Lucide, adopted on a beta
+# 0021. Panda CSS and Lucide
 
 ## Status
 
-Accepted.
+Accepted. **Amended 2026-09-17:** the adopted version is stable
+`1.12.1`, not `2.0.0-beta.17`. The original decision is kept below with its
+reasoning intact; see *Why the version reversed* for what changed and why.
 
 ## Context
 
@@ -35,7 +37,7 @@ on.
 
 ## Decision
 
-**Adopt Panda CSS at `2.0.0-beta.17`, and `lucide-react` at `1.46.0`.**
+**Adopt Panda CSS at `1.12.1`, and `lucide-react` at `1.46.0`.**
 
 - **Recipes** replace the eight button classes with one component and variants.
   This is the survey's central finding and the feature that selected Panda over
@@ -54,10 +56,13 @@ on.
   stun — do not exist in any general-purpose set and are hand-drawn as inline
   SVG to Lucide's stroke weight.
 
-**The version is the notable part of this decision.** Panda's `latest` is
-`1.12.1`; `2.0.0-beta.17` is published only under the `beta` tag. Stable 1.12.1
-would have covered every finding above. The beta was chosen deliberately, with
-the cost below stated in advance rather than discovered.
+**The version was the notable part of this decision, and it reversed.** This
+ADR originally adopted `2.0.0-beta.17`, published only under the `beta` tag,
+while conceding in this same paragraph that stable `1.12.1` "would have covered
+every finding above". It named no benefit the beta bought. The gate the ADR
+itself mandated then refused the beta outright on a supply-chain trust failure,
+and the owner reversed the version on 2026-09-17. The reasoning is under
+*Why the version reversed*; the evidence is under *Supply-chain verification*.
 
 ## Consequences
 
@@ -72,21 +77,26 @@ stylesheet's opening comment has only ever asked for politely.
 
 The costs, in the order they are likely to hurt.
 
-**The beta is the main one, and it is not hedged.** Every component in
-`packages/ui` and `packages/app-shell` will be written against an API that may
-change before 2.0.0 is released, and a breaking change lands on the whole app
-at once rather than on one screen. Two things bound it: the styled surface is
-confined to a theme file plus a set of recipes, and the migration path in is
-one stylesheet rather than hundreds of scattered files — so the migration path
-*out*, if the beta goes somewhere unacceptable, is the same size. It remains
-true that this is a repository whose CI pins stable toolchains and whose
-CLAUDE.md is largely a list of things that bit it once, and a beta foundation
-sits against that grain.
+**The largest cost is the one the amendment removed.** As written, this ADR
+put every component in `packages/ui` and `packages/app-shell` on an API that
+could change before 2.0.0 released, with a breaking change landing on the whole
+app at once — in a repository whose CI pins stable toolchains and whose
+CLAUDE.md is largely a list of things that bit it once. Stable `1.12.1` does not
+carry that, and it costs nothing the decision above actually asked for: recipes,
+tokens, static extraction and the `palette.ts`-derived colours are all Panda 1.x
+features. What is given up is 2.x's forward compatibility, so a 2.0 migration
+becomes a later, deliberate piece of work rather than something already absorbed.
+The bound on that is the one this ADR already named in the other direction: the
+styled surface is a theme file plus a set of recipes, so the migration path out
+is the same size as the path in.
 
-**Panda 2.0.0-beta.17 has not been verified against this stack.** React 19.3,
-Vite 8.3, TypeScript 6.0.3, Nx, and nub's non-hoisting linker. The first task
-of any plan implementing this must be to install it and build, before anything
-is written against it — not to write screens and discover it at the end.
+**Panda 1.12.1 is verified against this stack** — React 19.3, Vite 8.3,
+TypeScript 6.0.3, Nx, and nub's non-hoisting linker — to the extent that it
+installs cleanly and exposes `defineConfig`, `defineRecipe`, `defineTokens`,
+`defineSemanticTokens` and the `@pandacss/dev/postcss` entrypoint the plan's
+config needs. The first task of any plan implementing this still installs it and
+builds before anything is written against it. That gate is what caught the beta,
+and it earned its place.
 
 **The Nx codegen target is a known trap in a new place.** Panda generates a
 `styled-system` directory, and that target needs its `inputs` and `outputs`
@@ -183,21 +193,31 @@ it proves this tarball's contents, not the pipeline that made them. And the
 finding does not transfer: the next beta bump carries no automated guarantee
 either, so each one needs this check again until upstream restores provenance.
 
-### The cost this adds to the decision
+### Why the version reversed
 
-Installing `beta.17` requires a `trustPolicyExclude` entry in `nub.jsonc`,
-pinned to the exact version (`@pandacss/cli@2.0.0-beta.17` — a bare
-`@pandacss/cli` would exempt every future version, including one published
-after a real compromise). That entry is a standing exception in a repository
-whose CI pins stable toolchains, and it must be re-reviewed on every bump.
+Keeping `beta.17` would have required a `trustPolicyExclude` entry in
+`nub.jsonc`, pinned to the exact version (`@pandacss/cli@2.0.0-beta.17` — a bare
+`@pandacss/cli` would exempt every future version, including one published after
+a real compromise). That is a standing exception in a repository whose CI pins
+stable toolchains, and because the verification above does not transfer to the
+next release, it would need re-reviewing on every bump.
 
-Worth recording alongside it: the Decision above states that stable `1.12.1`
-"would have covered every finding above", and lists costs for the beta without
-naming a benefit it buys. Stable `1.12.1` was probed and **installs cleanly** —
-the 1.x line has no `@pandacss/cli` dependency at all, so the trust failure does
-not arise, and its `defineConfig`, `defineRecipe`, `defineTokens`,
-`defineSemanticTokens` and `@pandacss/dev/postcss` entrypoint all cover what the
-plan's Task 1 config uses. Reversing the version is therefore an option that
-costs one ADR edit and removes both the exception and the unhedged beta-breakage
-risk. It is an architectural decision and so belongs to the owner, not to the
-session that found this.
+Set against that, the beta bought nothing this ADR had asked for. The Decision
+conceded in its own text that stable `1.12.1` "would have covered every finding
+above", and named no benefit in exchange. Stable `1.12.1` was probed and
+**installs cleanly**: the 1.x line has no `@pandacss/cli` dependency at all, so
+the trust failure does not arise, and `defineConfig`, `defineRecipe`,
+`defineTokens`, `defineSemanticTokens` and the `@pandacss/dev/postcss`
+entrypoint all cover what the plan's Task 1 config uses.
+
+**The owner reversed the version to stable `1.12.1` on 2026-09-17.** One ADR
+amendment removed both the standing exception and the unhedged beta-breakage
+risk, and cost only 2.x's forward compatibility — which was never among the
+reasons Panda was chosen.
+
+The durable lesson is about the gate, not the library. ADR 0021 required the
+install to be proven before anything was written against it, and justified that
+on API compatibility. The install failed on provenance instead — a failure mode
+the ADR had not imagined — and the gate caught it anyway, eight tasks before it
+would have hurt. A first task that simply installs the dependency and builds is
+worth keeping in any plan that adopts one.

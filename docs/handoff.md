@@ -1139,8 +1139,9 @@ is left, in order:
    a single media query, and every glyph an emoji in a text node.
 
    **Spec B is written too** — `2026-09-17-chrome-and-layout-design.md`, plus
-   **ADR 0021** (Panda CSS `2.0.0-beta.17` and Lucide, adopted with the beta
-   cost stated). The match layout is drawn rather than described, at
+   **ADR 0021** (Panda CSS `1.12.1` and Lucide — adopted on `2.0.0-beta.17`
+   with the beta cost stated, then amended to stable on 2026-09-17 when the
+   beta failed its own gate; see the ADR's "Why the version reversed"). The match layout is drawn rather than described, at
    <https://claude.ai/artifact/MXucAxxrRbVbr1uo8ZYAAR>, artboard
    "A — CHOSEN: edges + progress rows".
 
@@ -1158,11 +1159,22 @@ is left, in order:
    depends on is built in plan 1's Task 8. Building settings UI first would
    mean building it twice.
 
-   **Plan 1, Task 1 is a gate, not a formality.** Panda `2.0.0-beta.17` is
-   unverified against React 19.3, Vite 8.3, TS 6.0.3 and nub's non-hoisting
-   linker. If it fails there, stop and report rather than working around it —
-   ADR 0021 was accepted on the assumption that failure is cheap at that point
-   and expensive eight tasks later.
+   **Plan 1, Task 1 is a gate, and it has already earned its keep.** It was
+   written to prove Panda against React 19.3, Vite 8.3, TS 6.0.3 and nub's
+   non-hoisting linker before anything was written against it. On 2026-09-17 it
+   failed on none of those: `nub` refused `@pandacss/dev@2.0.0-beta.17` because
+   its transitive `@pandacss/cli` **lost its provenance attestation** at
+   `beta.11`, which `trustPolicy=no-downgrade` treats as a supply-chain
+   downgrade. The tarball was verified clean against both the last attested
+   release and its own source tag (ADR 0021, "Supply-chain verification"), but
+   keeping the beta would have meant a standing `trustPolicyExclude` bypass —
+   so the owner reversed the version to stable `1.12.1`, which has no
+   `@pandacss/cli` dependency and installs cleanly.
+
+   The rule still stands for the rest of the task: if the build fails, stop and
+   report rather than working around it. Failure is cheap here and expensive
+   eight tasks later — which is exactly what just happened, in the one failure
+   mode nobody had imagined.
 
    Two things in plan 1 fail on real defects the moment they are written, which
    is intentional: Task 3's seat-colour predicate (`#4ee39b` is inside the

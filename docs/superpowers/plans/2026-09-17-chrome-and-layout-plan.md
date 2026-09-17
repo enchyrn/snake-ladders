@@ -6,7 +6,7 @@
 
 **Architecture:** Panda generates atomic CSS at build time from tokens derived from `packages/render/src/palette.ts`, so the DOM overlay and the WebGL board cannot drift. One button recipe with variants replaces eight hand-written classes. The match screen becomes five vertical bands whose heights are a pure, tested function of player count, with the board fixed at 366 CSS px and never reduced.
 
-**Tech Stack:** Panda CSS `2.0.0-beta.17`, `lucide-react` `1.46.0`, React 19.3, Vite 8.3, TypeScript 6.0.3, Nx, nub, vitest, Playwright via `scripts/drive-app.mjs`.
+**Tech Stack:** Panda CSS `1.12.1`, `lucide-react` `1.46.0`, React 19.3, Vite 8.3, TypeScript 6.0.3, Nx, nub, vitest, Playwright via `scripts/drive-app.mjs`.
 
 **Spec:** `docs/superpowers/specs/2026-09-17-chrome-and-layout-design.md`
 (governed by ADR 0020 and ADR 0021; the match layout is drawn at
@@ -22,7 +22,7 @@ settings overlay and dice tray are UI that would otherwise be built twice.
 ## Global Constraints
 
 - **nub, not npm.** `nub add`, `nub run`, `nubx`. `npm ci` fails — there is no `package-lock.json` (ADR 0017).
-- **Exact versions, pinned.** `@pandacss/dev@2.0.0-beta.17` and `lucide-react@1.46.0`, both added with `-E` so no `^` appears. Panda's `latest` is 1.12.1; the beta is deliberate (ADR 0021) and must not be "helpfully" upgraded or downgraded.
+- **Exact versions, pinned.** `@pandacss/dev@1.12.1` and `lucide-react@1.46.0`, both added with `-E` so no `^` appears. `1.12.1` is Panda's `latest`. Do **not** "helpfully" move to the `2.0.0-beta` line: it was the original choice, and ADR 0021 was amended away from it on 2026-09-17 because `@pandacss/cli` lost its provenance attestation at `beta.11` and `nub`'s `trustPolicy=no-downgrade` refuses to install it.
 - **Layer boundaries are enforced.** `layer:ui` may depend only on `engine` and `render`; `layer:render` only on `engine`. Run `nub run lint` after moving anything between packages.
 - **`nub run verify:ui` does NOT build.** Always `nub run build && nub run verify:ui`. A session already watched a change pass against an eight-hour-stale `dist/`.
 - **The board band is 366 CSS px and is never reduced** for any player count. Every other band gives way first.
@@ -53,10 +53,16 @@ settings overlay and dice tray are UI that would otherwise be built twice.
 
 ### Task 1: Prove the Panda beta builds before anything is written against it
 
-ADR 0021 mandates this as the first task. Panda `2.0.0-beta.17` is unverified
-against React 19.3, Vite 8.3, TypeScript 6.0.3 and nub's non-hoisting linker.
-If it fails here, it fails cheaply; if it fails in Task 9, it fails after eight
-tasks of work written against it.
+ADR 0021 mandates this as the first task: Panda must be proven against React
+19.3, Vite 8.3, TypeScript 6.0.3 and nub's non-hoisting linker before anything
+is written against it. If it fails here, it fails cheaply; if it fails in Task 9,
+it fails after eight tasks of work written against it.
+
+**This gate has already fired once.** On 2026-09-17 it refused
+`@pandacss/dev@2.0.0-beta.17` — not on compatibility, but because the transitive
+`@pandacss/cli` lost its provenance attestation at `beta.11`. The version was
+reversed to stable `1.12.1`, which has no `@pandacss/cli` dependency and installs
+cleanly. The steps below are the stable path; the evidence is in ADR 0021.
 
 **Files:**
 - Modify: `package.json` (dependencies only — via `nub add`, not by hand)
@@ -71,7 +77,7 @@ tasks of work written against it.
 - [ ] **Step 1: Add the dependencies, pinned exactly**
 
 ```bash
-nub add -D -E @pandacss/dev@2.0.0-beta.17
+nub add -D -E @pandacss/dev@1.12.1
 nub add -E lucide-react@1.46.0
 ```
 
@@ -81,9 +87,8 @@ nub add -E lucide-react@1.46.0
 grep -n "pandacss\|lucide-react" package.json
 ```
 
-Expected: `"@pandacss/dev": "2.0.0-beta.17"` and `"lucide-react": "1.46.0"`, no `^`.
-If either shows a `^`, re-add with `-E`. A caret on a beta will drift to a
-different beta.
+Expected: `"@pandacss/dev": "1.12.1"` and `"lucide-react": "1.46.0"`, no `^`.
+If either shows a `^`, re-add with `-E`.
 
 - [ ] **Step 3: Write a minimal Panda config**
 
@@ -143,7 +148,7 @@ At the very top of `apps/game-web/styles.css`, above the existing comment:
 nub run build
 ```
 
-Expected: PASS. This is the ADR-mandated gate. If the beta is incompatible with
+Expected: PASS. This is the ADR-mandated gate. If Panda is incompatible with
 Vite 8.3 or TS 6.0.3, stop here and report it — do not work around it silently,
 because ADR 0021 was accepted on the assumption that this step is cheap to
 reverse.
@@ -152,7 +157,7 @@ reverse.
 
 ```bash
 git add package.json nub.lock panda.config.ts postcss.config.cjs .gitignore apps/game-web/styles.css
-git commit -m "build: adopt Panda CSS 2.0.0-beta.17 and Lucide, and prove they build"
+git commit -m "build: adopt Panda CSS 1.12.1 and Lucide, and prove they build"
 ```
 
 ---
