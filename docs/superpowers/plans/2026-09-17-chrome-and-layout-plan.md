@@ -208,7 +208,7 @@ skips codegen and leaves whatever happens to be on disk.
 - Consumes: Task 1's `panda.config.ts`.
 - Produces: an `nx run game-web:panda` target that `build` depends on.
 
-- [ ] **Step 1: Add the target and the dependency**
+- [x] **Step 1: Add the target and the dependency**
 
 Replace the `targets` block of `apps/game-web/project.json` with:
 
@@ -240,7 +240,7 @@ Replace the `targets` block of `apps/game-web/project.json` with:
 `typecheck` depends on `panda` because `styled-system`'s `.d.ts` files must
 exist before `tsc` runs, or a clean clone fails typecheck with missing modules.
 
-- [ ] **Step 2: Prove a cache hit RESTORES the output rather than skipping it**
+- [x] **Step 2: Prove a cache hit RESTORES the output rather than skipping it**
 
 This is the whole point of the task, and it is the step that catches the
 ADR 0018 defect.
@@ -257,7 +257,7 @@ again. If the directory is missing after a cache hit, `outputs` is wrong — fix
 it before continuing. A cache that restores nothing is worse than no cache,
 because it looks like it worked.
 
-- [ ] **Step 3: Confirm the full build still passes**
+- [x] **Step 3: Confirm the full build still passes**
 
 ```bash
 nub run build
@@ -265,12 +265,46 @@ nub run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/game-web/project.json
 git commit -m "build: make panda codegen a cached Nx target with declared outputs"
 ```
+
+
+> **Executed 2026-09-17.** Gates: `nub run build` clean, `nub run test` 185 in
+> 19 files, `nub run lint` clean. Step 2 caught two defects in the JSON this
+> plan prescribes, which is the task working as intended.
+>
+> **The prescribed target never caches, so Step 2 cannot pass as written.** An
+> `nx:run-commands` target is not cacheable by default; it needs an explicit
+> `"cache": true`, and `nx.json`'s `targetDefaults` has no `panda` entry to
+> supply one. Without it every run reports `Cache: 0/1 hit (0%)` and `outputs`
+> is inert — codegen simply re-runs each time. Safe, but not what the task asks
+> for, and the "prove a cache hit restores the output" step silently has nothing
+> to prove. With `"cache": true`, deleting `styled-system/` and re-running gives
+> `Cache: 1/1 hit (100%)` **and** puts the directory back.
+>
+> **`nub run typecheck` does not go through Nx at all**, so the `dependsOn:
+> ["panda"]` this task adds to the `typecheck` target never fires for the
+> command CLAUDE.md documents — the root script was a bare `tsc --noEmit`.
+> Verified by deleting `styled-system/` and running it: codegen did not run.
+> That is this task's stated rationale for the dependency ("a clean clone fails
+> typecheck with missing modules") defeated by the script layer, and it would
+> have fired in Task 3 at the first `styled-system/css` import.
+>
+> Fixed as `nx run game-web:panda && tsc --noEmit`, **not** by pointing the
+> script at `nx run game-web:typecheck`: that target compiles only
+> `apps/game-web/tsconfig.json`, so the obvious one-line swap would have
+> narrowed the gate from the whole workspace to one app while looking like a
+> tidy-up. Same shape as the `verify-ui` trap — a documented command that does
+> less than its name says.
+>
+> **Still open, same root cause:** `nub run test` is a bare `vitest run` and is
+> not covered by this fix. It does not matter yet, but Task 10 writes component
+> tests, and if any of them import `styled-system/*` a clean clone will fail
+> there for exactly the reason typecheck would have.
 
 ---
 

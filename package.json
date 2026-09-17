@@ -9,7 +9,7 @@
     "preview": "vite preview --config apps/game-web/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "nx run game-web:panda && tsc --noEmit",
     "lint": "eslint .",
     "tauri": "tauri",
     "android": "tauri android dev",
