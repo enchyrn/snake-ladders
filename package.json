@@ -71,5 +71,10 @@
       "version": "^0.9.1",
       "onFail": "ignore"
     }
+  },
+  "overrides": {
+    "postcss": "8.5.28",
+    "browserslist": "4.29.0",
+    "postcss-selector-parser": "7.1.6"
   }
 }
