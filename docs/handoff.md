@@ -1294,21 +1294,41 @@ reason as above.
 ### State of the gates, as of this checkpoint
 
 **Superseded for plan-1 work: re-run on `claude/chrome-and-layout` at
-`c532c04` (2026-09-17), working tree clean — `nub run test` 185 passed in 19
-files, `nub run typecheck` clean, `nub run lint` clean, `nub run build` clean.
-Panda's arrival moved no test count. The Rust gates were not re-run, because
-nothing outside the web toolchain was touched.**
+`858c07e` (2026-09-17), working tree clean — `nub run test` 185 passed in 19
+files, `nub run typecheck` clean, `nub run lint` clean, `nub run build` clean
+from a deleted `styled-system/` and `dist/`, and `nub run verify:ui` clean on
+that fresh build. Panda's arrival moved no test count. `nub audit` reports one
+advisory, down from six, and the survivor is pre-existing on `main` — see the
+audit note below. The Rust gates were not re-run, because nothing outside the
+web toolchain was touched.**
 
-**Two environment notes new to this session.** `nub`'s OSV advisory check is
-**silently degraded** here — every `nub add` prints `WARN OSV advisory check
-failed` because `api.osv.dev` is not on the egress allowlist, so no
-vulnerability scan ran for either new dependency. The install succeeds anyway
-and the warning is easy to lose in the scroll. `nub`'s *trust-policy* check is
-independent of it and did run, which is what caught the Panda beta. Separately,
-`git push` to `origin` answers **403** in this environment, so nothing on the
-branch has been pushed, and `origin/claude/snake-ladders-cross-device-3uu177` —
-the abandoned branch, fully absorbed into `main` and verified as such with
-`git cherry` — could not be deleted from here.
+**The branch is pushed.** `claude/chrome-and-layout` is on `origin` at
+`858c07e`. That needed the owner to widen the egress list mid-session; before
+it, pushing answered 403 and the session's traffic to GitHub was anonymous and
+read-only. **Deleting a ref is still refused** — a delete push answers 403 even
+now, and the GitHub MCP server exposes no delete-branch tool, so
+`origin/claude/snake-ladders-cross-device-3uu177` survives and has to be removed
+from a developer machine or the web UI. It is safe to delete: every one of its
+four commits is already upstream in `main` as an equivalent patch, checked with
+the porcelain that detects exactly that.
+
+**`nub audit` had never run in this environment, and it mattered.** The advisory
+check needs `api.osv.dev`, which was not on the egress allowlist, so every
+`nub add` printed `WARN OSV advisory check failed` and installed anyway — a
+warning easy to lose in the scroll. With the host allowed, the audit reported
+six advisories and **five of them arrived with Panda**: it exact-pins
+`postcss@8.5.14`, `browserslist@4.28.1` and `postcss-selector-parser@7.1.1`,
+all inside advisory ranges, with no caret anywhere. Safe versions of the first
+two were already in the tree and unreachable, which is why `nub dedupe` changed
+nothing — an exact pin is not a range, so there is nothing to collapse. An
+`overrides` block in `package.json` (`858c07e`) takes six down to one, and the
+survivor, `smol-toml`, predates this work and is **also present on `main`**.
+
+Two things to carry forward. The trust-policy check is independent of the
+advisory check and ran throughout — it is what caught the Panda beta — so a
+clean install proves less than it looks when OSV is unreachable. And any future
+Panda upgrade must be re-audited with the overrides re-checked, because they pin
+around that library's own pins and a new Panda may move them.
 
 The pre-Panda baseline below stands for `main` itself:
 
@@ -1422,7 +1442,8 @@ Three traps, and the first is the one that matters:
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
    2026-09-16 "work on main" note above. There is still no open PR, and nothing
-   has been pushed. The host-served join plan is fully ticked, with an execution note
+   has been pushed to `origin/claude/chrome-and-layout`, and there is still no open
+   PR. The host-served join plan is fully ticked, with an execution note
    under each task recording what it did not anticipate. Read those notes
    before assuming the plan text is what shipped.
 3. **Build before you drive.** `nub run verify:ui` does not build; see the
