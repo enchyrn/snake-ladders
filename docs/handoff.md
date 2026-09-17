@@ -1142,11 +1142,32 @@ is left, in order:
    **ADR 0021** (Panda CSS `2.0.0-beta.17` and Lucide, adopted with the beta
    cost stated). The match layout is drawn rather than described, at
    <https://claude.ai/artifact/MXucAxxrRbVbr1uo8ZYAAR>, artboard
-   "A — CHOSEN: edges + progress rows". **The task to start on is now writing
-   the implementation plan for spec A and spec B**, and ADR 0021 fixes its
-   first task: install Panda beta and build before anything is written against
-   it, since it is unverified against React 19.3 / Vite 8.3 / TS 6.0.3 /
-   nub's non-hoisting linker.
+   "A — CHOSEN: edges + progress rows".
+
+   **Both implementation plans are written, and the work is ready to start.**
+
+   | Plan | Tasks | Covers |
+   |---|---|---|
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **Run this one first.** |
+   | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
+
+   **The order is deliberate and reverses what this file used to say.** Earlier
+   revisions named the settings spec as next; that was written before spec B
+   existed. ADR 0021 requires the Panda beta to be proven before anything is
+   written against it, and the dice tray that spec A's `rollButton: hidden`
+   depends on is built in plan 1's Task 8. Building settings UI first would
+   mean building it twice.
+
+   **Plan 1, Task 1 is a gate, not a formality.** Panda `2.0.0-beta.17` is
+   unverified against React 19.3, Vite 8.3, TS 6.0.3 and nub's non-hoisting
+   linker. If it fails there, stop and report rather than working around it —
+   ADR 0021 was accepted on the assumption that failure is cheap at that point
+   and expensive eight tasks later.
+
+   Two things in plan 1 fail on real defects the moment they are written, which
+   is intentional: Task 3's seat-colour predicate (`#4ee39b` is inside the
+   reserved link band) and Task 10's join-state test (the screen has one state
+   and needs three).
 
    Five things the settings brainstorm established that spec B or its plan
    will need:
