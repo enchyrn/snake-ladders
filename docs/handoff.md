@@ -1260,8 +1260,28 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-Re-run on `main` at `56e9e5e`, after both quick wins, working tree clean
-apart from the docs:
+**Re-run in full on `main` at `1f58541` (2026-09-17), working tree clean.**
+This session changed documentation only — no code moved — so the numbers below
+are unchanged from `56e9e5e` and were re-measured rather than copied forward:
+
+| Gate | Result |
+|---|---|
+| `nub run test` | **185 passed**, 19 files |
+| `nub run typecheck` | clean |
+| `nub run lint` | clean |
+| `nub run build` | clean |
+| `nub run verify:ui` | clean, on a freshly built `dist/` |
+| `cargo test -p lan-sync` | **58 passed** (26 + 21 + 11) |
+
+Two notes for whoever runs these next. `nub` is not on `PATH` in a fresh cloud
+session: `export PATH="$HOME/.local/share/mise/shims:$PATH"` first, because
+`mise x --` fails on the `java` and `rust` tool resolution before it gets to
+running anything. And the survey screenshots this session's specs are built on
+live in `screenshots/`, which is gitignored — regenerate them with
+`nub run build && nub run verify:ui` rather than looking for them in the repo.
+
+The historical table below is from `56e9e5e` and is kept for the commentary
+under it, which is still accurate:
 
 | Gate | Result |
 |---|---|
