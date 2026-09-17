@@ -1138,6 +1138,16 @@ is left, in order:
    — no `public/`, no icons, no fonts, 784 lines of CSS in one stylesheet with
    a single media query, and every glyph an emoji in a text node.
 
+   **Spec B is written too** — `2026-09-17-chrome-and-layout-design.md`, plus
+   **ADR 0021** (Panda CSS `2.0.0-beta.17` and Lucide, adopted with the beta
+   cost stated). The match layout is drawn rather than described, at
+   <https://claude.ai/artifact/MXucAxxrRbVbr1uo8ZYAAR>, artboard
+   "A — CHOSEN: edges + progress rows". **The task to start on is now writing
+   the implementation plan for spec A and spec B**, and ADR 0021 fixes its
+   first task: install Panda beta and build before anything is written against
+   it, since it is unverified against React 19.3 / Vite 8.3 / TS 6.0.3 /
+   nub's non-hoisting linker.
+
    Five things the settings brainstorm established that spec B or its plan
    will need:
 
@@ -1165,6 +1175,29 @@ is left, in order:
      of the fifteen `TimelineEvent` variants. `LinkCollapsed`, `Revealed`,
      `MineDefused`, `CardPlayed`, `VenomGained`, `BoardBreathed`, `Stunned` and
      `Finished` have no board depiction at all.
+
+   And five from spec B's screenshot survey, which is the part that could
+   only be learned by looking:
+
+   - **The board is square and the phone is 1:2.2.** At 390 wide the board
+     maxes out at 366×366 — 43% of the height, flat. Tilting it for
+     perspective makes it *shorter*: today's tilt costs ~90px. "Fill the
+     screen" was never on the table; the design question is what the other
+     ~430px does.
+   - **The band budget closes by arithmetic**, because `match.ts:195` caps a
+     match at six players. Even at six the board keeps its full 366 and ~119px
+     remains. That is a table, not a hope.
+   - **`seatColours[4]` is `#4ee39b`** — mint, inside the green band
+     `renderer-legibility` reserves for link tinting. The fifth player's token
+     already fights the snakes, today, before anyone is allowed to pick a
+     colour.
+   - **The join screen's empty room list renders nothing at all** — no
+     spinner, no empty state. A guest whose discovery fails cannot tell the app
+     from a dead page. It has one state and needs three.
+   - **The card rail is not broken, only undiscoverable.** `.cards` is
+     `overflow-x: auto`, so the two off-screen cards are reachable; this was
+     checked before it was written down. Flexing five cards across 366px
+     removes the problem by construction.
 
    The floor ADR 0020 demanded is settled and derived rather than chosen:
    speed scales each clip's duration and every clip clamps to
