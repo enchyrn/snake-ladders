@@ -1122,6 +1122,13 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
+> **Start at Task 3** of `plans/2026-09-17-chrome-and-layout-plan.md`:
+> "Derive colour tokens from palette.ts, and fix the seat colour that is already
+> wrong". Its seat-colour predicate is written to fail on a real defect —
+> `seatColours[4]` is `#4ee39b`, inside the green band `renderer-legibility`
+> reserves for link tinting — so a red test there is the task working, not a
+> mistake to route around.
+
 1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
    "A boardgame, not a number game", Accepted. See the brainstorm table above
    for what writing it turned up that the brainstorm had not. Docs only; no
@@ -1145,12 +1152,26 @@ is left, in order:
    <https://claude.ai/artifact/MXucAxxrRbVbr1uo8ZYAAR>, artboard
    "A — CHOSEN: edges + progress rows".
 
-   **Both implementation plans are written, and the work is ready to start.**
+   **Both implementation plans are written, and plan 1 is under way.**
 
    | Plan | Tasks | Covers |
    |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **Run this one first.** |
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–2 done, start at Task 3.** |
    | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
+
+   **Plan 1 is being executed on the branch `claude/chrome-and-layout`**, cut
+   fresh from `main` at `ac1f114`, not on `main` itself. Tasks 1 and 2 are
+   committed and their checkboxes ticked, each with an execution note recording
+   what the plan did not anticipate — read those notes before trusting the plan
+   text, because Task 1's version and Task 2's JSON both changed under
+   execution.
+
+   | Commit | What |
+   |---|---|
+   | `6126783` | The Panda beta's supply-chain verification, recorded in ADR 0021 |
+   | `66b1f1a` | ADR 0021 amended to stable `1.12.1`; file renamed, index/spec/plan updated |
+   | `722a033` | Task 1 — Panda `1.12.1` and Lucide installed, configured and proven to build |
+   | `c532c04` | Task 2 — `panda` codegen as a cached Nx target with declared outputs |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
@@ -1272,6 +1293,25 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
+**Superseded for plan-1 work: re-run on `claude/chrome-and-layout` at
+`c532c04` (2026-09-17), working tree clean — `nub run test` 185 passed in 19
+files, `nub run typecheck` clean, `nub run lint` clean, `nub run build` clean.
+Panda's arrival moved no test count. The Rust gates were not re-run, because
+nothing outside the web toolchain was touched.**
+
+**Two environment notes new to this session.** `nub`'s OSV advisory check is
+**silently degraded** here — every `nub add` prints `WARN OSV advisory check
+failed` because `api.osv.dev` is not on the egress allowlist, so no
+vulnerability scan ran for either new dependency. The install succeeds anyway
+and the warning is easy to lose in the scroll. `nub`'s *trust-policy* check is
+independent of it and did run, which is what caught the Panda beta. Separately,
+`git push` to `origin` answers **403** in this environment, so nothing on the
+branch has been pushed, and `origin/claude/snake-ladders-cross-device-3uu177` —
+the abandoned branch, fully absorbed into `main` and verified as such with
+`git cherry` — could not be deleted from here.
+
+The pre-Panda baseline below stands for `main` itself:
+
 **Re-run in full on `main` at `1f58541` (2026-09-17), working tree clean.**
 This session changed documentation only — no code moved — so the numbers below
 are unchanged from `56e9e5e` and were re-measured rather than copied forward:
@@ -1376,8 +1416,13 @@ Three traps, and the first is the one that matters:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. There is no plan in flight and no open PR, and work goes straight onto
-   `main`. The host-served join plan is fully ticked, with an execution note
+2. **A plan IS in flight**, which reverses what this list used to say. Plan 1
+   (`plans/2026-09-17-chrome-and-layout-plan.md`) is being executed on the
+   branch `claude/chrome-and-layout`, Tasks 1–2 done, Task 3 next; use
+   `superpowers:executing-plans`. Work is on that branch rather than straight
+   onto `main` at the owner's instruction (2026-09-17), which supersedes the
+   2026-09-16 "work on main" note above. There is still no open PR, and nothing
+   has been pushed. The host-served join plan is fully ticked, with an execution note
    under each task recording what it did not anticipate. Read those notes
    before assuming the plan text is what shipped.
 3. **Build before you drive.** `nub run verify:ui` does not build; see the
