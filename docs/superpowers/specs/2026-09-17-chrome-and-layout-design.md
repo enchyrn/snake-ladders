@@ -200,6 +200,20 @@ path already opens it, and that behaviour is unchanged.
 > Note also that `seatColour` indexes `seat % 6`, which with a hard cap of six
 > never wraps — the modulo is defensive, not load-bearing, and a seventh seat
 > would need a seventh colour rather than a reused one.
+>
+> **Resolved 2026-09-17 (plan 1, Task 3): mint became teal `#3fd0c9`.** The
+> replacement is ~177°, which clears the reserved band but leaves only 23° to
+> seat 0's cyan (~200°) — the tightest adjacent pair of the six. Six hues minus
+> a 65° reserved arc is genuinely tight and hue alone is at its limit here, so
+> re-spacing all six across the remaining 300°, or separating seats by shape as
+> well as hue, stays with `renderer-legibility` §"Identity without colour".
+>
+> A second collision the cap check did not look for: seat 2's amber (~45°) is
+> **5° from `ladder` (~40°)**. The reserved band covers only the green family,
+> so the predicate does not catch it, and the two are told apart by saturation
+> (70% against 44%) rather than hue. Ladders are also static geometry rather
+> than a moving token, which is why this reads as weaker than the snake case —
+> but it is the same defect, and it belongs to the same re-spacing work.
 - **Player rows carry the colour swatch** spec A defines, which is where colour
   is picked.
 - Room code and QR are the one part of the current lobby that works; they are

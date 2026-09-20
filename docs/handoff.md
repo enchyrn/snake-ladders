@@ -1,8 +1,9 @@
 # Handoff
 
 **The live work is on the branch `claude/chrome-and-layout`, not on `main`.**
-It is pushed to `origin` at `1a0f5a2`, seven commits ahead of `main` at
-`ac1f114`, and `main` itself has not moved. Check that branch out before
+It is eight commits ahead of `main` at `ac1f114`, and `main` itself has not
+moved. `origin` is at `6dedac7`; the Task 3 commit below is **local and not yet
+pushed** — the owner asked for no push until they say so. Check that branch out before
 anything else; everything below describing "state of `main`" is the history
 that led to it, not the current tip.
 
@@ -1130,12 +1131,16 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
-> **Start at Task 3** of `plans/2026-09-17-chrome-and-layout-plan.md`:
-> "Derive colour tokens from palette.ts, and fix the seat colour that is already
-> wrong". Its seat-colour predicate is written to fail on a real defect —
-> `seatColours[4]` is `#4ee39b`, inside the green band `renderer-legibility`
-> reserves for link tinting — so a red test there is the task working, not a
-> mistake to route around.
+> **Start at Task 4** of `plans/2026-09-17-chrome-and-layout-plan.md`:
+> "One button recipe replaces eight hand-written classes". Tasks 1-3 are done.
+> Task 4 is the first that writes Panda *recipes* rather than config, so it is
+> the first real test of whether the design system replaces the eight
+> hand-written button classes the survey found.
+>
+> Read Task 3's execution note before trusting the plan text for the tokens:
+> the generator now derives three tokens the plan's Step 6 omitted, and
+> `styles.css` lost six dead seat declarations that would otherwise have
+> drifted against the palette on the next edit.
 
 1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
    "A boardgame, not a number game", Accepted. See the brainstorm table above
@@ -1164,7 +1169,7 @@ is left, in order:
 
    | Plan | Tasks | Covers |
    |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–2 done, start at Task 3.** |
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–3 done, start at Task 4.** |
    | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
 
    **Plan 1 is being executed on the branch `claude/chrome-and-layout`**, cut
@@ -1180,6 +1185,8 @@ is left, in order:
    | `66b1f1a` | ADR 0021 amended to stable `1.12.1`; file renamed, index/spec/plan updated |
    | `722a033` | Task 1 — Panda `1.12.1` and Lucide installed, configured and proven to build |
    | `c532c04` | Task 2 — `panda` codegen as a cached Nx target with declared outputs |
+   | `858c07e` | An `overrides` block lifting the five advisories Panda's exact pins introduced |
+   | *(local)* | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
@@ -1301,8 +1308,23 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-**Superseded for plan-1 work: re-run on `claude/chrome-and-layout` at
-`858c07e` (2026-09-17), working tree clean — `nub run test` 185 passed in 19
+**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 3
+(2026-09-17), working tree clean — `nub run test` **188 passed in 20 files**
+(Task 3 added three), `nub run typecheck` clean, `nub run lint` clean, `nub run
+build` clean, and `nub run verify:ui` clean on that fresh build, with the board,
+HUD, card rail and legend rendering correctly at 390x844. The Rust gates were
+not re-run: nothing outside the web toolchain has been touched on this branch.**
+
+**Two things Task 3 established that outlive it.** `panda.config.ts` is **not
+in the tsc program**, so `nub run typecheck` does not cover it and a type error
+there surfaces only as a codegen failure. And the stylesheet's transcribed
+colours are a live drift source: six `--seat-*` declarations had **zero
+consumers** and were deleted rather than updated, but the rest of `:root` is
+still hand-copied from `palette.ts` and nothing yet enforces it. Panda's tokens
+are the mechanism for fixing that; the later chrome tasks are what actually
+retire the transcriptions.
+
+The earlier `858c07e` measurement, superseded by the above — `nub run test` 185 passed in 19
 files, `nub run typecheck` clean, `nub run lint` clean, `nub run build` clean
 from a deleted `styled-system/` and `dist/`, and `nub run verify:ui` clean on
 that fresh build. Panda's arrival moved no test count. `nub audit` reports one
@@ -1446,12 +1468,13 @@ Three traps, and the first is the one that matters:
    the rule that skills come before any other action.
 2. **A plan IS in flight**, which reverses what this list used to say. Plan 1
    (`plans/2026-09-17-chrome-and-layout-plan.md`) is being executed on the
-   branch `claude/chrome-and-layout`, Tasks 1–2 done, Task 3 next; use
+   branch `claude/chrome-and-layout`, **Tasks 1–3 done, Task 4 next**; use
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
-   2026-09-16 "work on main" note above. There is still no open PR, and nothing
-   has been pushed to `origin/claude/chrome-and-layout`, and there is still no open
-   PR. The host-served join plan is fully ticked, with an execution note
+   2026-09-16 "work on main" note above. There is no open PR. `origin` has the
+   branch up to `6dedac7`; **Task 3's commit is local only**, because the owner
+   asked that nothing be pushed until they say so.
+   The host-served join plan is fully ticked, with an execution note
    under each task recording what it did not anticipate. Read those notes
    before assuming the plan text is what shipped.
 3. **Build before you drive.** `nub run verify:ui` does not build; see the

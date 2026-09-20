@@ -325,7 +325,7 @@ written to enforce it fails immediately on a real defect.
 - Consumes: Task 1's config.
 - Produces: `hueOf(hex: string): number` and `RESERVED_LINK_HUE: readonly [number, number]` exported from `packages/render/src/palette.ts`; Panda tokens `colors.seat.0`–`colors.seat.5`, `colors.void`, `colors.surface`, `colors.surfaceRaised`, `colors.border`, `colors.text`, `colors.textDim`, `colors.ladder`, `colors.snake`, `colors.mine`, `colors.flag`, `colors.finish`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `renderer-legibility` reserves the green family for link tinting. A seat colour
 inside that band fights the snakes.
@@ -362,7 +362,7 @@ describe("seat colours", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and watch it fail on the real defect**
+- [x] **Step 2: Run it and watch it fail on the real defect**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/palette.test.ts
@@ -373,7 +373,7 @@ with `["#4ee39b"]` — seat 4's mint sits at ~151°, inside the reserved band. T
 is a live defect, not a hypothetical: the fifth player's token already fights
 the snakes today.
 
-- [ ] **Step 3: Add the hue helper and the reserved band**
+- [x] **Step 3: Add the hue helper and the reserved band**
 
 Append to `packages/render/src/palette.ts`:
 
@@ -397,7 +397,7 @@ export const hueOf = (hex: string): number => {
 }
 ```
 
-- [ ] **Step 4: Replace the offending seat colour**
+- [x] **Step 4: Replace the offending seat colour**
 
 In `seatColours`, replace `"#4ee39b", // mint` with:
 
@@ -405,7 +405,7 @@ In `seatColours`, replace `"#4ee39b", // mint` with:
   "#3fd0c9", // teal — mint (#4ee39b, ~151°) sat inside the reserved link band
 ```
 
-- [ ] **Step 5: Run the test and watch it pass**
+- [x] **Step 5: Run the test and watch it pass**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/palette.test.ts
@@ -420,7 +420,7 @@ all six across the 300° of non-reserved arc, or distinguishing seats by shape a
 well as hue — belongs to `renderer-legibility` §"Identity without colour",
 which is unbuilt. Do not attempt it here.
 
-- [ ] **Step 6: Write the token generator**
+- [x] **Step 6: Write the token generator**
 
 ```js
 // scripts/palette-tokens.mjs
@@ -439,7 +439,7 @@ export const colourTokens = {
 }
 ```
 
-- [ ] **Step 7: Read the palette module's actual exports before wiring it**
+- [x] **Step 7: Read the palette module's actual exports before wiring it**
 
 ```bash
 grep -n "^export" packages/render/src/palette.ts
@@ -449,7 +449,7 @@ The generator above assumes a `palette` object export. If `palette.ts` exports
 individual constants instead, adjust `palette-tokens.mjs` to name them
 explicitly — do not invent an export that is not there.
 
-- [ ] **Step 8: Add spacing and type scales, and the tokens, to the config**
+- [x] **Step 8: Add spacing and type scales, and the tokens, to the config**
 
 In `panda.config.ts`, add a `theme` block:
 
@@ -475,7 +475,7 @@ import { colourTokens } from "./scripts/palette-tokens.mjs"
   },
 ```
 
-- [ ] **Step 9: Declare the one breakpoint the app actually has**
+- [x] **Step 9: Declare the one breakpoint the app actually has**
 
 The app is phone-first and stays so. The existing single `@media (max-width:
 380px)` rule becomes a named breakpoint, so the 320–380 band — where the
@@ -493,7 +493,7 @@ tight band is the **unprefixed** base. Author the base styles for 320px and
 widen at `sm`, not the other way round — inverting this is how a layout ends
 up untested at its narrowest.
 
-- [ ] **Step 10: Regenerate, build, and run the full suite**
+- [x] **Step 10: Regenerate, build, and run the full suite**
 
 ```bash
 nubx nx run game-web:panda && nub run build && nub run test
@@ -501,12 +501,53 @@ nubx nx run game-web:panda && nub run build && nub run test
 
 Expected: all PASS.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add panda.config.ts scripts/palette-tokens.mjs packages/render/src/palette.ts packages/render/src/__tests__/palette.test.ts
 git commit -m "feat: derive colour tokens from palette.ts, and move seat 4 out of the link-tint band"
 ```
+
+
+> **Executed 2026-09-17.** Gates: `nub run test` **188 passed in 20 files**
+> (was 185 in 19 — the three new ones are this task's), `nub run typecheck`
+> clean, `nub run lint` clean, `nub run build` clean, and `nub run verify:ui`
+> clean on that fresh build with the board, HUD, card rail and legend
+> rendering correctly. Step 2 failed exactly as written — `["#4ee39b"]`, the
+> lone offender — so the defect was observed before it was fixed rather than
+> taken on the plan's word.
+>
+> **The stylesheet had already drifted, and the task's own Step 4 would have
+> widened the gap.** `apps/game-web/styles.css` transcribed all six seat
+> colours as `--seat-0` … `--seat-5`, including `--seat-4: #4ee39b`. Changing
+> only `palette.ts` leaves the DOM overlay holding mint while the WebGL board
+> gets teal — precisely the drift this task exists to make impossible, created
+> by the fix for it. The six declarations turned out to have **zero
+> consumers** (nothing reads `var(--seat-N)`; every real consumer calls
+> `seatColour()` from `palette.ts`, in `HUD.tsx`, `scene.ts` and `lobby.tsx`),
+> so they were **deleted** rather than re-transcribed with the new value.
+> Re-transcribing would have left the trap armed for the next palette edit.
+> `verify:ui` confirms nothing regressed.
+>
+> **Step 6's generator does not produce three tokens the task's own
+> "Interfaces" section promises.** `colors.surface`, `colors.surfaceRaised` and
+> `colors.border` are not in `palette`; the stylesheet defines them as aliases
+> (`--surface: var(--board-dark)` and so on). The generator now derives them
+> from `palette.boardDark`/`boardLight`/`boardEdge` rather than restating the
+> hexes, so a palette edit still reaches them and the "never transcribed"
+> constraint holds.
+>
+> **`panda.config.ts` is not in the tsc program**, so `nub run typecheck` does
+> not cover it — verified with `tsc --noEmit --listFiles`, which matches it
+> zero times. A type error in the config surfaces only as a codegen failure.
+> That is survivable because codegen runs ahead of both `build` and
+> `typecheck` (Task 2), but it means the config is gated by Panda, not by TypeScript.
+>
+> **A second seat/link collision the predicate does not catch.** Seat 2's amber
+> is ~45° and `ladder` is ~40°. `RESERVED_LINK_HUE` covers only the green
+> family, so the test passes; the two are separated by saturation, not hue.
+> Recorded in the spec's margin and left to `renderer-legibility` with the
+> re-spacing work, per this task's own instruction not to attempt it here.
 
 ---
 

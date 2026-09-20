@@ -22,13 +22,6 @@
   --start: #3d6f86;
   --finish: #d9b64a;
 
-  --seat-0: #4cc2ff;
-  --seat-1: #ff6b5a;
-  --seat-2: #ffd24c;
-  --seat-3: #9b7bff;
-  --seat-4: #4ee39b;
-  --seat-5: #ff8fd0;
-
   --surface: var(--board-dark);
   --surface-raised: var(--board-light);
   --border: var(--board-edge);
