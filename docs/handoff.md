@@ -2,8 +2,8 @@
 
 **The live work is on the branch `claude/chrome-and-layout`, not on `main`.**
 It is eight commits ahead of `main` at `ac1f114`, and `main` itself has not
-moved. `origin` is at `6dedac7`; the Task 3 commit below is **local and not yet
-pushed** — the owner asked for no push until they say so. Check that branch out before
+moved. `origin` is at `6dedac7`; `d42b881` (Task 3) is **local and not yet pushed** —
+the owner asked for no push until they say so. Check that branch out before
 anything else; everything below describing "state of `main`" is the history
 that led to it, not the current tip.
 
@@ -1186,7 +1186,7 @@ is left, in order:
    | `722a033` | Task 1 — Panda `1.12.1` and Lucide installed, configured and proven to build |
    | `c532c04` | Task 2 — `panda` codegen as a cached Nx target with declared outputs |
    | `858c07e` | An `overrides` block lifting the five advisories Panda's exact pins introduced |
-   | *(local)* | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
+   | `d42b881` | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
