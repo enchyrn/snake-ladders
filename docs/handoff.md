@@ -1,12 +1,20 @@
 # Handoff
 
-State of `main` as of 2026-09-16, written so another session — or the same
-person on a different machine — can pick it up without re-deriving anything.
-Start at **"Resuming From This Checkpoint"** near the end; everything before
-it is the history that led there.
+**The live work is on the branch `claude/chrome-and-layout`, not on `main`.**
+It is pushed to `origin` at `1a0f5a2`, seven commits ahead of `main` at
+`ac1f114`, and `main` itself has not moved. Check that branch out before
+anything else; everything below describing "state of `main`" is the history
+that led to it, not the current tip.
+
+Written so another session — or the same person on a different machine — can
+pick it up without re-deriving anything. Start at **"Resuming From This
+Checkpoint"** near the end.
 
 `claude/snake-ladders-cross-device-3uu177`, which earlier revisions of this
-file described, is abandoned and fully absorbed into `main`.
+file described, is abandoned and fully absorbed into `main`. Its four commits
+are all upstream as equivalent patches. It still exists on `origin` only
+because deleting a remote ref is refused from the cloud session — delete it
+from a developer machine or the web UI.
 
 ## Current checkpoint (2026-09-15)
 
@@ -1458,11 +1466,16 @@ Three traps, and the first is the one that matters:
 
 ```bash
 git clone <repo> && cd snake-ladders
-git checkout main
+git checkout claude/chrome-and-layout   # NOT main — the live work is here
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
-nub run test && nub run typecheck   # 101 tests, clean types
+nub run test && nub run typecheck   # 185 tests in 19 files, clean types
 ```
+
+`nub run typecheck` now runs Panda's codegen first, so a clean clone does not
+need a separate `nubx panda codegen` to resolve `styled-system/*`. `nub run
+test` does **not**, which does not matter yet and will the moment a component
+test imports from there.
 
 A Codespace and a Claude Code web session run `scripts/provision.sh`
 themselves, through `.devcontainer/devcontainer.json` and the `SessionStart`

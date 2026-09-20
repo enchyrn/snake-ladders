@@ -9,9 +9,10 @@ nub install
 nub run dev              # Vite dev server on :1420
 nub run dev -- --host    # also serve on the LAN, so phones can open it
 nub run test             # vitest, all suites
-nub run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
+nub run typecheck        # panda codegen, then tsc --noEmit (strict, noUncheckedIndexedAccess)
 nub run lint             # the layer boundaries, and nothing else
-nub run build            # typecheck + production bundle
+nub run build            # panda codegen + typecheck + production bundle
+nubx panda codegen       # regenerate styled-system/ alone (generated, gitignored)
 
 cargo test -p lan-sync   # Rust networking crate (real TCP/UDP sockets)
 cargo clippy -p lan-sync --all-targets -- -D warnings
@@ -45,6 +46,25 @@ nub links `node_modules` in an isolated layout with no hoisting, so a package
 imported but never declared in `package.json` fails to resolve instead of
 silently working. When a build dies on a missing module, the fix is to declare
 the dependency, not to change the linker.
+
+Panda CSS generates `styled-system/`, which is **gitignored and must exist
+before `tsc` runs**, so `game-web:panda` is a real Nx target that `build`,
+`serve` and `typecheck` all depend on. Two things about it are not obvious. An
+`nx:run-commands` target does **not** cache unless it says `"cache": true` —
+without it the declared `outputs` are inert, every run is a miss, and the step
+that proves a cache hit restores the directory has nothing to prove. And the
+root `typecheck` script has to invoke the target itself, because `nub run
+typecheck` never enters Nx; pointing it at `game-web:typecheck` instead would
+narrow a whole-workspace gate to one app while looking like a tidy-up.
+
+Panda **exact-pins** its own dependencies — no carets — and some of those pins
+sit inside published advisory ranges. `nub dedupe` cannot help, because an
+exact pin is not a range and there is nothing to collapse even when a safe
+version is already in the tree; the `overrides` block in `package.json` is what
+lifts them. Re-run `nub audit` and re-check those overrides after any Panda
+upgrade. `nub audit` needs `api.osv.dev` reachable: where it is not, `nub add`
+prints `WARN OSV advisory check failed` and installs anyway, so a clean install
+proves less than it looks.
 
 `verify:ui` screenshots the app at phone size and fails on console errors,
 page errors or horizontal overflow. **It drives whatever is already in
