@@ -14,6 +14,7 @@ export default defineConfig({
       // can check, instead of a `../../../..` that reaches past it unseen.
       "@mutation/relay": fileURLToPath(new URL("./apps/relay/lan-relay.mjs", import.meta.url)),
       "@mutation/tooling": fileURLToPath(new URL("./scripts", import.meta.url)),
+      "@mutation/panda-config": fileURLToPath(new URL("./panda.config.ts", import.meta.url)),
     },
   },
   test: { environment: "node", include: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"] },

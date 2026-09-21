@@ -52,7 +52,15 @@ export default [
           // so the exception is one visible line rather than a `../../../..`
           // that reaches past the rule unseen. Splitting the sequencer out of
           // the executable would retire it.
-          allow: ["@mutation/relay"],
+          // `panda.config.ts` is the design system's source of truth and sits
+          // at the workspace root, inside no project, so any test that pins a
+          // recipe is "external" by this rule's reckoning. Aliased and allowed
+          // for the same reason as the relay: one visible line beats a
+          // `../../../..`. The recipes it defines are config, not CSS, so the
+          // test asserts against the config rather than the generated output —
+          // `styled-system/` is gitignored and `nub run test` does not run
+          // codegen, so a generated-output test would fail on a clean clone.
+          allow: ["@mutation/relay", "@mutation/panda-config"],
           depConstraints: [
             // The reducer is the bottom of the world. It may import nothing
             // internal at all: every rule in CLAUDE.md's determinism contract

@@ -565,7 +565,7 @@ full-width slabs.
 **Interfaces:**
 - Produces: a `button` recipe with `variant: "primary" | "secondary" | "ghost" | "card" | "toggle"` and `size: "sm" | "md" | "lg"`, imported as `import { button } from "styled-system/recipes"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 A recipe is config, so the test pins the contract other tasks rely on rather
 than the CSS it emits.
@@ -597,7 +597,7 @@ describe("the button recipe", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
@@ -605,7 +605,7 @@ nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
 
 Expected: FAIL — `recipe()` returns `undefined`.
 
-- [ ] **Step 3: Define the recipe**
+- [x] **Step 3: Define the recipe**
 
 In `panda.config.ts`, inside `theme.extend`:
 
@@ -638,7 +638,7 @@ In `panda.config.ts`, inside `theme.extend`:
       },
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
@@ -646,7 +646,7 @@ nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Regenerate and typecheck**
+- [x] **Step 5: Regenerate and typecheck**
 
 ```bash
 nubx nx run game-web:panda && nub run typecheck
@@ -654,12 +654,61 @@ nubx nx run game-web:panda && nub run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add panda.config.ts packages/ui/src/__tests__/button-recipe.test.ts
 git commit -m "feat: one button recipe with variants, replacing eight ad-hoc classes"
 ```
+
+
+> **Executed 2026-09-21.** Gates: `nub run test` **190 passed in 21 files**
+> (was 188 in 20), `nub run typecheck` clean, `nub run lint` clean, `nub run
+> build` clean, `nub run verify:ui` clean on that fresh build.
+>
+> **The task's title overclaims, and the commit message it prescribes repeats
+> the overclaim.** Nothing is replaced here. The recipe is defined and pinned;
+> all eight hand-written classes are still in `styles.css` (`button.primary`,
+> `.roll`, `.module-toggle`, `.card`, `.add-player`, `.remove-player`,
+> `.view-reset`, `.seat-switch`), the file is still 779 lines, **nothing
+> imports `styled-system/recipes`, and therefore Panda emits no `.btn` CSS at
+> all** — it only generates rules for recipes the scanned source actually uses.
+> That is correct for this task, whose Files list touches no component, but it
+> means the replacement is entirely ahead in Tasks 7-9. The commit message was
+> reworded to say what the change does.
+>
+> **Step 1's test as written fails `nub run lint`.** `import config from
+> "../../../../panda.config"` escapes the package, and
+> `@nx/enforce-module-boundaries` rejects it: *"External resources cannot be
+> imported using a relative or absolute path"*. The plan's own Global
+> Constraints require that gate, so the task contradicts itself. Fixed the way
+> the repo already handles this exact shape — `@mutation/relay` is aliased and
+> named in the rule's `allow` list, with a comment saying the point is "one
+> visible line rather than a `../../../..` that reaches past the rule unseen".
+> Added `@mutation/panda-config` to `tsconfig.json` paths, `vitest.config.ts`
+> aliases and the `allow` list.
+>
+> **Testing the generated output instead was considered and rejected**, though
+> the task's own Interfaces section describes consumers importing from
+> `styled-system/recipes`. `styled-system/` is gitignored and `nub run test` is
+> a bare `vitest run` that does not invoke codegen — so a test importing it
+> fails on a clean clone. That is the trap Task 2's note already flagged as
+> waiting for Task 10, and it is still open.
+>
+> **This task falsifies Task 3's note that `panda.config.ts` is not in the tsc
+> program.** Importing the config from a test pulls it in, and it arrived with
+> a latent error: `TS7016`, because `scripts/palette-tokens.mjs` had no
+> declarations. Added `scripts/palette-tokens.d.mts` typing `colourTokens` as
+> Panda's own `NonNullable<Tokens["colors"]>`, so the boundary is typed rather
+> than suppressed. The config is now genuinely covered by `nub run typecheck`,
+> which it was not before.
+>
+> **Step 1's test could not fail for the right reason under strict TS.**
+> `recipe().variants.variant` is `possibly undefined` with
+> `noUncheckedIndexedAccess`, so it cost three `TS2532`/`TS2769` errors. It now
+> throws an explicit "panda.config defines no button recipe" instead of
+> optional-chaining into a vacuous pass — verified by deleting the recipe and
+> watching both tests fail, then restoring it.
 
 ---
 

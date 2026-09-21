@@ -1130,16 +1130,20 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
-> **Start at Task 4** of `plans/2026-09-17-chrome-and-layout-plan.md`:
-> "One button recipe replaces eight hand-written classes". Tasks 1-3 are done.
-> Task 4 is the first that writes Panda *recipes* rather than config, so it is
-> the first real test of whether the design system replaces the eight
-> hand-written button classes the survey found.
+> **Start at Task 5** of `plans/2026-09-17-chrome-and-layout-plan.md`:
+> "Icons — Lucide for the vocabulary, hand-drawn for the game's nouns".
+> Tasks 1-4 are done.
 >
-> Read Task 3's execution note before trusting the plan text for the tokens:
-> the generator now derives three tokens the plan's Step 6 omitted, and
-> `styles.css` lost six dead seat declarations that would otherwise have
-> drifted against the palette on the next edit.
+> **Task 4 replaced nothing, despite its title.** It defines the `button`
+> recipe and pins it; all eight hand-written classes are still in
+> `styles.css`, the file is still 779 lines, and because nothing imports
+> `styled-system/recipes` yet Panda emits **no `.btn` CSS at all**. The actual
+> replacement is Tasks 7-9. Do not read Task 4 as done work on the chrome.
+>
+> Read Tasks 3 and 4's execution notes before trusting the plan text: three
+> tokens the plan's generator omitted are now derived, `styles.css` lost six
+> dead seat declarations, and Task 4's test had to be re-pointed through an
+> alias to pass the repo's own lint gate.
 
 1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
    "A boardgame, not a number game", Accepted. See the brainstorm table above
@@ -1168,7 +1172,7 @@ is left, in order:
 
    | Plan | Tasks | Covers |
    |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–3 done, start at Task 4.** |
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–4 done, start at Task 5.** |
    | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
 
    **Plan 1 is being executed on the branch `claude/chrome-and-layout`**, cut
@@ -1186,6 +1190,7 @@ is left, in order:
    | `c532c04` | Task 2 — `panda` codegen as a cached Nx target with declared outputs |
    | `858c07e` | An `overrides` block lifting the five advisories Panda's exact pins introduced |
    | `d42b881` | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
+   | *(this task)* | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
@@ -1307,16 +1312,21 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 3
-(2026-09-17), working tree clean — `nub run test` **188 passed in 20 files**
-(Task 3 added three), `nub run typecheck` clean, `nub run lint` clean, `nub run
+**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 4
+(2026-09-21), working tree clean — `nub run test` **190 passed in 21 files**
+(Task 3 added three, Task 4 two), `nub run typecheck` clean, `nub run lint` clean, `nub run
 build` clean, and `nub run verify:ui` clean on that fresh build, with the board,
 HUD, card rail and legend rendering correctly at 390x844. The Rust gates were
 not re-run: nothing outside the web toolchain has been touched on this branch.**
 
-**Two things Task 3 established that outlive it.** `panda.config.ts` is **not
-in the tsc program**, so `nub run typecheck` does not cover it and a type error
-there surfaces only as a codegen failure. And the stylesheet's transcribed
+**Corrected by Task 4:** Task 3 recorded that `panda.config.ts` is not in the
+tsc program. That was true when written and is now false — importing the config
+from Task 4's recipe test pulls it in, and it arrived carrying a latent `TS7016`
+(`scripts/palette-tokens.mjs` had no declarations). `scripts/palette-tokens.d.mts`
+now types that boundary against Panda's own `Tokens["colors"]`, and the config
+is genuinely covered by `nub run typecheck`.
+
+**One thing Task 3 established that does outlive it.** The stylesheet's transcribed
 colours are a live drift source: six `--seat-*` declarations had **zero
 consumers** and were deleted rather than updated, but the rest of `:root` is
 still hand-copied from `palette.ts` and nothing yet enforces it. Panda's tokens
@@ -1467,7 +1477,7 @@ Three traps, and the first is the one that matters:
    the rule that skills come before any other action.
 2. **A plan IS in flight**, which reverses what this list used to say. Plan 1
    (`plans/2026-09-17-chrome-and-layout-plan.md`) is being executed on the
-   branch `claude/chrome-and-layout`, **Tasks 1–3 done, Task 4 next**; use
+   branch `claude/chrome-and-layout`, **Tasks 1–4 done, Task 5 next**; use
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
    2026-09-16 "work on main" note above. There is no open PR. `origin` has the

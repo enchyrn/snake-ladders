@@ -22,6 +22,32 @@ export default defineConfig({
         },
         sizes: { tap: { value: "44px" }, board: { value: "366px" } },
       },
+      recipes: {
+        button: {
+          className: "btn",
+          base: {
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            gap: "2", borderRadius: "10px", fontFamily: "inherit", fontWeight: 600,
+            cursor: "pointer", border: "1px solid transparent",
+            _disabled: { opacity: 0.45, cursor: "default" },
+          },
+          variants: {
+            variant: {
+              primary: { bg: "finish", color: "void", fontWeight: 700 },
+              secondary: { bg: "surfaceRaised", color: "text", borderColor: "border" },
+              ghost: { bg: "transparent", color: "textDim" },
+              card: { bg: "surfaceRaised", color: "text", borderColor: "border", flexDirection: "column", gap: "1" },
+              toggle: { bg: "surfaceRaised", color: "text", borderColor: "border" },
+            },
+            size: {
+              sm: { minHeight: "tap", px: "3", fontSize: "xs" },
+              md: { minHeight: "tap", px: "4", fontSize: "md" },
+              lg: { minHeight: "tap", px: "5", fontSize: "lg", height: "64px" },
+            },
+          },
+          defaultVariants: { variant: "secondary", size: "md" },
+        },
+      },
       // Panda's breakpoints are min-width, so the 320-380 band where the
       // progress rows and card rail are tightest is the UNPREFIXED base.
       // Author for 320 and widen at `sm`, never the other way round.
