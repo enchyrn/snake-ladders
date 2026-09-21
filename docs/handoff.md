@@ -1190,7 +1190,7 @@ is left, in order:
    | `c532c04` | Task 2 — `panda` codegen as a cached Nx target with declared outputs |
    | `858c07e` | An `overrides` block lifting the five advisories Panda's exact pins introduced |
    | `d42b881` | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
-   | *(this task)* | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
+   | `5be8a5d` | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
