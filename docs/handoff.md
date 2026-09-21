@@ -2,8 +2,7 @@
 
 **The live work is on the branch `claude/chrome-and-layout`, not on `main`.**
 It is eight commits ahead of `main` at `ac1f114`, and `main` itself has not
-moved. `origin` is at `6dedac7`; `d42b881` (Task 3) is **local and not yet pushed** —
-the owner asked for no push until they say so. Check that branch out before
+moved. `origin` is at `5a79856` and carries everything below — Task 3 included. Check that branch out before
 anything else; everything below describing "state of `main`" is the history
 that led to it, not the current tip.
 
@@ -1472,8 +1471,7 @@ Three traps, and the first is the one that matters:
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
    2026-09-16 "work on main" note above. There is no open PR. `origin` has the
-   branch up to `6dedac7`; **Task 3's commit is local only**, because the owner
-   asked that nothing be pushed until they say so.
+   branch up to `5a79856`, which includes Task 3; nothing is local-only.
    The host-served join plan is fully ticked, with an execution note
    under each task recording what it did not anticipate. Read those notes
    before assuming the plan text is what shipped.
