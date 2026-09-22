@@ -1130,8 +1130,19 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
-> **Start at Task 6** of `plans/2026-09-17-chrome-and-layout-plan.md`:
-> "The band budget as a pure, tested function". Tasks 1-5 are done.
+> **Start at Task 7** of `plans/2026-09-17-chrome-and-layout-plan.md`:
+> "Progress rows replace the bare digit and the 40px stub". Tasks 1-6 are done,
+> and **Task 7 is the first that changes anything on screen**.
+>
+> **Take Task 6's finding into Task 9 with you.** The band budget closes at
+> 844px and not on every phone: the fixed cost is 548px before a single player
+> row, so 2-6 players need 609/638/667/696/725. An iPhone SE or 8 (667) has
+> **zero** log at four players and **overflows at five and six**, by 29px and
+> 58px; a Galaxy S8 (740) has 15px at six players, less than one 22px line —
+> all before browser chrome. `bands()` clamps `log` at zero and so cannot
+> distinguish "fits exactly" from "overflows by 58px". The interface was left
+> alone deliberately, because Task 9 lays the bands out and that is where the
+> decision belongs. Eight tests pin the numbers.
 >
 > **Tasks 4 and 5 built the parts; they changed nothing on screen.** The
 > `button` recipe is defined but unimported, so Panda emits **no `.btn` CSS at
@@ -1175,7 +1186,7 @@ is left, in order:
 
    | Plan | Tasks | Covers |
    |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–5 done, start at Task 6.** |
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–6 done, start at Task 7.** |
    | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
 
    **Plan 1 is being executed on the branch `claude/chrome-and-layout`**, cut
@@ -1195,6 +1206,7 @@ is left, in order:
    | `d42b881` | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
    | `5be8a5d` | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
    | `e678ddb` | Task 5 — the eight game glyphs as inline SVG; the plan's mine was a sun |
+   | *(this task)* | Task 6 — the band budget as a pure function, plus where it stops closing |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
@@ -1263,7 +1275,9 @@ is left, in order:
      ~430px does.
    - **The band budget closes by arithmetic**, because `match.ts:195` caps a
      match at six players. Even at six the board keeps its full 366 and ~119px
-     remains. That is a table, not a hope.
+     remains. That is a table, not a hope. **Qualified by Task 6 (2026-09-22):
+     the table is for one phone.** It closes at 844; at 667 (iPhone SE/8) five
+     and six players overflow outright. See Task 6's execution note.
    - **`seatColours[4]` is `#4ee39b`** — mint, inside the green band
      `renderer-legibility` reserves for link tinting. The fifth player's token
      already fights the snakes, today, before anyone is allowed to pick a
@@ -1316,9 +1330,9 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 5
-(2026-09-22), working tree clean — `nub run test` **193 passed in 22 files**
-(Task 3 added three, Task 4 two, Task 5 three), `nub run typecheck` clean, `nub run lint` clean, `nub run
+**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 6
+(2026-09-22), working tree clean — `nub run test` **213 passed in 23 files**
+(Task 3 added three, Task 4 two, Task 5 three, Task 6 twenty), `nub run typecheck` clean, `nub run lint` clean, `nub run
 build` clean, and `nub run verify:ui` clean on that fresh build, with the board,
 HUD, card rail and legend rendering correctly at 390x844. The Rust gates were
 not re-run: nothing outside the web toolchain has been touched on this branch.**
@@ -1497,7 +1511,7 @@ Three traps, and the first is the one that matters:
    the rule that skills come before any other action.
 2. **A plan IS in flight**, which reverses what this list used to say. Plan 1
    (`plans/2026-09-17-chrome-and-layout-plan.md`) is being executed on the
-   branch `claude/chrome-and-layout`, **Tasks 1–5 done, Task 6 next**; use
+   branch `claude/chrome-and-layout`, **Tasks 1–6 done, Task 7 next**; use
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
    2026-09-16 "work on main" note above. There is no open PR. `origin` has the

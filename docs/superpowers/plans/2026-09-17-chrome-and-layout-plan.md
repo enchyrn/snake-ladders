@@ -899,7 +899,7 @@ legal player count. Claims like that are tested, not hoped.
 **Interfaces:**
 - Produces: `bands(players: number, viewportPx: number): Bands` where `Bands` is `{ header, rows, board, log, controls }`, all numbers in CSS px; and the constants `BOARD_PX = 366`, `LOG_LINE_PX = 22`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/ui/src/__tests__/bands.test.ts
@@ -934,7 +934,7 @@ describe("the match screen's band budget", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/bands.test.ts
@@ -942,7 +942,7 @@ nubx vitest run packages/ui/src/__tests__/bands.test.ts
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 ```ts
 // packages/ui/src/layout/bands.ts
@@ -980,7 +980,7 @@ export const bands = (players: number, viewportPx: number): Bands => {
 }
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/bands.test.ts
@@ -988,12 +988,51 @@ nubx vitest run packages/ui/src/__tests__/bands.test.ts
 
 Expected: PASS, including the three worked numbers from the spec.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/layout packages/ui/src/__tests__/bands.test.ts
 git commit -m "feat: the match screen's band budget as a tested pure function"
 ```
+
+
+> **Executed 2026-09-22.** Gates: `nub run test` **213 passed in 23 files**
+> (was 193 in 22), `nub run typecheck` clean, `nub run lint` clean, `nub run
+> build` clean, `nub run verify:ui` clean. The plan's own arithmetic is sound —
+> all three of the spec's worked numbers (2 → 61/235, 3 → 90/206, 6 → 177/119)
+> came out exactly, first try.
+>
+> **The budget closes at 844 and nowhere near every phone, and `bands` cannot
+> say which.** The fixed cost is **548px** before a single player row
+> (`HEADER 52 + BOARD 366 + CONTROLS 130`), so the viewport required runs 609 /
+> 638 / 667 / 696 / 725 for 2-6 players. That means:
+>
+> | Device | Height | What happens |
+> |---|---|---|
+> | iPhone 14/15 (the design target) | 844 | fits, 119-235px of log |
+> | Galaxy S8 | 740 | six players leaves **15px** — less than one 22px line |
+> | iPhone SE / 8 | 667 | four players leaves **zero** log; **five and six overflow**, by 29px and 58px |
+>
+> And those are CSS viewport heights *before* browser chrome, which a
+> host-served guest in Safari always has.
+>
+> The plan's own Step 1 test contains this and reads past it. `bands(6, 700)`
+> asserting `log === 0` is captioned "sacrifices the log before the board",
+> which sounds like graceful degradation; what actually happens at 700 is that
+> the log is already gone **and the layout is 25px over**. Because `log` clamps
+> at zero, `log: 0` means both "fits exactly" and "overflows by 58px", and a
+> consumer cannot tell them apart.
+>
+> Left the interface alone — Task 9 lays the bands out and should make that
+> call rather than have this task pre-empt it — but added a
+> `describe("where the budget stops closing")` block pinning the five required
+> heights, the 548px fixed cost, the exact set that overflows 667
+> (`[5, 6]`), and the sub-one-line log at 740. Eight extra tests. The limit is
+> now visible to whoever does the layout, and a constant edit that made it
+> worse fails here instead of on someone's handset.
+>
+> **This qualifies the spec's "the band budget closes by arithmetic … that is a
+> table, not a hope."** It is a table, and the table is for one phone.
 
 ---
 
