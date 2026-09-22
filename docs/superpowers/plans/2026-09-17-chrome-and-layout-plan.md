@@ -725,7 +725,7 @@ un-recolourable, un-alignable.
 **Interfaces:**
 - Produces: `VenomIcon`, `MineIcon`, `LadderIcon`, `SnakeIcon`, `FlagIcon`, `MomentumIcon`, `AnchorIcon`, `StunIcon`, each `(props: { readonly size?: number; readonly title?: string }) => JSX.Element`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/ui/src/__tests__/icons.test.tsx
@@ -760,7 +760,7 @@ describe("the game's own glyphs", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/icons.test.tsx
@@ -768,7 +768,7 @@ nubx vitest run packages/ui/src/__tests__/icons.test.tsx
 
 Expected: FAIL — the module does not exist.
 
-- [ ] **Step 3: Draw the eight glyphs**
+- [x] **Step 3: Draw the eight glyphs**
 
 ```tsx
 // packages/ui/src/icons/index.tsx
@@ -828,7 +828,7 @@ export const StunIcon = (p: IconProps) => (
 )
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/icons.test.tsx
@@ -836,12 +836,54 @@ nubx vitest run packages/ui/src/__tests__/icons.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/icons packages/ui/src/__tests__/icons.test.tsx
 git commit -m "feat: the game's eight glyphs as inline SVG on Lucide's grid"
 ```
+
+
+> **Executed 2026-09-22.** Gates: `nub run test` **193 passed in 22 files**
+> (was 190 in 21), `nub run typecheck` clean, `nub run lint` clean, `nub run
+> build` clean, `nub run verify:ui` clean on that fresh build.
+>
+> **The plan's `MineIcon` was a sun, and no test could have caught it.** A
+> centred circle with eight evenly spaced, detached, radially symmetric rays is
+> the universal brightness glyph — very nearly Lucide's own `sun`. In the card
+> rail at 20px it would have read as a display setting rather than the thing
+> that ends your turn. Redrawn as a contact mine: the spikes now **touch** the
+> body, sit on the upper hemisphere only, and the circle is dropped to `cy=14`
+> so it rests low in the frame. Detachment and radial symmetry are exactly what
+> make rays read as light, so breaking both is what separates the two shapes.
+>
+> This is the third time on this plan that rendering found what reading did
+> not, and the first where **every test passed on the defect**. All three of
+> Step 1's assertions — `currentColor`, `viewBox="0 0 24 24"`, `stroke-width="2"`
+> — are properties of the shared `Svg` wrapper, so they hold no matter what the
+> path data draws. The suite pins the *contract*; only a screenshot pins the
+> *drawing*. Worth remembering before adding a ninth glyph.
+>
+> The other seven were checked the same way and read correctly at both 64px and
+> 20px, against the board's own surface colour. `SnakeIcon` is the weakest —
+> at 20px it is close to a plain squiggle — but it is legible and it is not
+> *wrong*, so it was left alone.
+>
+> **Nothing consumes any of this yet, and the title again describes work that
+> is still ahead.** No module imports `../icons`, `lucide-react` is still
+> unimported anywhere in `packages/` or `apps/` despite being installed in
+> Task 1, and **all eight emoji are still in the source**: `☣ » ⚓ 💤 ⚑ ✸` in
+> `HUD.tsx`, `⟲` in `BoardCanvas.tsx`, `‹` in `lobby.tsx` and `join.tsx`. The
+> replacement happens in Tasks 7-9. As with Task 4, do not read this as done
+> work on the chrome.
+>
+> **Two tooling notes.** `vite-node` is not in the tree and `nubx` refuses to
+> fetch it without a terminal, so the preview was rendered by a throwaway
+> vitest file (deleted after) rather than by adding a dependency for one
+> screenshot. And `playwright.chromium.launch()` defaults to a headless-shell
+> build this container does not have; it needs
+> `executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"`, which
+> is the same browser `drive-app.mjs` already finds for itself.
 
 ---
 

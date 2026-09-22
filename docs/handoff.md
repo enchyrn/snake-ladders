@@ -1130,20 +1130,23 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
-> **Start at Task 5** of `plans/2026-09-17-chrome-and-layout-plan.md`:
-> "Icons — Lucide for the vocabulary, hand-drawn for the game's nouns".
-> Tasks 1-4 are done.
+> **Start at Task 6** of `plans/2026-09-17-chrome-and-layout-plan.md`:
+> "The band budget as a pure, tested function". Tasks 1-5 are done.
 >
-> **Task 4 replaced nothing, despite its title.** It defines the `button`
-> recipe and pins it; all eight hand-written classes are still in
-> `styles.css`, the file is still 779 lines, and because nothing imports
-> `styled-system/recipes` yet Panda emits **no `.btn` CSS at all**. The actual
-> replacement is Tasks 7-9. Do not read Task 4 as done work on the chrome.
+> **Tasks 4 and 5 built the parts; they changed nothing on screen.** The
+> `button` recipe is defined but unimported, so Panda emits **no `.btn` CSS at
+> all**; the eight glyphs exist but nothing imports them, `lucide-react` is
+> still unused despite being installed in Task 1, and **every emoji is still in
+> the source** (`☣ » ⚓ 💤 ⚑ ✸` in `HUD.tsx`, `⟲` in `BoardCanvas.tsx`, `‹` in
+> `lobby.tsx` and `join.tsx`). `styles.css` is still 779 lines with all eight
+> hand-written button classes. **The first task that changes a pixel is 7.**
+> Do not read Tasks 4-5 as done work on the chrome.
 >
-> Read Tasks 3 and 4's execution notes before trusting the plan text: three
-> tokens the plan's generator omitted are now derived, `styles.css` lost six
-> dead seat declarations, and Task 4's test had to be re-pointed through an
-> alias to pass the repo's own lint gate.
+> Read Tasks 3-5's execution notes before trusting the plan text: three tokens
+> the plan's generator omitted are now derived, `styles.css` lost six dead seat
+> declarations, Task 4's test had to be re-pointed through an alias to pass the
+> repo's own lint gate, and Task 5's `MineIcon` shipped as a **sun** in the
+> plan and had to be redrawn.
 
 1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
    "A boardgame, not a number game", Accepted. See the brainstorm table above
@@ -1172,7 +1175,7 @@ is left, in order:
 
    | Plan | Tasks | Covers |
    |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–4 done, start at Task 5.** |
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–5 done, start at Task 6.** |
    | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
 
    **Plan 1 is being executed on the branch `claude/chrome-and-layout`**, cut
@@ -1191,6 +1194,7 @@ is left, in order:
    | `858c07e` | An `overrides` block lifting the five advisories Panda's exact pins introduced |
    | `d42b881` | Task 3 — colour tokens derived from `palette.ts`; seat 4 moved out of the link-tint band |
    | `5be8a5d` | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
+   | *(this task)* | Task 5 — the eight game glyphs as inline SVG; the plan's mine was a sun |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
@@ -1312,12 +1316,28 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 4
-(2026-09-21), working tree clean — `nub run test` **190 passed in 21 files**
-(Task 3 added three, Task 4 two), `nub run typecheck` clean, `nub run lint` clean, `nub run
+**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 5
+(2026-09-22), working tree clean — `nub run test` **193 passed in 22 files**
+(Task 3 added three, Task 4 two, Task 5 three), `nub run typecheck` clean, `nub run lint` clean, `nub run
 build` clean, and `nub run verify:ui` clean on that fresh build, with the board,
 HUD, card rail and legend rendering correctly at 390x844. The Rust gates were
 not re-run: nothing outside the web toolchain has been touched on this branch.**
+
+**A verification blind spot Task 5 exposed, worth carrying forward.** The icon
+suite asserts `currentColor`, `viewBox` and `stroke-width` — and every one of
+those is a property of the shared `Svg` wrapper, so all three hold no matter
+what the path data draws. The plan's `MineIcon` was a **sun** (a centred circle
+with eight detached, radially symmetric rays, near-identical to Lucide's own
+`sun`) and passed every test. A suite can pin an icon's *contract*; only a
+screenshot pins its *drawing*. This is ADR 0020's "verification moves onto
+screenshots permanently" arriving in practice.
+
+To render one ad hoc: `playwright.chromium.launch()` defaults to a
+headless-shell build this container lacks, so pass
+`executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"` — the
+same browser `drive-app.mjs` finds for itself. `vite-node` is not in the tree
+and `nubx` will not fetch it without a terminal, so render through a throwaway
+vitest file rather than adding a dependency for one screenshot.
 
 **Corrected by Task 4:** Task 3 recorded that `panda.config.ts` is not in the
 tsc program. That was true when written and is now false — importing the config
@@ -1477,7 +1497,7 @@ Three traps, and the first is the one that matters:
    the rule that skills come before any other action.
 2. **A plan IS in flight**, which reverses what this list used to say. Plan 1
    (`plans/2026-09-17-chrome-and-layout-plan.md`) is being executed on the
-   branch `claude/chrome-and-layout`, **Tasks 1–4 done, Task 5 next**; use
+   branch `claude/chrome-and-layout`, **Tasks 1–5 done, Task 6 next**; use
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
    2026-09-16 "work on main" note above. There is no open PR. `origin` has the
