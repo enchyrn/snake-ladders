@@ -1221,7 +1221,7 @@ is left, in order:
    | `5be8a5d` | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
    | `e678ddb` | Task 5 — the eight game glyphs as inline SVG; the plan's mine was a sun |
    | `2983973` | Task 6 — the band budget as a pure function, plus where it stops closing |
-   | *(this task)* | Task 7 — progress rows, the state PlayerStrip would have dropped, and `styled-system` resolution |
+   | `f0fbe13` | Task 7 — progress rows, the state PlayerStrip would have dropped, and `styled-system` resolution |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
