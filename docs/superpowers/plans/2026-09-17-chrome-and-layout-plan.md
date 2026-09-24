@@ -1051,7 +1051,7 @@ is not one — the race is.
 - Consumes: `bands` (Task 6), `seatColour` from `@mutation/render/palette`.
 - Produces: `ProgressRows({ state, actingSeat }: { state: MatchState; actingSeat: string })`, replacing the exported `PlayerStrip` and `Progress`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/ui/src/__tests__/progress-rows.test.tsx
@@ -1096,7 +1096,7 @@ describe("ProgressRows", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
@@ -1104,7 +1104,7 @@ nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
 
 Expected: FAIL — `ProgressRows` is not exported.
 
-- [ ] **Step 3: Replace PlayerStrip and Progress with ProgressRows**
+- [x] **Step 3: Replace PlayerStrip and Progress with ProgressRows**
 
 In `packages/ui/src/HUD.tsx`, delete the `PlayerStrip` and `Progress` exports
 and add:
@@ -1161,7 +1161,7 @@ export const ProgressRows = ({
 
 Add `import { css } from "styled-system/css"` at the top of the file.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
@@ -1169,13 +1169,13 @@ nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Update the one consumer**
+- [x] **Step 5: Update the one consumer**
 
 In `packages/app-shell/src/routes/match.tsx`, replace the `PlayerStrip` and
 `Progress` imports and usages with `ProgressRows`, passing `state={match}` and
 `actingSeat={actingSeat}`.
 
-- [ ] **Step 6: Typecheck, lint and test**
+- [x] **Step 6: Typecheck, lint and test**
 
 ```bash
 nub run typecheck && nub run lint && nub run test
@@ -1184,12 +1184,65 @@ nub run typecheck && nub run lint && nub run test
 Expected: all PASS. `lint` matters here — `HUD.tsx` is `layer:ui` and must not
 have acquired an import from `app-shell`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/ui/src/HUD.tsx packages/ui/src/__tests__/progress-rows.test.tsx packages/app-shell/src/routes/match.tsx
 git commit -m "feat: progress rows replace the tile numeral and the progress stub"
 ```
+
+
+> **Executed 2026-09-24.** Gates: `nub run test` **224 passed in 24 files**
+> (was 213 in 23), `nub run typecheck` clean, `nub run lint` clean, `nub run
+> build` clean, `nub run verify:ui` clean on that fresh build. This is the
+> first task whose output is visible, and the first that ships Panda CSS.
+>
+> **`styled-system` resolved nowhere, so the import in Step 3 could not have
+> worked as written.** Not in `tsconfig.json` paths, not in
+> `apps/game-web/vite.config.ts`, not in `node_modules` — Panda's `outdir` is
+> the workspace root, outside every package. Task 4's test imported
+> `panda.config` itself and so never exercised it. Wired in all three, plus the
+> fourth place Task 2 left open: **`nub run test` was a bare `vitest run`** and
+> is now `nx run game-web:panda && vitest run`. Task 2 predicted this would
+> bite at Task 10; it bit here, and it bit production code rather than a test.
+> Verified by deleting `styled-system/` and running `nub run test`: 224 pass and
+> the gate regenerates the directory itself.
+>
+> **Deleting `PlayerStrip` dropped six pieces of player state and nothing in
+> Tasks 8-14 restored any of them** — venom, momentum, anchored, stunned,
+> finished and disconnected. Venom is the sharp one: Task 8 prices cards in
+> venom, so a player would read "costs 2" with no way to see they hold 1.
+> Checked the remaining tasks and the spec before concluding it; the spec's row
+> is "seat swatch, name, filled bar" and the only later `VenomIcon` use is the
+> card *cost*. **On the owner's decision, the state is carried onto the row**
+> as the Task 5 glyphs plus `data-away`/`data-done` dimming, which also gives
+> those icons their first consumer. Eight further tests pin it. This is a
+> deliberate deviation from the spec's stated row contents; ADR 0020 demotes
+> text, it does not delete state.
+>
+> **The badge column made the bars incomparable, and that defect was mine.**
+> With the badges `flex: none` but auto-width, each row's progress track took
+> whatever space the badges left — measured at **184/219/193/231/231/231px**, a
+> 26% spread. Since the fill is `position / top * 100%` of its own track, the
+> same position drew a different length on different rows, which destroys the
+> one thing these rows exist to show. Fixed with a fixed `w: "58px"` badge
+> column; re-measured at **163px on all six**.
+>
+> **The plan's `w: "54px"` name column clips two of the six default names.**
+> "Mamba" and "Python" both truncate to an ellipsis. Widened to 64px, measured
+> clean.
+>
+> Neither of those was visible in the markup and no assertion in this repo
+> would have caught either; both came from measuring the rendered row in a
+> browser. Same lesson as Task 5's sun, one layer up — and worth noting that
+> the useful tool was `getBoundingClientRect` in the page, not a screenshot.
+>
+> **Where the rows sit is wrong, and that is Task 9's job.** They render in
+> document flow where `PlayerStrip`/`Progress` were, which puts them between
+> the mine legend and the card rail rather than under the header. Task 9 Step 5
+> lays the five bands out. Also removed three CSS rules this task orphaned —
+> `.player-stats`, `.progress`, `.progress-bar` — taking `styles.css` from 779
+> to 759 lines. `.players` and `.player-name` stay: `lobby.tsx` still uses them.
 
 ---
 

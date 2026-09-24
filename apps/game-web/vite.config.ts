@@ -97,6 +97,9 @@ export default defineConfig({
       "@mutation/render": fileURLToPath(new URL("../../packages/render/src", import.meta.url)),
       "@mutation/ui": fileURLToPath(new URL("../../packages/ui/src", import.meta.url)),
       "@mutation/app-shell": fileURLToPath(new URL("../../packages/app-shell/src", import.meta.url)),
+      // Panda's generated output lives at the workspace root, outside every
+      // package, so nothing resolves it without being told.
+      "styled-system": fileURLToPath(new URL("../../styled-system", import.meta.url)),
     },
   },
   clearScreen: false,

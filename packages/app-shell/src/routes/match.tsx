@@ -8,7 +8,7 @@ import type { MatchClient } from "../store/match-client"
 import { BoardCanvas } from "@mutation/ui/BoardCanvas"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { EventLog } from "@mutation/ui/EventLog"
-import { CardRail, PlayerStrip, Progress } from "@mutation/ui/HUD"
+import { CardRail, ProgressRows } from "@mutation/ui/HUD"
 
 /** Isolated so the Roll button re-renders on its own — not on every card play,
  *  every tile reveal, or the roster twitching — since `canRollAtom` is the
@@ -86,8 +86,7 @@ export const MatchScreen = () => {
         <BoardCanvas state={match} onPickTile={hasMines ? pickTile : undefined} />
       </div>
 
-      <PlayerStrip state={match} me={actingSeat} />
-      <Progress state={match} />
+      <ProgressRows state={match} actingSeat={actingSeat} />
       <EventLog state={match} />
 
       {match.phase === "finished" && (

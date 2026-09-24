@@ -1,42 +1,12 @@
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
 import { countColour, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
+import { css } from "styled-system/css"
+import { AnchorIcon, MomentumIcon, StunIcon, VenomIcon } from "./icons"
 
 const CARDS: ReadonlyArray<CardKind> = ["anchor", "reverse", "double", "swap", "defuse"]
 
-export const PlayerStrip = ({
-  state,
-  me,
-}: {
-  readonly state: MatchState
-  readonly me: string
-}) => (
-  <ul className="players">
-    {state.players.map((player) => (
-      <li
-        key={player.id}
-        className={[
-          "player",
-          player.id === me ? "is-me" : "",
-          player.finishedAtRound !== null ? "is-done" : "",
-          player.connected ? "" : "is-away",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <span className="pip" style={{ background: seatColour(player.seat) }} />
-        <span className="player-name">{player.name}</span>
-        <span className="player-stats">
-          <span title="tile">{player.position}</span>
-          {player.venom > 0 && <span className="venom" title="venom">☣{player.venom}</span>}
-          {player.momentum > 0 && <span className="momentum" title="momentum">»{player.momentum}</span>}
-          {player.anchored && <span title="anchored">⚓</span>}
-          {player.stunned > 0 && <span title="sitting out">💤</span>}
-        </span>
-      </li>
-    ))}
-  </ul>
-)
+const badge = css({ display: "inline-flex", alignItems: "center", gap: "2px" })
 
 export const CardRail = ({
   me,
@@ -76,21 +46,106 @@ export const CardRail = ({
   )
 }
 
-export const Progress = ({ state }: { readonly state: MatchState }) => {
+/**
+ * One row per player: swatch, name, and a bar showing how far along the board
+ * they are. This replaces both the tile numeral in the old PlayerStrip and the
+ * 5%-wide stub the old Progress rendered — a player reads the race off the
+ * bars' relative lengths (ADR 0020). The tile number stays on the board.
+ *
+ * The badges are not in the spec's row, which is swatch/name/bar. They are here
+ * because deleting PlayerStrip otherwise dropped venom, momentum, anchor, stun,
+ * finished and disconnected with nothing downstream restoring any of them —
+ * and card costs are priced in venom, so a player would read a cost they could
+ * not check against a balance. ADR 0020 demotes text; it does not delete state.
+ */
+export const ProgressRows = ({
+  state,
+  actingSeat,
+}: {
+  readonly state: MatchState
+  readonly actingSeat: string
+}) => {
   const top = lastTile(state.config.size)
   return (
-    <div className="progress" aria-hidden>
+    <ul className={css({ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: "9px" })}>
       {state.players.map((player) => (
-        <div
+        <li
           key={player.id}
-          className="progress-bar"
-          style={{
-            width: `${(player.position / top) * 100}%`,
-            background: seatColour(player.seat),
-          }}
-        />
+          data-acting={player.id === actingSeat}
+          data-away={player.connected ? undefined : true}
+          data-done={player.finishedAtRound !== null ? true : undefined}
+          className={css({
+            display: "flex",
+            alignItems: "center",
+            gap: "9px",
+            "&[data-away]": { opacity: 0.45 },
+            "&[data-done]": { opacity: 0.7 },
+          })}
+        >
+          <span
+            className={css({
+              w: "14px",
+              h: "14px",
+              borderRadius: "50%",
+              flex: "none",
+              "li[data-acting='true'] &": { boxShadow: "0 0 0 2px var(--colors-text)" },
+            })}
+            style={{ background: seatColour(player.seat) }}
+          />
+          <span className={css({ fontSize: "sm", fontWeight: 600, w: "64px", truncate: true })}>
+            {player.name}
+          </span>
+          <span
+            role="progressbar"
+            aria-label={player.name}
+            aria-valuenow={player.position}
+            aria-valuemin={0}
+            aria-valuemax={top}
+            className={css({ flexGrow: 1, h: "10px", borderRadius: "5px", bg: "surface", overflow: "hidden" })}
+          >
+            <span
+              className={css({ display: "block", h: "100%", borderRadius: "5px" })}
+              style={{ width: `${(player.position / top) * 100}%`, background: seatColour(player.seat) }}
+            />
+          </span>
+          <span
+            className={css({
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: "1",
+              flex: "none",
+              w: "58px",
+              fontSize: "xs",
+              color: "textDim",
+            })}
+          >
+            {player.venom > 0 && (
+              <span data-venom={player.venom} className={badge} title={`venom ${player.venom}`}>
+                <VenomIcon size={12} />
+                {player.venom}
+              </span>
+            )}
+            {player.momentum > 0 && (
+              <span data-momentum={player.momentum} className={badge} title={`momentum ${player.momentum}`}>
+                <MomentumIcon size={12} />
+                {player.momentum}
+              </span>
+            )}
+            {player.anchored && (
+              <span data-anchored="true" className={badge} title="anchored">
+                <AnchorIcon size={12} />
+              </span>
+            )}
+            {player.stunned > 0 && (
+              <span data-stunned={player.stunned} className={badge} title="sitting out">
+                <StunIcon size={12} />
+              </span>
+            )}
+          </span>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
 

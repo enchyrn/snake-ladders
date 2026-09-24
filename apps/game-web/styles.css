@@ -600,26 +600,6 @@ button.start {
   flex: none;
 }
 
-.player-stats {
-  display: flex;
-  gap: 0.4em;
-  color: var(--text-dim);
-  font-size: 0.85em;
-}
-
-.progress {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.progress-bar {
-  height: 4px;
-  border-radius: 2px;
-  min-width: 2px;
-  transition: width 0.3s ease;
-}
-
 .control-bar {
   position: sticky;
   bottom: 0;

@@ -24,7 +24,8 @@
       "@mutation/app-shell/*": ["./packages/app-shell/src/*"],
       "@mutation/relay": ["./apps/relay/lan-relay.d.ts"],
       "@mutation/tooling/*": ["./scripts/*"],
-      "@mutation/panda-config": ["./panda.config.ts"]
+      "@mutation/panda-config": ["./panda.config.ts"],
+      "styled-system/*": ["./styled-system/*"]
     }
   },
   "include": ["apps", "packages", "vitest.config.ts"]

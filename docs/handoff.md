@@ -1130,9 +1130,23 @@ above polish.
 **The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
 is left, in order:
 
-> **Start at Task 7** of `plans/2026-09-17-chrome-and-layout-plan.md`:
-> "Progress rows replace the bare digit and the 40px stub". Tasks 1-6 are done,
-> and **Task 7 is the first that changes anything on screen**.
+> **Start at Task 8** of `plans/2026-09-17-chrome-and-layout-plan.md`:
+> "The control bar — five cards that flex, and a real dice tray". Tasks 1-7 are
+> done. Task 7 was the first to change anything on screen and the first to ship
+> Panda CSS.
+>
+> **Task 9 must move the rows.** They currently render in document flow where
+> `PlayerStrip`/`Progress` sat — between the mine legend and the card rail,
+> not under the header. Task 9 Step 5 is where the five bands get laid out.
+>
+> **Two defects in Task 7 were found by measuring the rendered row, not by
+> reading it and not from a screenshot.** The badge column made every row's
+> progress track a different width (184-231px, a 26% spread), so the same
+> position drew a different bar length per row and the race stopped being
+> comparable — the one thing the rows exist to show. And the plan's 54px name
+> column clipped "Mamba" and "Python", two of the six default names. Both are
+> fixed and re-measured (163px on all six tracks; no clipping). The tool that
+> found them was `getBoundingClientRect` in the page.
 >
 > **Take Task 6's finding into Task 9 with you.** The band budget closes at
 > 844px and not on every phone: the fixed cost is 548px before a single player
@@ -1186,7 +1200,7 @@ is left, in order:
 
    | Plan | Tasks | Covers |
    |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–6 done, start at Task 7.** |
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **In progress: Tasks 1–7 done, start at Task 8.** |
    | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
 
    **Plan 1 is being executed on the branch `claude/chrome-and-layout`**, cut
@@ -1207,6 +1221,7 @@ is left, in order:
    | `5be8a5d` | Task 4 — the `button` recipe, defined and pinned; nothing consumes it yet |
    | `e678ddb` | Task 5 — the eight game glyphs as inline SVG; the plan's mine was a sun |
    | `2983973` | Task 6 — the band budget as a pure function, plus where it stops closing |
+   | *(this task)* | Task 7 — progress rows, the state PlayerStrip would have dropped, and `styled-system` resolution |
 
    **The order is deliberate and reverses what this file used to say.** Earlier
    revisions named the settings spec as next; that was written before spec B
@@ -1330,12 +1345,21 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 6
-(2026-09-22), working tree clean — `nub run test` **213 passed in 23 files**
-(Task 3 added three, Task 4 two, Task 5 three, Task 6 twenty), `nub run typecheck` clean, `nub run lint` clean, `nub run
+**Current for plan-1 work: re-run on `claude/chrome-and-layout` after Task 7
+(2026-09-24), working tree clean — `nub run test` **224 passed in 24 files**, `nub run typecheck` clean, `nub run lint` clean, `nub run
 build` clean, and `nub run verify:ui` clean on that fresh build, with the board,
 HUD, card rail and legend rendering correctly at 390x844. The Rust gates were
 not re-run: nothing outside the web toolchain has been touched on this branch.**
+
+**`styled-system` had to be wired into four places, and three of them are not
+obvious.** Panda's `outdir` is the workspace root, outside every package, so
+nothing resolved `styled-system/css` until Task 7 needed it: `tsconfig.json`
+paths, `apps/game-web/vite.config.ts` aliases and `vitest.config.ts` aliases all
+needed an entry. The fourth is the one Task 2 flagged and left open — **`nub run
+test` was a bare `vitest run`** with no codegen, so a clean clone would fail the
+moment any test reached generated code. It is now `nx run game-web:panda &&
+vitest run`, verified by deleting `styled-system/` and watching the gate rebuild
+it. Task 2 expected this at Task 10; it arrived at Task 7, in production code.
 
 **A verification blind spot Task 5 exposed, worth carrying forward.** The icon
 suite asserts `currentColor`, `viewBox` and `stroke-width` — and every one of
@@ -1511,7 +1535,7 @@ Three traps, and the first is the one that matters:
    the rule that skills come before any other action.
 2. **A plan IS in flight**, which reverses what this list used to say. Plan 1
    (`plans/2026-09-17-chrome-and-layout-plan.md`) is being executed on the
-   branch `claude/chrome-and-layout`, **Tasks 1–6 done, Task 7 next**; use
+   branch `claude/chrome-and-layout`, **Tasks 1–7 done, Task 8 next**; use
    `superpowers:executing-plans`. Work is on that branch rather than straight
    onto `main` at the owner's instruction (2026-09-17), which supersedes the
    2026-09-16 "work on main" note above. There is no open PR. `origin` has the
