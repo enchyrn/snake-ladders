@@ -8,7 +8,7 @@ import type { MatchClient } from "../store/match-client"
 import { BoardCanvas } from "@mutation/ui/BoardCanvas"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { EventLog } from "@mutation/ui/EventLog"
-import { CardRail, ProgressRows } from "@mutation/ui/HUD"
+import { CardRail, DiceTray, ProgressRows } from "@mutation/ui/HUD"
 
 /** Isolated so the Roll button re-renders on its own — not on every card play,
  *  every tile reveal, or the roster twitching — since `canRollAtom` is the
@@ -133,6 +133,10 @@ export const MatchScreen = () => {
 
       <div className="control-bar">
         <CardRail me={actingPlayer} state={match} onPlay={playCard} disabled={match.phase !== "committing"} />
+        <DiceTray
+          onRoll={() => client.send({ _tag: "Commit", playerId: actingSeat })}
+          disabled={!canRollNow}
+        />
         <RollButton client={client} seat={actingSeat} />
       </div>
     </main>

@@ -1,7 +1,8 @@
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
 import { countColour, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
-import { css } from "styled-system/css"
+import { css, cx } from "styled-system/css"
+import { button } from "styled-system/recipes"
 import { ChevronRight } from "lucide-react"
 import { AnchorIcon, MomentumIcon, StunIcon, VenomIcon } from "./icons"
 
@@ -164,7 +165,14 @@ export const CardRail = ({
   const hasMines = state.config.modules.includes("minesweeper")
 
   return (
-    <div className="cards">
+    // No `overflow-x`: the rail's five cards (four without minesweeper) flex
+    // to fit the control bar rather than scrolling out of reach — the survey
+    // found a half-clipped "Double" behind the old fixed-width, scrolling rail.
+    // `flex: "1 1 0"` on the rail itself (the legacy `.cards { flex: 1 }` this
+    // replaces) is load-bearing: without it the rail sizes to its children's
+    // min-content instead of the space left over in the control bar, and the
+    // whole bar overflows off the left edge of the screen.
+    <div className={css({ display: "flex", gap: "6px", flex: "1 1 0", minWidth: 0 })}>
       {CARDS.filter((card) => card !== "defuse" || hasMines).map((card) => {
         const cost = cardCost[card]
         const affordable = me.venom >= cost
@@ -173,19 +181,63 @@ export const CardRail = ({
           <button
             key={card}
             type="button"
-            className="card"
+            className={cx(
+              button({ variant: "card", size: "sm" }),
+              css({ flex: "1 1 0", minWidth: 0 }),
+            )}
             disabled={disabled || !affordable || alreadyPlayed}
             title={cardBlurbs[card]}
             onClick={() => onPlay(card)}
           >
-            <span className="card-name">{card}</span>
-            <span className="card-cost">☣{cost}</span>
+            <span
+              className={css({
+                textTransform: "capitalize",
+                fontSize: "xs",
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              })}
+            >
+              {card}
+            </span>
+            <span className={css({ display: "flex", alignItems: "center", gap: "2px", color: "flag", fontSize: "xs" })}>
+              <VenomIcon size={12} />
+              {cost}
+            </span>
           </button>
         )
       })}
     </div>
   )
 }
+
+/**
+ * The input affordance, which is a different object from `Dice.show`'s
+ * rendered outcome — an input control inside the renderer is what ADR 0007
+ * exists to prevent. It is a real <button> so that hiding the Roll button
+ * (plan 2) does not remove the only keyboard path to Commit.
+ */
+export const DiceTray = ({
+  onRoll,
+  disabled,
+}: {
+  readonly onRoll: () => void
+  readonly disabled: boolean
+}) => (
+  <button
+    type="button"
+    aria-label="Roll the dice"
+    disabled={disabled}
+    onClick={onRoll}
+    className={button({ variant: "secondary", size: "lg" })}
+  >
+    <span aria-hidden className={css({ display: "flex", gap: "5px" })}>
+      <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
+      <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
+    </span>
+  </button>
+)
 
 /**
  * A one-line key to the minefield. Hidden tiles, revealed counts, flags and
