@@ -2,7 +2,15 @@ import { css, cx } from "styled-system/css"
 
 /** The safe-area gutters every screen pads out to, left and right. Kept as
  *  named constants rather than repeated `max()` expressions because the
- *  match screen's board overlay and control bar need the exact same values. */
+ *  match screen's board overlay and control bar need the exact same values.
+ *
+ *  Import these directly (not through the `@mutation/ui/...` alias) if you
+ *  need them inside a `css()` call: Panda's static extraction can follow a
+ *  same-package relative import (as `BoardCanvas.tsx` does) but not a
+ *  package-alias one, so `packages/app-shell/src/routes/match.tsx` — which
+ *  can only reach this file through the alias — mirrors the two literals by
+ *  hand instead. A silently-missing rule is the failure mode: the classname
+ *  still gets generated, it just matches nothing in the built CSS. */
 export const GUTTER_LEFT = "max(16px, env(safe-area-inset-left))"
 export const GUTTER_RIGHT = "max(16px, env(safe-area-inset-right))"
 

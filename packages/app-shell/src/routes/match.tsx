@@ -14,7 +14,7 @@ import { bands } from "@mutation/ui/layout/bands"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { History, Settings, X } from "lucide-react"
-import { GUTTER_LEFT, GUTTER_RIGHT, headingClass, matchScreenClass } from "@mutation/ui/layout/screen"
+import { headingClass, matchScreenClass } from "@mutation/ui/layout/screen"
 import { noticeBanner } from "@mutation/ui/Banners"
 
 /** Isolated so the Roll button re-renders on its own — not on every card play,
@@ -197,7 +197,14 @@ export const MatchScreen = () => {
             alignItems: "center",
             justifyContent: "center",
             gap: "3",
-            padding: GUTTER_LEFT,
+            // Same limit as the header's `HEADER_PX` above: Panda's static
+            // extraction cannot follow `GUTTER_LEFT` across a package-alias
+            // import (it resolved fine inside BoardCanvas.tsx's own package,
+            // via a relative import, but not through `@mutation/ui/...` —
+            // confirmed by the generated class having no matching rule, so
+            // this padding was silently 0 until this literal replaced it).
+            // Mirrors `GUTTER_LEFT` in `packages/ui/src/layout/screen.ts`.
+            padding: "max(16px, env(safe-area-inset-left))",
             background: "rgba(8, 11, 16, 0.92)",
             textAlign: "center",
           })}
@@ -227,7 +234,10 @@ export const MatchScreen = () => {
           display: "flex",
           alignItems: "stretch",
           gap: "0.6rem",
-          padding: `0.6rem ${GUTTER_RIGHT} max(0.6rem, env(safe-area-inset-bottom)) ${GUTTER_LEFT}`,
+          // Mirrors `GUTTER_LEFT`/`GUTTER_RIGHT` in `packages/ui/src/layout/screen.ts`
+          // by hand — see the comment on the result-overlay's padding above.
+          padding:
+            "0.6rem max(16px, env(safe-area-inset-right)) max(0.6rem, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
           background: "surface",
           borderTop: "1px solid",
           borderColor: "border",

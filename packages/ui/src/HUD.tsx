@@ -173,7 +173,7 @@ export const CardRail = ({
     // and Roll on a second row after it), so it needs no `flex` of its own
     // here — the column parent's `align-items: stretch`/`width: 100%` gives
     // it the full row width, which five cards then divide evenly below.
-    <div className={css({ display: "flex", gap: "6px" })}>
+    <div className={css({ display: "flex", gap: "4px" })}>
       {CARDS.filter((card) => card !== "defuse" || hasMines).map((card) => {
         const cost = cardCost[card]
         const affordable = me.venom >= cost
@@ -184,7 +184,12 @@ export const CardRail = ({
             type="button"
             className={cx(
               button({ variant: "card", size: "sm" }),
-              css({ flex: "1 1 0", minWidth: 0 }),
+              // Five cards at 390px leave each about 43px of label room
+              // inside the recipe's own padding — enough to truncate every
+              // name past "swap". Tighter padding claims some of that back;
+              // below `sm` (320–379px) there is no claiming it back, so the
+              // label still truncates there, which is fine.
+              css({ flex: "1 1 0", minWidth: 0, paddingInline: { base: "3", sm: "1" } }),
             )}
             disabled={disabled || !affordable || alreadyPlayed}
             title={cardBlurbs[card]}
@@ -195,9 +200,15 @@ export const CardRail = ({
                 textTransform: "capitalize",
                 fontSize: "xs",
                 overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
                 maxWidth: "100%",
+                // At 390px+ (`sm`) the name wraps to a second line instead of
+                // being cut off — the button has no fixed height, so it just
+                // grows past the 44px floor. Below `sm`, back to a single
+                // truncated line: there is no width left to wrap into.
+                whiteSpace: { base: "nowrap", sm: "normal" },
+                textOverflow: { base: "ellipsis", sm: "clip" },
+                overflowWrap: { sm: "break-word" },
+                textAlign: "center",
               })}
             >
               {card}
@@ -231,7 +242,10 @@ export const DiceTray = ({
     aria-label="Roll the dice"
     disabled={disabled}
     onClick={onRoll}
-    className={button({ variant: "secondary", size: "lg" })}
+    // Grows to share the row with whatever sits beside it (`Roll`, which
+    // keeps its own fixed width) instead of shrinking to its own content —
+    // the pair used to leave roughly a third of the row empty.
+    className={cx(button({ variant: "secondary", size: "lg" }), css({ flex: "1 1 auto" }))}
   >
     <span aria-hidden className={css({ display: "flex", gap: "5px" })}>
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />

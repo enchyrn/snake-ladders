@@ -13,6 +13,7 @@ import { MineLegend } from "./HUD"
 import { RotateCcw } from "lucide-react"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
+import { GUTTER_LEFT, GUTTER_RIGHT } from "./layout/screen"
 
 const canvasClass = css({
   display: "block",
@@ -36,7 +37,12 @@ const overlayClass = css({
   justifyContent: "flex-end",
   alignItems: "flex-end",
   gap: "2",
-  padding: "0 max(16px, env(safe-area-inset-right)) 0.5rem max(16px, env(safe-area-inset-left))",
+  // Importing these (rather than repeating the `max()` expressions) works
+  // here because Panda's static extraction can follow a same-package
+  // relative import — confirmed in the built CSS. It cannot follow the
+  // `@mutation/ui/...` alias from another package, which is why match.tsx
+  // hand-mirrors these same two constants instead of importing them.
+  padding: `0 ${GUTTER_RIGHT} 0.5rem ${GUTTER_LEFT}`,
   pointerEvents: "none",
 })
 
