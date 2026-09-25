@@ -14,16 +14,23 @@ import { bands } from "@mutation/ui/layout/bands"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { History, Settings, X } from "lucide-react"
+import { GUTTER_LEFT, GUTTER_RIGHT, headingClass, matchScreenClass } from "@mutation/ui/layout/screen"
+import { noticeBanner } from "@mutation/ui/Banners"
 
 /** Isolated so the Roll button re-renders on its own — not on every card play,
  *  every tile reveal, or the roster twitching — since `canRollAtom` is the
  *  only slice it reads. */
+const rollButtonClass = cx(
+  button({ variant: "primary", size: "md" }),
+  css({ flex: "none", minWidth: { base: "4.5rem", sm: "6rem" } }),
+)
+
 const RollButton = ({ client, seat }: { readonly client: MatchClient; readonly seat: string }) => {
   const canRoll = useAtomValue(canRollAtom)
   return (
     <button
       type="button"
-      className="primary roll"
+      className={rollButtonClass}
       disabled={!canRoll}
       onClick={() => client.send({ _tag: "Commit", playerId: seat })}
     >
@@ -88,10 +95,10 @@ export const MatchScreen = () => {
   }
 
   return (
-    <main className="screen match">
+    <main className={matchScreenClass}>
       <NoticeBanner />
       <DesyncBanner />
-      {armedDefuse && <p className="banner notice">Tap a tile within reach to disarm it.</p>}
+      {armedDefuse && <p className={noticeBanner}>Tap a tile within reach to disarm it.</p>}
 
       {/* Band 1: header — whose turn, round-log, settings (ADR 0020's chrome
        * home for the two controls that are not the board or the roll). */}
@@ -166,7 +173,7 @@ export const MatchScreen = () => {
 
       {/* Band 3: the board — fixed at the `board` token so a flex
        * miscalculation elsewhere in the tree can never squeeze it. */}
-      <div className={cx("board-wrap", css({ flex: "none", h: "board", w: "100%" }))}>
+      <div className={css({ position: "relative", flex: "none", minHeight: 0, h: "board", w: "100%" })}>
         <BoardCanvas state={match} onPickTile={hasMines ? pickTile : undefined} />
       </div>
 
@@ -180,25 +187,52 @@ export const MatchScreen = () => {
       </div>
 
       {match.phase === "finished" && (
-        <div className="result-overlay">
+        <div
+          className={css({
+            position: "absolute",
+            inset: 0,
+            zIndex: 5,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "3",
+            padding: GUTTER_LEFT,
+            background: "rgba(8, 11, 16, 0.92)",
+            textAlign: "center",
+          })}
+        >
           {/* `winners[0]` under `.length > 0` is always in range — noUncheckedIndexedAccess
            * still types it as possibly-undefined, so name it explicitly instead of asserting. */}
-          <h2>{winner ? `${nameOf(winner)} wins!` : "Match over"}</h2>
-          <ol className="standings">
+          <h2 className={headingClass}>{winner ? `${nameOf(winner)} wins!` : "Match over"}</h2>
+          <ol className={css({ margin: 0, padding: 0, listStyle: "none", fontSize: "1.1rem" })}>
             {match.winners.map((id, i) => (
               <li key={id}>
                 {i + 1}. {nameOf(id)}
               </li>
             ))}
           </ol>
-          <button type="button" className="primary" onClick={backHome}>
+          <button type="button" className={button({ variant: "primary", size: "md" })} onClick={backHome}>
             Back to home
           </button>
         </div>
       )}
 
       {/* Band 5: the control bar — card rail, then dice tray and Roll. */}
-      <div className="control-bar">
+      <div
+        className={css({
+          position: "sticky",
+          bottom: 0,
+          zIndex: 4,
+          display: "flex",
+          alignItems: "stretch",
+          gap: "0.6rem",
+          padding: `0.6rem ${GUTTER_RIGHT} max(0.6rem, env(safe-area-inset-bottom)) ${GUTTER_LEFT}`,
+          background: "surface",
+          borderTop: "1px solid",
+          borderColor: "border",
+        })}
+      >
         <ControlBar
           me={actingPlayer}
           state={match}
@@ -227,7 +261,7 @@ export const MatchScreen = () => {
           })}
         >
           <div className={css({ display: "flex", alignItems: "center", justifyContent: "space-between" })}>
-            <h2 className={css({ margin: 0, fontSize: "lg" })}>Round log</h2>
+            <h2 className={cx(headingClass, css({ margin: 0, fontSize: "lg" }))}>Round log</h2>
             <button
               type="button"
               aria-label="Close round log"

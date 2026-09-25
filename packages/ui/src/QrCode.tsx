@@ -1,4 +1,9 @@
 import qrcode from "qrcode-generator"
+import { css } from "styled-system/css"
+
+// White quiet zone around the code: a scanner needs the border, and the dark
+// page background would otherwise run right up to the modules.
+const qrClass = css({ padding: "2", background: "#fff", borderRadius: "0.5rem", maxWidth: "60vw", height: "auto" })
 
 /**
  * The margin a scanner needs to find the code's edges, in modules. Drawn into
@@ -35,7 +40,7 @@ export const QrCode = ({ value, size = 180 }: { readonly value: string; readonly
 
   return (
     <svg
-      className="qr"
+      className={qrClass}
       width={size}
       height={size}
       viewBox={`0 0 ${extent} ${extent}`}

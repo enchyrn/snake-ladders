@@ -6,6 +6,7 @@ import { useSession } from "../app/session"
 import { randomSeed } from "../app/hooks"
 import { button } from "styled-system/recipes"
 import { css, cx } from "styled-system/css"
+import { errorClass, headingClass, paragraphClass, screenClass, textInputClass } from "@mutation/ui/layout/screen"
 
 export const HomeScreen = () => {
   const session = useSession()
@@ -53,20 +54,36 @@ export const HomeScreen = () => {
   }
 
   return (
-    <main className="screen home">
-      <header className="brand">
-        <h1>
+    <main className={screenClass}>
+      <header>
+        <h1
+          className={cx(
+            headingClass,
+            css({ fontSize: "1.6rem", display: "flex", flexDirection: "column", gap: "0.15em" }),
+          )}
+        >
           Snakes &amp; Ladders
-          <span className="brand-sub">Mutation</span>
+          <span
+            className={css({
+              fontSize: "0.9rem",
+              fontWeight: 400,
+              color: "flag",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            })}
+          >
+            Mutation
+          </span>
         </h1>
-        <p className="tagline">
+        <p className={cx(paragraphClass, css({ color: "textDim" }))}>
           The board fights back. No internet, no accounts — just the phones in the room.
         </p>
       </header>
 
-      <label className="field">
+      <label className={css({ display: "flex", flexDirection: "column", gap: "0.35em" })}>
         <span>Your name</span>
         <input
+          className={textInputClass}
           value={session.identity.name}
           maxLength={14}
           onChange={(e) => session.rename(e.target.value)}
@@ -74,7 +91,7 @@ export const HomeScreen = () => {
         />
       </label>
 
-      <div className="actions">
+      <div className={css({ display: "flex", flexDirection: "column", gap: "0.6rem" })}>
         <button
           type="button"
           className={button({ variant: "primary", size: "lg" })}
@@ -110,7 +127,7 @@ export const HomeScreen = () => {
         </button>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className={cx(paragraphClass, errorClass)}>{error}</p>}
     </main>
   )
 }

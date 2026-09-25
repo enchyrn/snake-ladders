@@ -11,10 +11,21 @@
  * desync (rare, and never something to paper over) is never missed for the
  * same reason.
  */
+import { css, cx } from "styled-system/css"
+
+const banner = css({ margin: 0, padding: "0.6rem 0.85rem", borderRadius: "10px", fontSize: "0.9rem" })
+
+/** Exported so `match.tsx` can give the armed-defuse tip the same notice
+ *  look without a second banner subscribing to the store just to render it. */
+export const noticeBanner = cx(
+  banner,
+  css({ background: "rgba(242, 163, 60, 0.15)", border: "1px solid", borderColor: "flag", color: "flag" }),
+)
+
 export const NoticeBannerView = ({ notice }: { notice: string | null }) => {
   if (!notice) return null
   return (
-    <p className="banner notice" role="status">
+    <p className={noticeBanner} role="status">
       {notice}
     </p>
   )
@@ -23,7 +34,10 @@ export const NoticeBannerView = ({ notice }: { notice: string | null }) => {
 export const DesyncBannerView = ({ desync }: { desync: string | null }) => {
   if (!desync) return null
   return (
-    <p className="banner desync" role="alert">
+    <p
+      className={cx(banner, css({ background: "rgba(217, 69, 95, 0.18)", border: "1px solid", borderColor: "mine", color: "mine" }))}
+      role="alert"
+    >
       Out of sync with the host: {desync}
     </p>
   )

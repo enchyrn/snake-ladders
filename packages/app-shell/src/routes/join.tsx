@@ -8,6 +8,18 @@ import { joinState, manualPlacement, SEARCH_GRACE_MS } from "../app/join-state"
 import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
+import { button } from "styled-system/recipes"
+import { css, cx } from "styled-system/css"
+import {
+  barClass,
+  errorClass,
+  headingClass,
+  hintClass,
+  paragraphClass,
+  screenClass,
+  textInputClass,
+} from "@mutation/ui/layout/screen"
+import { ChevronLeft } from "lucide-react"
 
 export const JoinScreen = () => {
   const session = useSession()
@@ -119,47 +131,54 @@ export const JoinScreen = () => {
     void enter(addr.trim(), seed)
   }
 
+  const manualClass = css({ border: "1px solid", borderColor: "border", borderRadius: "10px", padding: "3" })
+
   const manualFields = (
     <>
       <input
+        className={cx(textInputClass, css({ width: "100%", margin: "0.5rem 0" }))}
         value={manual}
         placeholder="192.168.1.24:5000@7QF2"
         autoCapitalize="characters"
         onChange={(e) => setManual(e.target.value)}
       />
-      <button type="button" disabled={joining} onClick={enterManually}>
+      <button type="button" className={button({ size: "md" })} disabled={joining} onClick={enterManually}>
         Join
       </button>
     </>
   )
 
   return (
-    <main className="screen">
-      <header className="bar">
-        <button type="button" onClick={() => void navigate({ to: "/" })}>
-          ‹ Back
+    <main className={screenClass}>
+      <header className={barClass}>
+        <button type="button" className={button({ size: "md" })} onClick={() => void navigate({ to: "/" })}>
+          <ChevronLeft size={16} aria-hidden="true" /> Back
         </button>
-        <h2>Join a game</h2>
+        <h2 className={headingClass}>Join a game</h2>
       </header>
 
       {state === "searching" && (
-        <p className="hint" role="status">
+        <p className={cx(paragraphClass, hintClass)} role="status">
           Looking for games on this Wi-Fi. Both devices need to be on the same
           network — a phone hotspot works, and neither device needs internet.
         </p>
       )}
 
       {state === "found" && (
-        <ul className="rooms">
+        <ul className={css({ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2" })}>
           {rooms.data.map((room) => (
             <li key={room.room}>
               <button
                 type="button"
+                className={cx(
+                  button({ size: "md" }),
+                  css({ width: "100%", display: "flex", justifyContent: "space-between", gap: "2", textAlign: "left" }),
+                )}
                 disabled={joining || room.locked || room.players >= room.capacity}
                 onClick={() => void enter(room.addr, room.seed)}
               >
-                <span className="room-code">{room.room}</span>
-                <span className="room-host">{room.host}</span>
+                <span className={css({ fontWeight: 700, letterSpacing: "0.05em" })}>{room.room}</span>
+                <span className={css({ flex: 1, color: "textDim" })}>{room.host}</span>
                 <span className="room-count">
                   {room.players}/{room.capacity}
                   {room.locked ? " · in progress" : ""}
@@ -172,12 +191,12 @@ export const JoinScreen = () => {
 
       {placement === "disclosure" && (
         <details
-          className="manual"
+          className={manualClass}
           open={byAddress}
           onToggle={(e) => setByAddress(e.currentTarget.open)}
         >
           <summary>Join by address</summary>
-          <p className="hint">
+          <p className={cx(paragraphClass, hintClass)}>
             {arrival
               ? "Read from the code you scanned. Check the room, then tap Join."
               : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
@@ -188,16 +207,16 @@ export const JoinScreen = () => {
 
       {placement === "promoted" && (
         <>
-          <p className="hint">
+          <p className={cx(paragraphClass, hintClass)}>
             {arrival
               ? "The code didn't show up automatically. Check the address below, then tap Join."
               : "No games showed up on this Wi-Fi. Enter the address shown on the host's screen, or check that both devices are on the same network."}
           </p>
-          <div className="manual">{manualFields}</div>
+          <div className={manualClass}>{manualFields}</div>
         </>
       )}
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className={cx(paragraphClass, errorClass)}>{error}</p>}
     </main>
   )
 }

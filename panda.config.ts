@@ -44,11 +44,25 @@ export default defineConfig({
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             gap: "2", borderRadius: "10px", fontFamily: "inherit", fontWeight: 600,
             cursor: "pointer", border: "1px solid transparent",
+            // Anything the player presses gets a real target and never fights
+            // the browser's own gestures (double-tap zoom, text selection on
+            // a fast tap) — was a bare `button {}` rule in styles.css, so
+            // every button needs it, not just the ones with their own variant.
+            touchAction: "manipulation",
+            userSelect: "none",
+            "-webkit-user-select": "none",
             _disabled: { opacity: 0.45, cursor: "default" },
           },
           variants: {
             variant: {
-              primary: { bg: "finish", color: "void", fontWeight: 700 },
+              // Opacity alone is not enough for a saturated fill: at 45% on a
+              // dark ground a gold button still reads as the main action
+              // while refusing to respond to a tap. A disabled primary gives
+              // up its fill and looks like what it is.
+              primary: {
+                bg: "finish", color: "void", fontWeight: 700,
+                _disabled: { bg: "surfaceRaised", borderColor: "border", color: "textDim", fontWeight: 500 },
+              },
               secondary: { bg: "surfaceRaised", color: "text", borderColor: "border" },
               ghost: { bg: "transparent", color: "textDim" },
               card: { bg: "surfaceRaised", color: "text", borderColor: "border", flexDirection: "column", gap: "1" },

@@ -12,6 +12,49 @@ import { showRound } from "./round-playback"
 import { MineLegend } from "./HUD"
 import { RotateCcw } from "lucide-react"
 import { css, cx } from "styled-system/css"
+import { button } from "styled-system/recipes"
+
+const canvasClass = css({
+  display: "block",
+  width: "100%",
+  height: "100%",
+  // The board handles its own drag-to-look and tap-to-pick; the page must
+  // not also try to scroll or zoom underneath a finger on it.
+  touchAction: "none",
+})
+
+// Overlays that belong to the board itself: the reset-view button and the
+// minefield key. They sit inside the board's own wrapper, so they never
+// cover the roster or the control bar, and they let pointer events through
+// to the canvas everywhere but on their own controls.
+const overlayClass = css({
+  position: "absolute",
+  inset: 0,
+  zIndex: 2,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "flex-end",
+  alignItems: "flex-end",
+  gap: "2",
+  padding: "0 max(16px, env(safe-area-inset-right)) 0.5rem max(16px, env(safe-area-inset-left))",
+  pointerEvents: "none",
+})
+
+const viewResetClass = cx(
+  button({ variant: "secondary", size: "sm" }),
+  css({
+    pointerEvents: "auto",
+    minHeight: "36px",
+    padding: "0.3em 0.75em",
+    fontSize: "0.85rem",
+    background: "rgba(8, 11, 16, 0.75)",
+    backdropFilter: "blur(6px)",
+    borderColor: "revealedEdge",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  }),
+)
 
 interface Props {
   readonly state: MatchState
@@ -124,21 +167,14 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
     <>
       <canvas
         ref={canvasRef}
-        className="board-canvas"
+        className={canvasClass}
         onPointerDown={onPickTile ? handlePointerDown : undefined}
         onPointerUp={onPickTile ? handlePointerUp : undefined}
         onPointerCancel={onPickTile ? handlePointerCancel : undefined}
       />
-      <div className="board-overlay">
+      <div className={overlayClass}>
         {viewMoved && (
-          <button
-            type="button"
-            className={cx(
-              "view-reset",
-              css({ display: "flex", alignItems: "center", gap: "4px" }),
-            )}
-            onClick={resetView}
-          >
+          <button type="button" className={viewResetClass} onClick={resetView}>
             <RotateCcw size={14} aria-hidden="true" /> Reset view
           </button>
         )}

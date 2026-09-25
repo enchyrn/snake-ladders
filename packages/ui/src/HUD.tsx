@@ -285,26 +285,65 @@ export const ControlBar = ({
  * spent mines are all drawn on the board itself; this names them, and tells a
  * first-time player the one thing the board cannot: tapping flags a tile.
  */
+const legendClass = css({
+  alignSelf: "stretch",
+  margin: 0,
+  padding: "0.35rem 0.6rem",
+  listStyle: "none",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "0.25rem 0.9rem",
+  fontSize: "0.75rem",
+  color: "textDim",
+  background: "rgba(8, 11, 16, 0.7)",
+  backdropFilter: "blur(6px)",
+  borderRadius: "10px",
+  "& li": { display: "flex", alignItems: "center", gap: "0.35em", whiteSpace: "nowrap" },
+})
+
+const swatchClass = css({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "1.25rem",
+  height: "1.25rem",
+  borderRadius: "3px",
+  fontWeight: 800,
+  fontSize: "0.85rem",
+  lineHeight: 1,
+})
+
+const hiddenSwatch = cx(
+  swatchClass,
+  css({
+    background: "surfaceRaised",
+    boxShadow: "inset 1px 1px 0 rgba(255, 255, 255, 0.12), inset -1px -1px 0 rgba(0, 0, 0, 0.45)",
+  }),
+)
+const revealedSwatch = cx(swatchClass, css({ background: "revealed", boxShadow: "inset 1px 1px 0 rgba(0, 0, 0, 0.4)" }))
+const flagSwatch = cx(swatchClass, css({ background: "surfaceRaised", color: "flag" }))
+const mineSwatch = cx(swatchClass, css({ background: "rgba(217, 69, 95, 0.28)", color: "#9aa7ad" }))
+
 export const MineLegend = () => (
-  <ul className="legend" aria-label="Minefield key">
+  <ul className={legendClass} aria-label="Minefield key">
     <li>
-      <span className="legend-swatch is-hidden" />
+      <span className={hiddenSwatch} />
       hidden
     </li>
     <li>
-      <span className="legend-swatch is-revealed" style={{ color: countColour(2) }}>
+      <span className={revealedSwatch} style={{ color: countColour(2) }}>
         2
       </span>
       mines nearby
     </li>
     <li>
-      <span className="legend-swatch is-flag">
+      <span className={flagSwatch}>
         <FlagIcon size={14} />
       </span>
-      flag <span className="legend-hint">(tap a hidden tile)</span>
+      flag <span className={css({ color: "text" })}>(tap a hidden tile)</span>
     </li>
     <li>
-      <span className="legend-swatch is-mine">
+      <span className={mineSwatch}>
         <MineIcon size={14} />
       </span>
       spent mine

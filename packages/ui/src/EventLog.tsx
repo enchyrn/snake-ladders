@@ -67,18 +67,24 @@ export const EventLog = ({
   // at all, so no mode may take it out of the tree — an empty round still
   // renders the live region, just with nothing in it yet.
   //
-  // `.log` still carries the legacy `styles.css` rule that floated it above
-  // the board — a `.screen.match .log` descendant selector, which keeps
-  // matching this element under Task 9's flow layout however deep it sits.
-  // The class stays (drive-app.mjs's ".log li" check and the panel look —
-  // background, padding, radius, font-size — both come from it); only the
-  // positioning half is reset here, in the Panda layer that wins over it, so
-  // the log lays out where its container puts it instead of floating.
+  // The `log` class carries no styling of its own — it is what
+  // `scripts/drive-app.mjs` greps for (`.log li`) to confirm a round
+  // narrated, so it stays as a hook even though the panel's look (background,
+  // padding, radius, font-size) is the Panda classes right beside it.
   return (
     <ul
       className={cx(
         "log",
-        css({ position: "static", top: "auto", left: "auto", right: "auto", zIndex: "auto", maxHeight: "none", overflowY: "visible" }),
+        css({
+          margin: 0,
+          padding: "0.5rem 0.75rem",
+          listStyle: "none",
+          background: "rgba(8, 11, 16, 0.7)",
+          backdropFilter: "blur(6px)",
+          borderRadius: "12px",
+          fontSize: "0.85rem",
+          "& li": { padding: "0.15em 0" },
+        }),
       )}
       aria-live="polite"
     >
