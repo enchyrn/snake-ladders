@@ -22,12 +22,20 @@ export default defineConfig({
         spacing: {
           "1": { value: "4px" }, "2": { value: "8px" }, "3": { value: "12px" },
           "4": { value: "16px" }, "5": { value: "24px" }, "6": { value: "32px" },
+          // The side gutters every screen pads to, one per edge because the
+          // notch is on one side at a time in landscape. Use them as
+          // longhands (`paddingLeft: "gutterL"`) or as `{spacing.gutterL}`
+          // inside a string: a bare multi-token shorthand is emitted verbatim.
+          gutterL: { value: "max(16px, env(safe-area-inset-left))" },
+          gutterR: { value: "max(16px, env(safe-area-inset-right))" },
         },
         fontSizes: {
           xs: { value: "12px" }, sm: { value: "13px" }, md: { value: "15px" },
           lg: { value: "18px" }, xl: { value: "24px" }, display: { value: "32px" },
         },
-        sizes: { tap: { value: "44px" }, board: { value: "366px" } },
+        // `board` and `header` are BOARD_PX and HEADER_PX in
+        // packages/ui/src/layout/bands.ts; panda-tokens.test.ts pins them.
+        sizes: { tap: { value: "44px" }, board: { value: "366px" }, header: { value: "52px" } },
       },
       // The app is phone-first and stays so. Panda's breakpoints are
       // min-width, so `sm` means "380px and wider" — the tight 320–380px

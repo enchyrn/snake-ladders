@@ -1,18 +1,4 @@
-import { css, cx } from "styled-system/css"
-
-/** The safe-area gutters every screen pads out to, left and right. Kept as
- *  named constants rather than repeated `max()` expressions because the
- *  match screen's board overlay and control bar need the exact same values.
- *
- *  Import these directly (not through the `@mutation/ui/...` alias) if you
- *  need them inside a `css()` call: Panda's static extraction can follow a
- *  same-package relative import (as `BoardCanvas.tsx` does) but not a
- *  package-alias one, so `packages/app-shell/src/routes/match.tsx` — which
- *  can only reach this file through the alias — mirrors the two literals by
- *  hand instead. A silently-missing rule is the failure mode: the classname
- *  still gets generated, it just matches nothing in the built CSS. */
-export const GUTTER_LEFT = "max(16px, env(safe-area-inset-left))"
-export const GUTTER_RIGHT = "max(16px, env(safe-area-inset-right))"
+import { css } from "styled-system/css"
 
 /**
  * Every route but the match screen scrolls normally, padded out to the safe
@@ -23,18 +9,36 @@ export const screenClass = css({
   display: "flex",
   flexDirection: "column",
   gap: "4",
-  padding: `max(16px, env(safe-area-inset-top)) ${GUTTER_RIGHT} max(16px, env(safe-area-inset-bottom)) ${GUTTER_LEFT}`,
+  paddingTop: "max(16px, env(safe-area-inset-top))",
+  paddingRight: "gutterR",
+  paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+  paddingLeft: "gutterL",
   maxWidth: "640px",
   marginInline: "auto",
 })
 
-/** The match screen: the board owns it, so it fills the viewport exactly
- *  instead of scrolling, and nothing pads it — the five bands place
- *  themselves. */
-export const matchScreenClass = cx(
-  screenClass,
-  css({ height: "100dvh", maxWidth: "none", padding: 0, gap: 0, position: "relative", overflow: "hidden" }),
-)
+/** The match screen: the board owns it, so it fills the viewport exactly and
+ *  nothing pads it — each band carries its own gutters.
+ *
+ *  Its own complete rule rather than `cx(screenClass, css({ padding: 0 }))`:
+ *  `cx` only concatenates atomic class names, and which of two conflicting
+ *  utilities wins is decided by stylesheet order, not argument order. That
+ *  composition left `p_0` losing to the gutters and `gap_0` to `gap_4`.
+ *
+ *  It scrolls only if the fixed bands cannot fit at all (a phone shorter than
+ *  the budget in bands.ts), so the control bar is reachable rather than
+ *  clipped — the board is never the thing that gives way. */
+export const matchScreenClass = css({
+  height: "100dvh",
+  display: "flex",
+  flexDirection: "column",
+  position: "relative",
+  overflowX: "hidden",
+  overflowY: "auto",
+})
+
+/** A band of the match screen that lines its content up with the gutters. */
+export const gutterBandClass = css({ paddingLeft: "gutterL", paddingRight: "gutterR" })
 
 export const barClass = css({ display: "flex", alignItems: "center", gap: "3", "& h2": { margin: 0 } })
 
