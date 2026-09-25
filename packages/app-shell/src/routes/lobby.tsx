@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
-import { Plus } from "lucide-react"
+import { ChevronDown, Plus } from "lucide-react"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
 import { useSession } from "../app/session"
@@ -30,6 +30,7 @@ export const LobbyScreen = () => {
   const me = useAtomValue(meAtom)
   const room = useAtomValue(roomAtom)
   const [guestName, setGuestName] = useState("")
+  const [expandedModules, setExpandedModules] = useState<ReadonlySet<RuleModule>>(() => new Set())
 
   // A peer only ever proposes modules and a start through the host's Configure
   // and Start; on this device's own screen a peer just watches them happen.
@@ -71,6 +72,15 @@ export const LobbyScreen = () => {
   const leave = () => {
     session.close()
     void navigate({ to: "/" })
+  }
+
+  const toggleExpanded = (module: RuleModule) => {
+    setExpandedModules((prev) => {
+      const next = new Set(prev)
+      if (next.has(module)) next.delete(module)
+      else next.add(module)
+      return next
+    })
   }
 
   return (
@@ -194,32 +204,47 @@ export const LobbyScreen = () => {
         >
           {allModules.map((module) => {
             const active = match.config.modules.includes(module)
+            const expanded = expandedModules.has(module)
             return (
               <li key={module}>
-                <button
-                  type="button"
-                  className={cx(
-                    button({ variant: "toggle", size: "md" }),
-                    css({ width: "100%", justifyContent: "space-between" }),
-                    active ? onColour : undefined,
-                  )}
-                  disabled={!canHost}
-                  aria-pressed={active}
-                  onClick={() => toggleModule(module)}
-                >
-                  <span>{moduleLabels[module]}</span>
-                  <span className={active ? undefined : css({ color: "textDim" })}>
-                    {active ? "On" : "Off"}
-                  </span>
-                </button>
-                {/* Blurb on demand: the four paragraphs that used to sit here
-                    permanently are what pushed Start below the fold. */}
-                <details>
-                  <summary className={css({ fontSize: "xs", color: "textDim", cursor: "pointer", paddingBlock: "1" })}>
-                    What this does
-                  </summary>
-                  <p className="hint">{moduleBlurbs[module]}</p>
-                </details>
+                {/* The state toggle and the blurb disclosure are two
+                    different actions, so they're two tap targets in one
+                    44px-tall row rather than one stacked on the other — a
+                    permanent second row per module (even a small one) is
+                    what pushed Start below the fold before. */}
+                <div className={css({ display: "flex", gap: "1" })}>
+                  <button
+                    type="button"
+                    className={cx(
+                      button({ variant: "toggle", size: "md" }),
+                      css({ flex: 1, justifyContent: "space-between" }),
+                      active ? onColour : undefined,
+                    )}
+                    disabled={!canHost}
+                    aria-pressed={active}
+                    onClick={() => toggleModule(module)}
+                  >
+                    <span>{moduleLabels[module]}</span>
+                    <span className={active ? undefined : css({ color: "textDim" })}>
+                      {active ? "On" : "Off"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={cx(button({ variant: "ghost", size: "md" }), css({ flex: "none", width: "tap", paddingInline: "0" }))}
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? "Hide" : "Show"} what ${moduleLabels[module]} does`}
+                    onClick={() => toggleExpanded(module)}
+                  >
+                    <ChevronDown
+                      size={18}
+                      aria-hidden
+                      className={css({ transition: "transform 0.15s" })}
+                      style={{ transform: expanded ? "rotate(180deg)" : undefined }}
+                    />
+                  </button>
+                </div>
+                {expanded && <p className="hint">{moduleBlurbs[module]}</p>}
               </li>
             )
           })}
