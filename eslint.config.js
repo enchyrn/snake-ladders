@@ -52,7 +52,14 @@ export default [
           // so the exception is one visible line rather than a `../../../..`
           // that reaches past the rule unseen. Splitting the sequencer out of
           // the executable would retire it.
-          allow: ["@mutation/relay"],
+          // `../../../../panda.config` (packages/ui/src/__tests__/button-recipe.test.ts):
+          // the button recipe's test pins the config as actually defined, so
+          // it has to read panda.config.ts directly rather than the
+          // generated output. That file sits at the workspace root, outside
+          // every project, so the boundary rule can never resolve it to a
+          // target project — `allow` is the one thing this rule checks
+          // before that resolution even happens.
+          allow: ["@mutation/relay", "../../../../panda.config"],
           depConstraints: [
             // The reducer is the bottom of the world. It may import nothing
             // internal at all: every rule in CLAUDE.md's determinism contract
@@ -97,17 +104,5 @@ export default [
         },
       ],
     },
-  },
-  {
-    // panda.config.ts sits at the workspace root, outside every project, so
-    // the project graph has no target project for it: the boundary rule
-    // reports any relative import of it as reaching an "external resource"
-    // unconditionally, before `allow`/`depConstraints` (which only apply once
-    // a target project is found) are consulted. This test's whole job is to
-    // pin the button recipe as it is actually defined in that config, so it
-    // reads panda.config.ts directly rather than the generated output — the
-    // rule is switched off for this one file instead of routed around it.
-    files: ["packages/ui/src/__tests__/button-recipe.test.ts"],
-    rules: { "@nx/enforce-module-boundaries": "off" },
   },
 ]
