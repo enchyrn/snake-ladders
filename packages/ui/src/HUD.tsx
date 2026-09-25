@@ -168,11 +168,11 @@ export const CardRail = ({
     // No `overflow-x`: the rail's five cards (four without minesweeper) flex
     // to fit the control bar rather than scrolling out of reach — the survey
     // found a half-clipped "Double" behind the old fixed-width, scrolling rail.
-    // `flex: "1 1 0"` on the rail itself (the legacy `.cards { flex: 1 }` this
-    // replaces) is load-bearing: without it the rail sizes to its children's
-    // min-content instead of the space left over in the control bar, and the
-    // whole bar overflows off the left edge of the screen.
-    <div className={css({ display: "flex", gap: "6px", flex: "1 1 0", minWidth: 0 })}>
+    // This is its own full-width row in `.control-bar` (match.tsx puts the
+    // dice tray and Roll on a second row below it), so it needs no `flex` of
+    // its own here — the column parent's `align-items: stretch` gives it the
+    // full row width, which five cards then divide evenly below.
+    <div className={css({ display: "flex", gap: "6px" })}>
       {CARDS.filter((card) => card !== "defuse" || hasMines).map((card) => {
         const cost = cardCost[card]
         const affordable = me.venom >= cost

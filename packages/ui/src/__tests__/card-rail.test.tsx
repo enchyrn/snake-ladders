@@ -24,6 +24,26 @@ describe("CardRail", () => {
     expect(html.match(/<button/g)).toHaveLength(5)
     expect(html).toContain("disabled")
   })
+
+  // The control bar used to squeeze the rail into a shared row with the dice
+  // tray and Roll, driving every card under the 44px tap minimum (~26px at
+  // phone width) — this only checks the static half of that regression: every
+  // card still carries the button recipe's `size: "sm"` variant, which is
+  // what applies `minHeight: tap` (44px). The width half (each card actually
+  // getting the rail's full row) is a real layout computation
+  // `renderToStaticMarkup` cannot see; that is covered by driving the built
+  // app and reading the control bar's rendered widths (see task-8-report.md).
+  it("gives every card the recipe's tap-height size variant", () => {
+    const me = { ...state().players[0]!, venom: 0 }
+    const html = renderToStaticMarkup(
+      <CardRail me={me} state={state()} onPlay={() => {}} disabled={false} />,
+    )
+    const buttons = html.match(/<button[^>]*>/g) ?? []
+    expect(buttons).toHaveLength(5)
+    for (const button of buttons) {
+      expect(button).toContain("btn--size_sm")
+    }
+  })
 })
 
 describe("DiceTray", () => {
