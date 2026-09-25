@@ -882,10 +882,12 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-**Checkpoint written 2026-09-16, updated after the two quick wins and again
-after ADR 0020 — the feel ADR — was written.**
-Everything below is committed and on `main`; nothing lives only in a
-conversation.
+**Checkpoint last updated 2026-09-25, at the Task 7 boundary of plan 1.**
+The live work is on `claude/chrome-and-layout`, pushed, **not** on `main` —
+older paragraphs below that say "on `main`" describe the history that led here
+and were true when written. Everything is committed; nothing lives only in a
+conversation. Plan 1 stands at **47 of 95 checkboxes ticked, Tasks 1-7 of 14
+done**; start at the "Start at Task 8" block below.
 
 ### Where the work stands
 
@@ -1375,7 +1377,16 @@ headless-shell build this container lacks, so pass
 `executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"` — the
 same browser `drive-app.mjs` finds for itself. `vite-node` is not in the tree
 and `nubx` will not fetch it without a terminal, so render through a throwaway
-vitest file rather than adding a dependency for one screenshot.
+vitest file rather than adding a dependency for one screenshot. When that page
+needs the app's styles, inline **every** `dist/assets/*.css` — there are four,
+and Panda's output is not the first; taking one produced an unstyled page that
+looked like a component defect and was not.
+
+**And a screenshot is not the last rung.** Task 7's two real defects — every
+progress row having a different track width, and two of six default names
+clipping — were both invisible in the markup *and* in the screenshot. What
+found them was `getBoundingClientRect` evaluated in the page. Reach for
+measurement, not just a picture, whenever a layout claim is about size.
 
 **Corrected by Task 4:** Task 3 recorded that `panda.config.ts` is not in the
 tsc program. That was true when written and is now false — importing the config
