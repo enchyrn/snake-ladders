@@ -2,6 +2,8 @@ import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } fro
 import { countColour, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
 import { css } from "styled-system/css"
+import { ChevronRight } from "lucide-react"
+import { AnchorIcon, MomentumIcon, StunIcon, VenomIcon } from "./icons"
 
 const CARDS: ReadonlyArray<CardKind> = ["anchor", "reverse", "double", "swap", "defuse"]
 
@@ -30,49 +32,119 @@ export const ProgressRows = ({
         gap: "9px",
       })}
     >
-      {state.players.map((player) => (
-        <li
-          key={player.id}
-          data-acting={player.id === actingSeat}
-          className={css({ display: "flex", alignItems: "center", gap: "9px" })}
-        >
-          <span
-            className={css({ width: "14px", height: "14px", borderRadius: "50%", flex: "none" })}
-            style={{ background: seatColour(player.seat) }}
-          />
-          <span
+      {state.players.map((player) => {
+        const isActing = player.id === actingSeat
+        const isDone = player.finishedAtRound !== null
+        const isAway = !player.connected
+        return (
+          <li
+            key={player.id}
+            data-acting={isActing}
             className={css({
-              fontSize: "sm",
-              fontWeight: 600,
-              width: "54px",
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              textOverflow: "ellipsis",
+              display: "flex",
+              alignItems: "center",
+              gap: "9px",
+              opacity: isAway ? 0.35 : 1,
+              textDecoration: isAway ? "line-through" : "none",
             })}
           >
-            {player.name}
-          </span>
-          <span
-            role="progressbar"
-            aria-label={player.name}
-            aria-valuenow={player.position}
-            aria-valuemin={0}
-            aria-valuemax={top}
-            className={css({
-              flexGrow: 1,
-              height: "10px",
-              borderRadius: "5px",
-              background: "surface",
-              overflow: "hidden",
-            })}
-          >
+            {/* Reserves its width on every row so the acting row's marker
+             * appearing doesn't nudge the swatch and bar sideways. Bold alone
+             * would fail colour-blind and low-vision players the same way the
+             * dropped colour-only cue would have (ADR 0020). */}
             <span
-              className={css({ display: "block", height: "100%", borderRadius: "5px" })}
-              style={{ width: `${(player.position / top) * 100}%`, background: seatColour(player.seat) }}
+              className={css({
+                width: "14px",
+                flex: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              })}
+            >
+              {isActing && <ChevronRight size={14} aria-hidden="true" />}
+            </span>
+            <span
+              className={css({ width: "14px", height: "14px", borderRadius: "50%", flex: "none" })}
+              style={{ background: seatColour(player.seat) }}
             />
-          </span>
-        </li>
-      ))}
+            <span
+              className={css({
+                fontSize: "sm",
+                fontWeight: isActing ? 700 : 600,
+                color: isDone ? "finish" : "text",
+                width: "54px",
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+              })}
+            >
+              {player.name}
+            </span>
+            <span
+              role="progressbar"
+              aria-label={player.name}
+              aria-valuenow={player.position}
+              aria-valuemin={0}
+              aria-valuemax={top}
+              className={css({
+                flexGrow: 1,
+                height: "10px",
+                borderRadius: "5px",
+                background: "surface",
+                overflow: "hidden",
+              })}
+            >
+              <span
+                className={css({ display: "block", height: "100%", borderRadius: "5px" })}
+                style={{ width: `${(player.position / top) * 100}%`, background: seatColour(player.seat) }}
+              />
+            </span>
+            {/* Module state a player has to weigh against a decision (a card's
+             * venom cost, whether to risk a stunned turn) rather than colour
+             * or animation alone — ADR 0020 keeps these as honest glyphs plus
+             * digits, gated exactly as the old PlayerStrip gated them. */}
+            <span
+              className={css({
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flex: "none",
+                fontSize: "xs",
+                color: "textDim",
+              })}
+            >
+              {player.venom > 0 && (
+                <span
+                  aria-label={`${player.venom} venom`}
+                  className={css({ display: "flex", alignItems: "center", gap: "2px" })}
+                >
+                  <VenomIcon size={14} />
+                  {player.venom}
+                </span>
+              )}
+              {player.momentum > 0 && (
+                <span
+                  aria-label={`${player.momentum} momentum`}
+                  className={css({ display: "flex", alignItems: "center", gap: "2px" })}
+                >
+                  <MomentumIcon size={14} />
+                  {player.momentum}
+                </span>
+              )}
+              {player.anchored && (
+                <span aria-label="anchored" className={css({ display: "flex", alignItems: "center" })}>
+                  <AnchorIcon size={14} />
+                </span>
+              )}
+              {player.stunned > 0 && (
+                <span aria-label="sitting out" className={css({ display: "flex", alignItems: "center" })}>
+                  <StunIcon size={14} />
+                </span>
+              )}
+            </span>
+          </li>
+        )
+      })}
     </ul>
   )
 }
