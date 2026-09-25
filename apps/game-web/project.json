@@ -12,6 +12,7 @@
       "options": { "command": "panda codegen" },
       "inputs": [
         "{workspaceRoot}/panda.config.ts",
+        "{workspaceRoot}/scripts/palette-tokens.mjs",
         "{workspaceRoot}/packages/render/src/palette.ts",
         "{workspaceRoot}/packages/*/src/**/*.{ts,tsx}",
         "{workspaceRoot}/apps/game-web/**/*.{ts,tsx}"
