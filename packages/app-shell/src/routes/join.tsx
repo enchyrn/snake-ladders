@@ -4,7 +4,7 @@ import { Effect, Either } from "effect"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { roomCode, seedFromRoom } from "../app/hooks"
 import { joinArrival } from "../app/join-link"
-import { joinState, SEARCH_GRACE_MS } from "../app/join-state"
+import { joinState, manualPlacement, SEARCH_GRACE_MS } from "../app/join-state"
 import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
@@ -57,6 +57,7 @@ export const JoinScreen = () => {
   }, [])
 
   const state = joinState(rooms.data, elapsedMs)
+  const placement = manualPlacement(state, arrival !== null)
 
   const runEnter = async (addr: string, seed: number) => {
     setError(null)
@@ -149,47 +150,47 @@ export const JoinScreen = () => {
       )}
 
       {state === "found" && (
-        <>
-          <ul className="rooms">
-            {rooms.data.map((room) => (
-              <li key={room.room}>
-                <button
-                  type="button"
-                  disabled={joining || room.locked || room.players >= room.capacity}
-                  onClick={() => void enter(room.addr, room.seed)}
-                >
-                  <span className="room-code">{room.room}</span>
-                  <span className="room-host">{room.host}</span>
-                  <span className="room-count">
-                    {room.players}/{room.capacity}
-                    {room.locked ? " · in progress" : ""}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <details
-            className="manual"
-            open={byAddress}
-            onToggle={(e) => setByAddress(e.currentTarget.open)}
-          >
-            <summary>Join by address</summary>
-            <p className="hint">
-              {arrival
-                ? "Read from the code you scanned. Check the room, then tap Join."
-                : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
-            </p>
-            {manualFields}
-          </details>
-        </>
+        <ul className="rooms">
+          {rooms.data.map((room) => (
+            <li key={room.room}>
+              <button
+                type="button"
+                disabled={joining || room.locked || room.players >= room.capacity}
+                onClick={() => void enter(room.addr, room.seed)}
+              >
+                <span className="room-code">{room.room}</span>
+                <span className="room-host">{room.host}</span>
+                <span className="room-count">
+                  {room.players}/{room.capacity}
+                  {room.locked ? " · in progress" : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
-      {state === "none" && (
+      {placement === "disclosure" && (
+        <details
+          className="manual"
+          open={byAddress}
+          onToggle={(e) => setByAddress(e.currentTarget.open)}
+        >
+          <summary>Join by address</summary>
+          <p className="hint">
+            {arrival
+              ? "Read from the code you scanned. Check the room, then tap Join."
+              : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
+          </p>
+          {manualFields}
+        </details>
+      )}
+
+      {placement === "promoted" && (
         <>
           <p className="hint">
             {arrival
-              ? "The code didn't show up automatically. Check the room below, then tap Join."
+              ? "The code didn't show up automatically. Check the address below, then tap Join."
               : "No games showed up on this Wi-Fi. Enter the address shown on the host's screen, or check that both devices are on the same network."}
           </p>
           <div className="manual">{manualFields}</div>
