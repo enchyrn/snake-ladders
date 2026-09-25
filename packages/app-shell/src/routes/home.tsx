@@ -4,7 +4,8 @@ import { useState } from "react"
 import { unexpected } from "@mutation/net/transport"
 import { useSession } from "../app/session"
 import { randomSeed } from "../app/hooks"
-import { allModules, moduleBlurbs, moduleLabels } from "@mutation/engine/primitives"
+import { button } from "styled-system/recipes"
+import { css, cx } from "styled-system/css"
 
 export const HomeScreen = () => {
   const session = useSession()
@@ -76,14 +77,15 @@ export const HomeScreen = () => {
       <div className="actions">
         <button
           type="button"
-          className="primary"
-          disabled={busy !== null || !session.canHost}
-          onClick={() => void startMatch("network")}
+          className={button({ variant: "primary", size: "lg" })}
+          disabled={busy !== null}
+          onClick={() => void startMatch("local")}
         >
-          {busy === "network" ? "Opening…" : "Host on Wi-Fi"}
+          {busy === "local" ? "Starting…" : "Pass and play on this device"}
         </button>
         <button
           type="button"
+          className={button({ variant: "secondary", size: "md" })}
           disabled={busy !== null || !session.canJoin}
           onClick={() => void navigate({ to: "/join" })}
         >
@@ -91,33 +93,24 @@ export const HomeScreen = () => {
         </button>
         <button
           type="button"
-          disabled={busy !== null}
-          onClick={() => void startMatch("local")}
+          className={cx(
+            button({ variant: "secondary", size: "md" }),
+            css({ flexDirection: "column", gap: "1", paddingBlock: "2" }),
+          )}
+          disabled={busy !== null || !session.canHost}
+          title={!session.canHost ? "Browsers can't open the socket other devices connect to" : undefined}
+          onClick={() => void startMatch("network")}
         >
-          {busy === "local" ? "Starting…" : "Pass and play on this device"}
+          <span>{busy === "network" ? "Opening…" : "Host on Wi-Fi"}</span>
+          {!session.canHost && (
+            <span className={css({ fontSize: "xs", fontWeight: 400, color: "textDim" })}>
+              Needs the installed app — browsers can't host
+            </span>
+          )}
         </button>
       </div>
 
-      {!session.canHost && (
-        <p className="hint">
-          Hosting needs the installed app, because a web page cannot open the
-          socket other devices connect to. You can still join a match from here:
-          run the relay on a computer and paste the address it prints.
-        </p>
-      )}
       {error && <p className="error">{error}</p>}
-
-      <section className="rules">
-        <h2>The twists</h2>
-        <dl>
-          {allModules.map((module) => (
-            <div key={module}>
-              <dt>{moduleLabels[module]}</dt>
-              <dd>{moduleBlurbs[module]}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
     </main>
   )
 }
