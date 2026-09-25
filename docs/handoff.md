@@ -897,12 +897,24 @@ complete.** All 14 tasks are done and ticked, each with an execution note
 recording what the plan text did not anticipate; a final whole-branch review
 (0 Critical, 7 Important, 10 Minor) ran after Task 13 and its fix wave landed
 before this checkpoint, per that review's own ruling that a checkpoint written
-before the final fixes would be stale on arrival. The SDD ledger
-(`.superpowers/sdd/2026-09-17-chrome-and-layout-plan/progress.md`) is the
-authoritative blow-by-blow if you need more than the plan's execution notes or
-this file give you; the reports beside it (`task-*-report.md`,
-`layer-fix-report.md`, `final-findings.md`, `final-fix-report.md`) go one level
-deeper still.
+before the final fixes would be stale on arrival.
+
+**The SDD ledger and its reports no longer exist.** They lived in the
+gitignored `.superpowers/sdd/2026-09-17-chrome-and-layout-plan/` workspace,
+which the skill deletes once the final review is clean. Everything durable in
+them was carried out first: every ruling and what it costs if wrong is in the
+plan's per-task execution notes, the final summary is PR #4's description, and
+`git log f8ab630..HEAD` has the per-fix commit messages. Do not go looking for
+`progress.md`.
+
+**PR #4 is open against `main`**
+(<https://github.com/enchyrn/snake-ladders/pull/4>, opened 2026-09-25 at the
+owner's request). Its description is the best one-page account of the plan:
+what changed, the four Panda defects, the gate numbers, and what is known
+and not fixed. Nothing watches it — no PR subscription and no scheduled
+check-in — so check its CI and review state by hand before doing anything
+else on this branch. A red check or a review comment there comes before
+plan 2.
 
 The whole game rebuilt its chrome on Panda CSS tokens/recipes and Lucide
 icons: the match screen is five budgeted bands (header, progress rows, a fixed
@@ -924,13 +936,15 @@ not directly on `main` — harness mandates this branch; handoff's 'work on
 main' predates it." The branch carries `main` merged in at `f8ab630` (tree ==
 `main` at that point) plus the entire chrome-and-layout plan on top — nothing
 from `main`'s history is missing, and nothing here is a fork that needs
-reconciling. **Merging it into `main` is the owner's decision, not something
-to do automatically on the next session.**
+reconciling. **Merging it into `main` is the owner's decision — through PR
+#4 — not something to do automatically on the next session.**
 
 Key commits, in order: `f8ab630`..`2fbff6b` is the plan's 14 tasks (Task 1
 `2d7f2da`, the mid-plan `@layer base` fix `1b6ad83`, Task 8 `c6c71d0`, Task 9
 `f3f3539`, Task 13 `e3c94ed` + fix `2fbff6b`); `2c76cb4`..`8c8ecf8` is the
-final review's fix wave. `8c8ecf8` is `HEAD`.
+final review's fix wave. `8c8ecf8` is the last code commit; `c8ce199` (this
+checkpoint), `e3a1f39` (the local-setup snippet) and the PR #4 note are docs
+only.
 
 ### Two defects found while implementing, both worth remembering
 
@@ -968,8 +982,9 @@ throwaway-`serveDist` pattern the plan's Task 13 Step 4 used for 320px):
   every module on, both before and after a roll.
 - At every size and player count measured: no overlaps, no button under 44px,
   no horizontal overflow, the board holds its full 366×366, the log gives way
-  before the board does. See `final-fix-report.md`'s measurement table for
-  the exact numbers per band.
+  before the board does. Measured bands at 390×844, 6 players, simultaneous
+  on: header 52, seat switcher 52, progress rows 177, board 366×366, log
+  preview ~63, control bar ~134 (px).
 
 **Not verified — this pass never touched a real device.** No phone, no
 tablet, no iOS anything. Everything above is a Chromium screenshot at a fixed
@@ -1296,7 +1311,13 @@ prose elsewhere names a thread rather than citing its number.
    click. The reporter's own hypothesis (WebGL main-thread contention) is
    unproven. The existing "Known flakes" entry below, which predates this
    pass and describes the same symptom more vaguely, should be superseded by
-   whatever task investigates this.
+   whatever task investigates this. A suggested-task card, "Fix Roll clicks
+   that never resolve a commit", was queued in the Claude app on 2026-09-25
+   with this evidence. Candidates it names: `canRollAtom` timing, a buffered
+   commit stuck on a sequence gap in `packages/net/src/local.ts`, a
+   subscription attached after the first frame, or an acting-seat/`playerId`
+   mismatch. It asks for a unit test at the transport or match-client level
+   that fails without the fix.
 2. **Card and seat names truncate at 320px.** Measured directly: "Anchor",
    "Reverse", "Double" and "Defuse" all clip to a few characters
    (`final-320-match-2p.png`, `final-320-match-6p.png`); "Adder"/"Viper" in the
@@ -1343,11 +1364,11 @@ commit.** This is the tip of plan 1, after the final review's fix wave:
 Two notes for whoever runs these next. `nub` is not on `PATH` in a fresh cloud
 session: `export PATH="$HOME/.local/share/mise/shims:$PATH"` first, because
 `mise x --` fails on the `java` and `rust` tool resolution before it gets to
-running anything. And this pass's own screenshots
-(`final-{390,320}-*.png`, `t13-*.png`, `1-home.png`, `2-lobby.png`, …) live in
-`.superpowers/sdd/2026-09-17-chrome-and-layout-plan/`, or in `screenshots/`
-for a fresh `verify:ui` run — both are gitignored, so regenerate rather than
-looking for them tracked in the repo.
+running anything. And this pass's own screenshots (`final-{390,320}-*.png`,
+`t13-*.png`, …) were deleted along with the SDD workspace. `screenshots/`
+holds only the latest `verify:ui` run and is gitignored, so regenerate
+rather than look for them. The 320px and 6-player views need a throwaway
+script built on `serveDist`, because the driver has no width flag.
 
 The historical tables below predate this branch's work and are kept for the
 commentary under them, which is still accurate:
@@ -1436,8 +1457,9 @@ Three traps, and the first is the one that matters:
 2. **Check out `claude/snake-ladders-cross-device-3uu177`, not `main`.** Plan
    1 (chrome and layout) is complete on this branch and not yet merged;
    `main` does not have it. Confirm with `git log --oneline -1` — it should
-   show `8c8ecf8` or this checkpoint's own docs commit on top of it, not the
-   `03e1cd1`-era history alone.
+   show a docs commit on top of `8c8ecf8`, not the `03e1cd1`-era history
+   alone. Then check PR #4's CI and review state; if it has been merged,
+   start from `main` instead.
 3. **Start plan 2**: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
    using `superpowers:subagent-driven-development` or `superpowers:executing-plans`
    as the plan's own first line requires. Its dependency on plan 1 (a real
