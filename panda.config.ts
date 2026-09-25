@@ -7,6 +7,14 @@ export default defineConfig({
   exclude: [],
   outdir: "styled-system",
   jsxFramework: undefined, // no styled() factory: this codebase writes plain JSX
+  // beta.17 ships no default presets — omitting this left every utility
+  // (bg, px, w, h, truncate, …) undefined, so css()/recipes emitted bare
+  // token names like `background: surface` instead of `var(--colors-surface)`.
+  // `preset-base` is the utilities/conditions layer only; `preset-panda`
+  // (the other half of what `panda init` scaffolds) is deliberately left
+  // out because its default palette and tokens would compete with the ones
+  // generated from palette.ts above.
+  presets: ["@pandacss/preset-base"],
   theme: {
     extend: {
       tokens: {
