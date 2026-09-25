@@ -92,6 +92,11 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      // Panda's codegen output lives at the repo root, not in node_modules,
+      // so nub's non-hoisting linker cannot resolve "styled-system/*" as a
+      // bare specifier without this — same reason every @mutation/* alias
+      // below exists.
+      "styled-system": fileURLToPath(new URL("../../styled-system", import.meta.url)),
       "@mutation/engine": fileURLToPath(new URL("../../packages/engine/src", import.meta.url)),
       "@mutation/net": fileURLToPath(new URL("../../packages/net/src", import.meta.url)),
       "@mutation/render": fileURLToPath(new URL("../../packages/render/src", import.meta.url)),
