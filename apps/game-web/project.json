@@ -15,7 +15,8 @@
         "{workspaceRoot}/scripts/palette-tokens.mjs",
         "{workspaceRoot}/packages/render/src/palette.ts",
         "{workspaceRoot}/packages/*/src/**/*.{ts,tsx}",
-        "{workspaceRoot}/apps/game-web/**/*.{ts,tsx}"
+        "{workspaceRoot}/apps/game-web/**/*.{ts,tsx}",
+        { "runtime": "node -p \"require('@pandacss/dev/package.json').version + ' ' + require('@pandacss/preset-base/package.json').version\"" }
       ],
       "outputs": ["{workspaceRoot}/styled-system"]
     },
