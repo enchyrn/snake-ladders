@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Effect, Either } from "effect"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { seedFromRoom } from "../app/hooks"
+import { roomCode, seedFromRoom } from "../app/hooks"
+import { joinArrival } from "../app/join-link"
 import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
@@ -10,7 +11,19 @@ import { unexpected, type RoomView } from "@mutation/net/transport"
 export const JoinScreen = () => {
   const session = useSession()
   const navigate = useNavigate()
-  const [manual, setManual] = useState("")
+  // Read once, at mount: this is the URL the player arrived on, and re-reading
+  // it on a later render would overwrite a field they have since edited.
+  const [arrival] = useState(() =>
+    typeof window === "undefined" ? null : joinArrival(window.location.hash),
+  )
+  const [manual, setManual] = useState(() =>
+    arrival ? `${arrival.addr}@${roomCode(arrival.seed)}` : "",
+  )
+  // Scanning a code should not drop the player into a live match — the room
+  // is filled in and shown, and they press Join. But a pre-filled field
+  // inside a collapsed `<details>` is the same dead end as no field at all,
+  // so arriving from a link opens it.
+  const [byAddress, setByAddress] = useState(arrival !== null)
   const [error, setError] = useState<string | null>(null)
   const [joining, setJoining] = useState(false)
 
@@ -127,12 +140,16 @@ export const JoinScreen = () => {
         ))}
       </ul>
 
-      <details className="manual">
+      <details
+        className="manual"
+        open={byAddress}
+        onToggle={(e) => setByAddress(e.currentTarget.open)}
+      >
         <summary>Join by address</summary>
         <p className="hint">
-          Use this when the network blocks discovery broadcasts, or on an iPhone
-          that has not been granted the local-network permission. The host
-          screen shows both parts.
+          {arrival
+            ? "Read from the code you scanned. Check the room, then tap Join."
+            : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
         </p>
         <input
           value={manual}

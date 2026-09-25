@@ -1,8 +1,12 @@
 # Handoff
 
-State of the branch `claude/snake-ladders-cross-device-3uu177` as of
-2026-09-15, written so another session — or the same person on a different
-machine — can pick it up without re-deriving anything.
+State of `main` as of 2026-09-16, written so another session — or the same
+person on a different machine — can pick it up without re-deriving anything.
+Start at **"Resuming From This Checkpoint"** near the end; everything before
+it is the history that led there.
+
+`claude/snake-ladders-cross-device-3uu177`, which earlier revisions of this
+file described, is abandoned and fully absorbed into `main`.
 
 ## Current checkpoint (2026-09-15)
 
@@ -870,8 +874,10 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-**Checkpoint written 2026-09-16, updated after the merge.** Everything below is
-committed and on `main`; nothing lives only in a conversation.
+**Checkpoint written 2026-09-16, updated after the two quick wins and again
+after ADR 0020 — the feel ADR — was written.**
+Everything below is committed and on `main`; nothing lives only in a
+conversation.
 
 ### Where the work stands
 
@@ -882,10 +888,15 @@ ticked. A guest scans a QR on the host's lobby, the host serves them the game
 over plain HTTP on the port it was already listening on, and they join the room.
 No install, no relay machine, no certificate.
 
-`main` is the branch to start from. `claude/snake-ladders-cross-device-3uu177`
-has been merged and carries nothing unmerged — **do not stack new work on it.**
-Restart it from `main` (same name is fine) or use a fresh branch; a merged
-branch cannot track new work.
+**Work happens directly on `main` now, at the owner's instruction
+(2026-09-16).** No feature branch, no PR: the two quick wins below were
+committed straight to it.
+
+`claude/snake-ladders-cross-device-3uu177` is **abandoned**. Everything it
+carried is on `main` — the merge `03e1cd1` plus its three documentation
+commits, cherry-picked across as `8c98595`, `801a59e` and `e4ae3ef` so that
+abandoning the branch loses no recorded state. Do not add to it and do not
+read it for history; `main` is complete.
 
 The gates below were re-run **on the merged `main`**, not only on the branch:
 a green feature branch does not prove a green merge.
@@ -934,6 +945,8 @@ green gates do and do not mean:
 | The serving rules refuse every traversal we could think of | That a real phone camera scans the rendered QR |
 | `src-tauri` compiles for Android (CI, run 91) | That the APK *runs*; CI builds it and never starts it |
 | The lobby's host block renders correctly at 390x844 | That it renders on a real device, at a real DPI |
+| A scanned `#/join?room=…&at=…` fills the join field in and opens it, driven in Chromium at 390x844 | That a phone camera resolves the now-longer URL — more characters means more modules and a smaller module at the same 180px |
+| `showRound` holds the tokens still while a round is pending (unit) | That the avatar no longer visibly teleports — a timing defect no screenshot can show |
 
 `local_address()` is the piece most likely to disappoint on contact. It reports
 **one** address, from whichever interface an outbound route would leave by. A
@@ -968,6 +981,27 @@ because it governs three specs (settings, renderer-legibility, and the mode
 designs) and each would otherwise re-derive it. Its honest cost: showing takes
 longer than telling, so it trades speed for weight, and some things genuinely
 read better as digits.
+
+> **Written 2026-09-16 as [ADR 0020](adr/0020-a-boardgame-not-a-number-game.md),
+> Accepted.** It states the thesis as four rules — every `TimelineEvent` owes a
+> board-visible depiction; text is demoted rather than deleted (the `aria-live`
+> log is how a screen-reader player receives a round at all); digits stay where
+> a digit is the honest unit; and *showing never implies agency the engine does
+> not grant*, which is the rule that decides flick-to-throw rather than leaving
+> it to taste. Two things the brainstorm had not separated came out while
+> writing it. First, the depiction is free on the wire and automatically
+> consistent across devices, because `TimelineEvent` is already a semantic
+> stream folded identically everywhere (ADR 0001) — the ask is a presentation
+> cost, not a protocol one. Second, the worst cost is not the pace trade: it is
+> that **a missing depiction fails silently in the direction of withholding
+> information from a player while every engine test stays green**, since the
+> engine is right. That moves verification onto screenshots permanently. The
+> ADR also records the standing tax on ADR 0002 — each new rule module now owes
+> a visual vocabulary as well as a reducer — and closes the venom question by
+> classifying it as a defect rather than a quirk.
+>
+> `renderer-legibility` predates the ADR and now carries a pointer to it in its
+> own §ADRs, since it was arguing towards the same premise independently.
 
 | Question | Decision |
 |---|---|
@@ -1024,10 +1058,13 @@ The owner's wish list decomposed into four clusters, not one:
 `Skip`. And ADR 0002 says a match with no modules is classic Snakes & Ladders,
 so snakes hunting idle players must live in a module rather than the core.
 
-### The two approved quick wins, specified
+### The two approved quick wins — both landed 2026-09-16
 
-Both are defects rather than features, and both will be hit the moment anyone
-tests on hardware.
+Both are defects rather than features, and both would have been hit the moment
+anyone tested on hardware. **Both are now fixed and on `main`** — `5c393ea`
+and `56e9e5e`. The specifications below are kept as written so the commits can
+be read against what was asked for; the notes under each record what the
+implementation found that the specification did not.
 
 **1. The QR lands nowhere useful.** `lobby.tsx:85` encodes a bare
 `http://${address}:${port}/`, which opens the app at the home screen. The join
@@ -1037,6 +1074,20 @@ then abandons you. Encode room and address — `…/#/join?room=W3SZ&at=IP:PORT`
 and have the join route read it and pre-fill. The room code is the seed, but
 that is already true of the code read aloud, so this exposes nothing new.
 `share-and-start-menu` §"The link, and what happens on arrival" is the design.
+
+> **Landed as `5c393ea`.** `joinLink` and `joinArrival`
+> (`packages/app-shell/src/app/join-link.ts`) are one pure module so the
+> encoder and decoder are pinned against each other by a round-trip test —
+> the room code is the seed, so a code that decodes anyway builds a different
+> board in silence. The link is rooted at the origin rather than at Vite's
+> `BASE_URL`: it addresses the *host's* server, and `request_path` answers
+> `/` with index.html. Arrival fills the field **and opens the `<details>`**,
+> because a pre-filled field inside a collapsed disclosure is the same dead
+> end as no field at all. It does not auto-join — the spec's step 2 wants the
+> room confirmed first. The `<details>` is controlled (`open` + `onToggle`)
+> rather than set open declaratively: the room list refetches every second,
+> and an uncontrolled `open={true}` springs back open every time the player
+> closes it.
 
 **2. The avatar teleports before it moves.** `BoardCanvas.tsx:78` calls
 `scene.sync(state)` unconditionally *before* `scene.play(...)`, and
@@ -1048,13 +1099,141 @@ not snap token positions while a timeline is pending; `play`'s existing
 game leaking through the presentation, which is why the feel ADR promotes it
 above polish.
 
+> **Landed as `56e9e5e`.** The fix is not the obvious one. *Swapping* `sync`
+> and `play` looks smaller and is wrong: `play` resolves each token from
+> `this.tokens` and `break`s silently when one is missing, so a player whose
+> token `sync` had not yet created would lose their animation with no error
+> anywhere. `clips` cannot answer the question either — it is empty right up
+> until `play` fills it, which is the whole defect. So the caller, the only
+> thing that knows a round is about to replay, now says so: `Scene.sync`
+> takes `{ snapTokens }`, and the ordering rule moved out of the React effect
+> into `packages/ui/src/round-playback.ts` (`showRound`), where a fake stage
+> tests it without a WebGL context — `Scene`'s constructor needs a real
+> canvas and `WebGLRenderer`, so it cannot be built in the node test
+> environment at all.
+>
+> **What this does not prove.** The ordering contract is unit-pinned and the
+> match screen still renders and animates without console errors. Nobody has
+> *watched* the animation: a teleport is a timing defect and a screenshot
+> cannot show one. Confirm it by eye on the next hardware run.
+
 ### The task to start on
 
-**Start with the two quick wins above** — the QR arrival prefill and the avatar
-teleport. Both are approved, both are specified in full above, and both are
-defects that a hardware test will hit immediately. Use TDD; they are small
-enough that the failing test comes first cheaply. Then write the feel ADR,
-then the settings spec.
+**The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
+is left, in order:
+
+1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
+   "A boardgame, not a number game", Accepted. See the brainstorm table above
+   for what writing it turned up that the brainstorm had not. Docs only; no
+   code changed, so no gate moved.
+2. ~~**Write the settings spec**~~ — **done 2026-09-16**, as
+   `docs/superpowers/specs/2026-09-16-settings-and-input-design.md`. It became
+   **spec A of two**: the owner asked mid-brainstorm to revisit every menu and
+   HUD and to consider new assets, which is a second subsystem, so it was
+   decomposed rather than absorbed. **Spec B — the chrome and layout pass — is
+   the task to start on**, and it needs a screenshot survey of the current
+   screens before anything else. It must absorb `renderer-legibility` §Chrome
+   and `share-and-start-menu` §"The start menu" rather than compete with them,
+   and it inherits the asset question: the game has **no assets at all** today
+   — no `public/`, no icons, no fonts, 784 lines of CSS in one stylesheet with
+   a single media query, and every glyph an emoji in a text node.
+
+   **Spec B is written too** — `2026-09-17-chrome-and-layout-design.md`, plus
+   **ADR 0021** (Panda CSS `2.0.0-beta.17` and Lucide, adopted with the beta
+   cost stated). The match layout is drawn rather than described, at
+   <https://claude.ai/artifact/MXucAxxrRbVbr1uo8ZYAAR>, artboard
+   "A — CHOSEN: edges + progress rows".
+
+   **Both implementation plans are written, and the work is ready to start.**
+
+   | Plan | Tasks | Covers |
+   |---|---|---|
+   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **Run this one first.** |
+   | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
+
+   **The order is deliberate and reverses what this file used to say.** Earlier
+   revisions named the settings spec as next; that was written before spec B
+   existed. ADR 0021 requires the Panda beta to be proven before anything is
+   written against it, and the dice tray that spec A's `rollButton: hidden`
+   depends on is built in plan 1's Task 8. Building settings UI first would
+   mean building it twice.
+
+   **Plan 1, Task 1 is a gate, not a formality.** Panda `2.0.0-beta.17` is
+   unverified against React 19.3, Vite 8.3, TS 6.0.3 and nub's non-hoisting
+   linker. If it fails there, stop and report rather than working around it —
+   ADR 0021 was accepted on the assumption that failure is cheap at that point
+   and expensive eight tasks later.
+
+   Two things in plan 1 fail on real defects the moment they are written, which
+   is intentional: Task 3's seat-colour predicate (`#4ee39b` is inside the
+   reserved link band) and Task 10's join-state test (the screen has one state
+   and needs three).
+
+   Five things the settings brainstorm established that spec B or its plan
+   will need:
+
+   - **The layer rule decides the architecture, not taste.** `layer:ui` may
+     depend only on `engine` and `render`, so `BoardCanvas`, `EventLog` and
+     `HUD` cannot import a settings store. Settings live in `app-shell` and
+     every lower layer takes its slice as an explicit parameter. The dangling
+     `quality` prop on `BoardCanvas` was that pattern, half-built.
+   - **Settings is an overlay, not a route.** A `/settings` route replaces the
+     match screen, unmounting `BoardCanvas` and discarding the clip queue of a
+     round mid-replay.
+   - **There is no tappable dice tray.** `Scene.pick` raycasts the board plane
+     only; the dice are WebGL objects nothing picks. The tray has to be built,
+     and as a DOM control — `RollButton` is currently the only
+     keyboard-reachable path to `Commit`, so hiding it behind a raycast would
+     be an accessibility regression.
+   - **iOS haptics are feasible but unreachable.** WebKit has never shipped the
+     Vibration API, so no web path reaches them; a Tauri v2 plugin would, but
+     only in the installed iOS app, which ADR 0011 keeps manual and which is
+     not the path iOS actually takes here (guest in Safari). Hence a capability
+     probe rather than a platform check — which also covers `wakeLock`, absent
+     on exactly the guest phones that scanned in, because the host-served join
+     is plain HTTP and `wakeLock` is `[SecureContext]`.
+   - **ADR 0020 rule 1 already fails in eight places.** `Scene.play` clips six
+     of the fifteen `TimelineEvent` variants. `LinkCollapsed`, `Revealed`,
+     `MineDefused`, `CardPlayed`, `VenomGained`, `BoardBreathed`, `Stunned` and
+     `Finished` have no board depiction at all.
+
+   And five from spec B's screenshot survey, which is the part that could
+   only be learned by looking:
+
+   - **The board is square and the phone is 1:2.2.** At 390 wide the board
+     maxes out at 366×366 — 43% of the height, flat. Tilting it for
+     perspective makes it *shorter*: today's tilt costs ~90px. "Fill the
+     screen" was never on the table; the design question is what the other
+     ~430px does.
+   - **The band budget closes by arithmetic**, because `match.ts:195` caps a
+     match at six players. Even at six the board keeps its full 366 and ~119px
+     remains. That is a table, not a hope.
+   - **`seatColours[4]` is `#4ee39b`** — mint, inside the green band
+     `renderer-legibility` reserves for link tinting. The fifth player's token
+     already fights the snakes, today, before anyone is allowed to pick a
+     colour.
+   - **The join screen's empty room list renders nothing at all** — no
+     spinner, no empty state. A guest whose discovery fails cannot tell the app
+     from a dead page. It has one state and needs three.
+   - **The card rail is not broken, only undiscoverable.** `.cards` is
+     `overflow-x: auto`, so the two off-screen cards are reachable; this was
+     checked before it was written down. Flexing five cards across 366px
+     removes the problem by construction.
+
+   The floor ADR 0020 demanded is settled and derived rather than chosen:
+   speed scales each clip's duration and every clip clamps to
+   `max(150ms, duration / speed)`. 150ms because `step` already clamps `delta`
+   to 64ms, so a 150ms clip renders at least three frames on a phone dropping
+   them. Presets are 1× / 1.5× / 2.5×; the clamp, not the multiplier, is what
+   keeps a beat visible, which is why `quick` can be 2.5×.
+
+3. **Fix `verify-ui` so it builds first** — see the trap below. It is a
+   deliberate non-fix in this pass and it is small, but it is an Nx graph
+   edit, and this repo has already been bitten once by an Nx attribution
+   change that looked trivial.
+
+`venom`'s two defects (stranded without `mutation`, nothing worth buying)
+still gate any second currency, unchanged by this pass.
 
 **Then: play a match on two real devices.** That remains the highest-value
 action nothing in a container can do, and the quick wins are worth landing
@@ -1081,24 +1260,97 @@ reason as above.
 
 ### State of the gates, as of this checkpoint
 
-Re-run on the merged `main` (`03e1cd1`), working tree clean apart from this file:
+**Re-run in full on `main` at `1f58541` (2026-09-17), working tree clean.**
+This session changed documentation only — no code moved — so the numbers below
+are unchanged from `56e9e5e` and were re-measured rather than copied forward:
 
 | Gate | Result |
 |---|---|
-| `nub run test` | **170 passed**, 17 files (was 166 in 16) |
+| `nub run test` | **185 passed**, 19 files |
 | `nub run typecheck` | clean |
 | `nub run lint` | clean |
 | `nub run build` | clean |
-| `nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow |
-| `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session; was 39) |
-| `cargo clippy -p lan-sync --all-targets -- -D warnings` | clean |
-| CI Android APK | **green** on `9b6f3be` (run 91) and `7e9ec94` (run 92) |
-| CI on the PR head | **green** — run 116, pull_request event |
+| `nub run verify:ui` | clean, on a freshly built `dist/` |
+| `cargo test -p lan-sync` | **58 passed** (26 + 21 + 11) |
 
-`nub run build` and `nub run verify:ui` were last run on `3c1f0fc`, the tree the
-merge carried unchanged; the merge added no code, only the merge commit.
+Two notes for whoever runs these next. `nub` is not on `PATH` in a fresh cloud
+session: `export PATH="$HOME/.local/share/mise/shims:$PATH"` first, because
+`mise x --` fails on the `java` and `rust` tool resolution before it gets to
+running anything. And the survey screenshots this session's specs are built on
+live in `screenshots/`, which is gitignored — regenerate them with
+`nub run build && nub run verify:ui` rather than looking for them in the repo.
 
-Two traps this session hit that the next one will too:
+The historical table below is from `56e9e5e` and is kept for the commentary
+under it, which is still accurate:
+
+| Gate | Result |
+|---|---|
+| `nub run test` | **185 passed**, 19 files (was 170 in 17) |
+| `nub run typecheck` | clean |
+| `nub run lint` | clean |
+| `nub run build` | clean |
+| `nub run verify:ui` | clean — **on a freshly built `dist/`; see the trap below** |
+| `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session) |
+| `cargo clippy -p lan-sync --all-targets -- -D warnings` | clean (rustc 1.98.1) |
+| CI Android APK | **green** on `9b6f3be` (run 91) and `7e9ec94` (run 92) — not re-run since; neither quick win touches `src-tauri` |
+
+The 15 new tests are `join-link` (8) and `round-playback` (7).
+
+Three traps, and the first is the one that matters:
+
+- **`nub run verify:ui` does NOT build first, and CLAUDE.md says it does.**
+  `tooling:verify-ui` is `node scripts/drive-app.mjs` with **no `dependsOn`**,
+  so it drives whatever happens to be sitting in `dist/`. This session ran it
+  after changing the join screen, watched it pass, and the `dist/` it had
+  driven was **eight hours stale** — the change was not in the bundle at all.
+  A real defect would have passed the gate silently. **Run `nub run build`
+  yourself, immediately before `nub run verify:ui`,** until the target
+  declares the dependency. Check `ls -la dist/` if in any doubt.
+
+  Not fixed in this pass on purpose: `verify-ui-pages` needs
+  `tooling:pages-build` (a different base) rather than `game-web:build`, so
+  the two targets want different dependencies, and this repo has already been
+  bitten by an Nx attribution change that looked like a one-liner (see
+  `packages/tooling`'s `sourceRoot` below). It is worth doing, deliberately.
+
+  **Analysed 2026-09-16, not yet implemented or approved.** The caution above
+  is right, and there are two concrete reasons rather than a general unease.
+  Anyone doing this should read both before editing, because the obvious fix
+  is wrong in a way that looks right:
+
+  1. **The pages build has no base path outside CI.** `tooling:pages-build`
+     resolves it as `${PUBLIC_BASE_PATH:-${GITHUB_REPOSITORY#*/}}`. In Actions
+     `GITHUB_REPOSITORY` supplies `snake-ladders`; on a laptop both are unset,
+     so it builds with an **empty** base while `drive-app.mjs` serves it under
+     `--base-path /snake-ladders`. A bare `dependsOn` therefore turns the pages
+     gate red locally and green in CI, which reads as a real failure. The pages
+     dependency has to pin `PUBLIC_BASE_PATH=/snake-ladders`.
+
+  2. **Neither build declares `outputs`, and both write to the same `dist/`.**
+     Nx caches the *target* but, with no `outputs`, restores no files — so a
+     cache hit skips `vite build` and leaves whatever is already in `dist/`.
+     Because `game-web:build` and `tooling:pages-build` share one output
+     directory, that can be the *other* variant's bundle. So adding `dependsOn`
+     **alone** produces a gate that looks fixed and can still drive the wrong
+     bundle: the same defect, one layer down. Both builds need
+     `outputs: ["{workspaceRoot}/dist"]` for a cache hit to restore correctly.
+
+  This is the "two projects whose Nx inputs are fictional" cost that ADR 0018
+  already records, surfacing in the place it does the most damage.
+
+  The shape of the fix, then: `verify-ui` dependsOn `game-web:build`;
+  `verify-ui-pages` dependsOn `tooling:pages-build` with the base path pinned;
+  `outputs` declared on both builds; CLAUDE.md's command block updated, since
+  it documents the current behaviour as though it were permanent. Verify it
+  behaviourally rather than with a unit test — change a visible string, run
+  `nub run verify:ui` **without** building, and confirm the screenshot shows
+  the change; then run it twice to confirm the cached second run restores
+  `dist/` rather than skipping it.
+
+  Worth knowing either way: **CI never runs this gate.** `ci.yml` runs
+  `typecheck,test,build` only, which is why nothing but a human catches a
+  stale bundle today.
+
 
 - **`vitest.config.ts` included only `*.test.ts`.** A `.tsx` test file was
   collected by nothing and would have "passed" by never running. Now
@@ -1112,11 +1364,14 @@ Two traps this session hit that the next one will too:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. There is no plan in flight and no open PR. The host-served join plan is
-   fully ticked, with an execution note under each task recording what it did
-   not anticipate. Read those notes before assuming the plan text is what
-   shipped.
-3. For hardware work, `docs/android-debugging.md`. For the design behind what
+2. There is no plan in flight and no open PR, and work goes straight onto
+   `main`. The host-served join plan is fully ticked, with an execution note
+   under each task recording what it did not anticipate. Read those notes
+   before assuming the plan text is what shipped.
+3. **Build before you drive.** `nub run verify:ui` does not build; see the
+   gates section. This is the trap most likely to make the next session
+   believe a broken change is fine.
+4. For hardware work, `docs/android-debugging.md`. For the design behind what
    just shipped, `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
    and ADR 0019, whose consequences section now records that the listener
    speaks three protocols rather than two.
@@ -1125,7 +1380,7 @@ Two traps this session hit that the next one will too:
 
 ```bash
 git clone <repo> && cd snake-ladders
-git checkout claude/snake-ladders-cross-device-3uu177
+git checkout main
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
 nub run test && nub run typecheck   # 101 tests, clean types

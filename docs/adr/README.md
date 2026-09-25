@@ -23,3 +23,5 @@ An ADR is a short document that records one significant architectural decision: 
 | [0017](0017-nub-is-the-package-manager-node-24-is-the-floor.md) | Nub is the package manager, and Node 24 is the floor | Accepted |
 | [0018](0018-nx-monorepo-adopted.md) | Nx monorepo adopted, superseding 0014 | Accepted |
 | [0019](0019-the-native-host-speaks-websocket-on-its-own-port.md) | The native host speaks WebSocket on the port it already listens on | Accepted |
+| [0020](0020-a-boardgame-not-a-number-game.md) | A boardgame, not a number game | Accepted |
+| [0021](0021-panda-css-and-lucide-adopted-on-a-beta.md) | Panda CSS and Lucide, adopted on a beta | Accepted |

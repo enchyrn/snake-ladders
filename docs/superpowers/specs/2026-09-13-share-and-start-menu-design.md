@@ -9,10 +9,18 @@ binding `0.0.0.0` makes every non-loopback address genuinely reachable, and a
 single probed address picks one interface, so a host on Wi-Fi plus VPN may be
 reachable on the other one.
 
-§"The link, and what happens on arrival" is **not** built: the QR encodes a
-bare `http://address:port/`, which lands on the home screen with nothing
-pre-filled. That is an approved quick win — see `docs/handoff.md`. The start
-menu and capability-model sections are unbuilt.
+§"The link, and what happens on arrival" is **partly** built as of
+2026-09-16. The QR now encodes `…/#/join?room=CODE&at=IP:PORT` and the join
+screen reads it, fills the address field in and opens it — so a scan lands
+somewhere useful. Step 2 ("confirm before joining") is honoured: the player
+still presses Join.
+
+What is **not** built from that section: the descriptor wire format (that is
+plan Task 8, and this link is a bare two-parameter form, not a versioned
+descriptor), the typed refusal at parse time, and step 3's "Open in app"
+scheme launch. Because steps 1 and 3 must be built as one, the
+transport-unusable refusal is still unbuilt in either half. The start menu
+and capability-model sections are unbuilt.
 **Date:** 2026-09-13
 
 **Paths remapped at 1d36bde.** This spec was written against the flat `src/`
