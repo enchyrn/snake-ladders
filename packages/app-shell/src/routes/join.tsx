@@ -4,6 +4,7 @@ import { Effect, Either } from "effect"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { roomCode, seedFromRoom } from "../app/hooks"
 import { joinArrival } from "../app/join-link"
+import { joinState, SEARCH_GRACE_MS } from "../app/join-state"
 import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
@@ -44,6 +45,18 @@ export const JoinScreen = () => {
     refetchInterval: 1000,
     initialData: [] as ReadonlyArray<RoomView>,
   })
+
+  // Elapsed time since mount, for `joinState` below. A `setTimeout`, not a
+  // repeating interval: the only thing that matters is the single instant the
+  // grace period closes, so there is exactly one timer and it fires once,
+  // rather than one that has to notice its own deadline and stop itself.
+  const [elapsedMs, setElapsedMs] = useState(0)
+  useEffect(() => {
+    const id = setTimeout(() => setElapsedMs(SEARCH_GRACE_MS), SEARCH_GRACE_MS)
+    return () => clearTimeout(id)
+  }, [])
+
+  const state = joinState(rooms.data, elapsedMs)
 
   const runEnter = async (addr: string, seed: number) => {
     setError(null)
@@ -105,62 +118,83 @@ export const JoinScreen = () => {
     void enter(addr.trim(), seed)
   }
 
+  const manualFields = (
+    <>
+      <input
+        value={manual}
+        placeholder="192.168.1.24:5000@7QF2"
+        autoCapitalize="characters"
+        onChange={(e) => setManual(e.target.value)}
+      />
+      <button type="button" disabled={joining} onClick={enterManually}>
+        Join
+      </button>
+    </>
+  )
+
   return (
     <main className="screen">
       <header className="bar">
         <button type="button" onClick={() => void navigate({ to: "/" })}>
           ‹ Back
         </button>
-        <h2>Games nearby</h2>
+        <h2>Join a game</h2>
       </header>
 
-      {rooms.data.length === 0 && (
-        <p className="hint">
-          Looking for rooms on this Wi-Fi. Both devices need to be on the same
+      {state === "searching" && (
+        <p className="hint" role="status">
+          Looking for games on this Wi-Fi. Both devices need to be on the same
           network — a phone hotspot works, and neither device needs internet.
         </p>
       )}
 
-      <ul className="rooms">
-        {rooms.data.map((room) => (
-          <li key={room.room}>
-            <button
-              type="button"
-              disabled={joining || room.locked || room.players >= room.capacity}
-              onClick={() => void enter(room.addr, room.seed)}
-            >
-              <span className="room-code">{room.room}</span>
-              <span className="room-host">{room.host}</span>
-              <span className="room-count">
-                {room.players}/{room.capacity}
-                {room.locked ? " · in progress" : ""}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {state === "found" && (
+        <>
+          <ul className="rooms">
+            {rooms.data.map((room) => (
+              <li key={room.room}>
+                <button
+                  type="button"
+                  disabled={joining || room.locked || room.players >= room.capacity}
+                  onClick={() => void enter(room.addr, room.seed)}
+                >
+                  <span className="room-code">{room.room}</span>
+                  <span className="room-host">{room.host}</span>
+                  <span className="room-count">
+                    {room.players}/{room.capacity}
+                    {room.locked ? " · in progress" : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
 
-      <details
-        className="manual"
-        open={byAddress}
-        onToggle={(e) => setByAddress(e.currentTarget.open)}
-      >
-        <summary>Join by address</summary>
-        <p className="hint">
-          {arrival
-            ? "Read from the code you scanned. Check the room, then tap Join."
-            : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
-        </p>
-        <input
-          value={manual}
-          placeholder="192.168.1.24:5000@7QF2"
-          autoCapitalize="characters"
-          onChange={(e) => setManual(e.target.value)}
-        />
-        <button type="button" disabled={joining} onClick={enterManually}>
-          Join
-        </button>
-      </details>
+          <details
+            className="manual"
+            open={byAddress}
+            onToggle={(e) => setByAddress(e.currentTarget.open)}
+          >
+            <summary>Join by address</summary>
+            <p className="hint">
+              {arrival
+                ? "Read from the code you scanned. Check the room, then tap Join."
+                : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
+            </p>
+            {manualFields}
+          </details>
+        </>
+      )}
+
+      {state === "none" && (
+        <>
+          <p className="hint">
+            {arrival
+              ? "The code didn't show up automatically. Check the room below, then tap Join."
+              : "No games showed up on this Wi-Fi. Enter the address shown on the host's screen, or check that both devices are on the same network."}
+          </p>
+          <div className="manual">{manualFields}</div>
+        </>
+      )}
 
       {error && <p className="error">{error}</p>}
     </main>
