@@ -1,5 +1,6 @@
 import type { TimelineEvent } from "@mutation/engine/events"
 import type { MatchState } from "@mutation/engine/types"
+import { css, cx } from "styled-system/css"
 
 /** Plain-language narration of a resolved round. */
 const describe = (event: TimelineEvent, nameOf: (id: string) => string): string | null => {
@@ -45,15 +46,42 @@ const describe = (event: TimelineEvent, nameOf: (id: string) => string): string 
   }
 }
 
-export const EventLog = ({ state }: { readonly state: MatchState }) => {
+/** The last two lines is the preview's whole budget (see the band layout);
+ *  `full` is everything the current round narrated. */
+const PREVIEW_LINES = 2
+
+export const EventLog = ({
+  state,
+  mode = "full",
+}: {
+  readonly state: MatchState
+  readonly mode?: "preview" | "full"
+}) => {
   const nameOf = (id: string) => state.players.find((p) => p.id === id)?.name ?? id
-  const lines = state.timeline
+  const allLines = state.timeline
     .map((event) => describe(event, nameOf))
     .filter((line): line is string => line !== null)
+  const lines = mode === "preview" ? allLines.slice(-PREVIEW_LINES) : allLines
 
-  if (lines.length === 0) return null
+  // ADR 0020 rule 2: this list is how a screen-reader player receives a round
+  // at all, so no mode may take it out of the tree — an empty round still
+  // renders the live region, just with nothing in it yet.
+  //
+  // `.log` still carries the legacy `styles.css` rule that floated it above
+  // the board — a `.screen.match .log` descendant selector, which keeps
+  // matching this element under Task 9's flow layout however deep it sits.
+  // The class stays (drive-app.mjs's ".log li" check and the panel look —
+  // background, padding, radius, font-size — both come from it); only the
+  // positioning half is reset here, in the Panda layer that wins over it, so
+  // the log lays out where its container puts it instead of floating.
   return (
-    <ul className="log" aria-live="polite">
+    <ul
+      className={cx(
+        "log",
+        css({ position: "static", top: "auto", left: "auto", right: "auto", zIndex: "auto", maxHeight: "none", overflowY: "visible" }),
+      )}
+      aria-live="polite"
+    >
       {lines.map((line, i) => (
         <li key={`${i}-${line}`}>{line}</li>
       ))}

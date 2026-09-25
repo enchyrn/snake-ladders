@@ -14,10 +14,13 @@ describe("the match screen's band budget", () => {
     expect(bands(players, PHONE).log).toBeGreaterThanOrEqual(2 * LOG_LINE_PX)
   })
 
+  // Rederived from the real, driven-app CONTROLS_PX (139, see bands.ts) —
+  // the design doc's worked table used the original 130 estimate, not a
+  // measurement, and Task 9's carried finding is what corrected it.
   it("matches the spec's worked numbers", () => {
-    expect(bands(2, PHONE)).toMatchObject({ rows: 61, log: 235 })
-    expect(bands(3, PHONE)).toMatchObject({ rows: 90, log: 206 })
-    expect(bands(6, PHONE)).toMatchObject({ rows: 177, log: 119 })
+    expect(bands(2, PHONE)).toMatchObject({ rows: 61, log: 226 })
+    expect(bands(3, PHONE)).toMatchObject({ rows: 90, log: 197 })
+    expect(bands(6, PHONE)).toMatchObject({ rows: 177, log: 110 })
   })
 
   // On a shorter screen the log gives way first and the board still does not.

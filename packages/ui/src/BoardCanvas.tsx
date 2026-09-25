@@ -10,6 +10,8 @@ import type { MatchState } from "@mutation/engine/types"
 import type { TimelineEvent } from "@mutation/engine/events"
 import { showRound } from "./round-playback"
 import { MineLegend } from "./HUD"
+import { RotateCcw } from "lucide-react"
+import { css, cx } from "styled-system/css"
 
 interface Props {
   readonly state: MatchState
@@ -52,6 +54,9 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
   settledRef.current = onSettled
   const pressRef = useRef<Press | null>(null)
   const [viewMoved, setViewMoved] = useState(false)
+  // Tile 0 is the start pad and is always revealed (board.ts), so it is
+  // excluded — this asks whether the *player* has revealed anything yet.
+  const hasRevealedTile = state.board.tiles.slice(1).some((tile) => tile.revealed)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -126,11 +131,22 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
       />
       <div className="board-overlay">
         {viewMoved && (
-          <button type="button" className="view-reset" onClick={resetView}>
-            ⟲ Reset view
+          <button
+            type="button"
+            className={cx(
+              "view-reset",
+              css({ display: "flex", alignItems: "center", gap: "4px" }),
+            )}
+            onClick={resetView}
+          >
+            <RotateCcw size={14} aria-hidden="true" /> Reset view
           </button>
         )}
-        {onPickTile && <MineLegend />}
+        {/* Retires once a tile is revealed: the board then shows what the
+         * legend explains, so a permanent key would just be narrating the
+         * board back at the player (ADR 0020). Index 0 is the start pad and
+         * is always revealed, so it is excluded from the check. */}
+        {onPickTile && !hasRevealedTile && <MineLegend />}
       </div>
     </>
   )

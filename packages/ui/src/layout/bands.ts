@@ -6,7 +6,13 @@
  */
 export const BOARD_PX = 366
 export const HEADER_PX = 52
-export const CONTROLS_PX = 130
+// Measured from the built app at 390×844 (Task 9): the card rail (44px) plus
+// its 6px gap plus the dice-tray/Roll row (64px, the recipe's `lg` size)
+// plus the bar's own vertical padding and border-top comes to 138.5625px,
+// not the 130 this constant first carried — driving the app is what caught
+// it, reading the recipe would not have. Rounded up so the log's budget
+// never assumes more room than the bar actually leaves it.
+export const CONTROLS_PX = 139
 export const ROW_PX = 20
 export const ROW_GAP_PX = 9
 export const ROWS_PAD_PX = 12

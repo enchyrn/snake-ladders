@@ -5,7 +5,7 @@ import { lastTile } from "@mutation/engine/board"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { ChevronRight } from "lucide-react"
-import { AnchorIcon, MomentumIcon, StunIcon, VenomIcon } from "./icons"
+import { AnchorIcon, FlagIcon, MineIcon, MomentumIcon, StunIcon, VenomIcon } from "./icons"
 
 const CARDS: ReadonlyArray<CardKind> = ["anchor", "reverse", "double", "swap", "defuse"]
 
@@ -298,11 +298,15 @@ export const MineLegend = () => (
       mines nearby
     </li>
     <li>
-      <span className="legend-swatch is-flag">⚑</span>
+      <span className="legend-swatch is-flag">
+        <FlagIcon size={14} />
+      </span>
       flag <span className="legend-hint">(tap a hidden tile)</span>
     </li>
     <li>
-      <span className="legend-swatch is-mine">✸</span>
+      <span className="legend-swatch is-mine">
+        <MineIcon size={14} />
+      </span>
       spent mine
     </li>
   </ul>
