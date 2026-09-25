@@ -24,7 +24,17 @@ nub run verify:ui:pages  # the same, but served from the /snake-ladders/ subpath
 node scripts/drive-app.mjs --https   # over TLS, where a service worker registers
 
 PUBLIC_BASE_PATH=/snake-ladders nub run build   # what the Pages workflow builds
+
+nubx nx run game-web:panda   # regenerate styled-system from panda.config.ts
 ```
+
+`game-web:build`, `:serve` and `:typecheck` all `dependsOn` the `panda`
+target, so `styled-system` — gitignored, since it's generated — exists before
+`tsc` or Vite ever look for it. A fresh clone doesn't need a manual step for
+this: `prepare` (`package.json`) runs `panda codegen`, so both `nub install`
+and `nub ci` regenerate it as part of the lifecycle hook. Run
+`nubx nx run game-web:panda` by hand only when iterating on `panda.config.ts`
+itself and you don't want to wait for a full build.
 
 **nub, not npm** (ADR 0017). `nub.lock` is the lockfile, there is no
 `package-lock.json`, and `npm ci` therefore fails. `nubx` replaces `npx`.
@@ -108,6 +118,39 @@ rejects, because clippy gains lints over time. A `while let` rewrite failed CI
 on exactly this after passing locally. `mise` cannot resolve `rust@stable` in a
 cloud session (the GitHub releases API answers 403), but `rustup update stable`
 works and is worth running before trusting a clean clippy.
+
+**Panda traps.** `panda.config.ts` generates `styled-system` from
+`packages/render/src/palette.ts` (ADR 0021), and four things about the
+2.0.0-beta toolchain cost real time to find:
+
+1. **The beta ships with no implicit preset.** Without
+   `@pandacss/preset-base` in `presets`, `theme.extend.tokens` never becomes
+   real utilities — the generated CSS emits bare, unresolved token names
+   verbatim (`background: surface;`) instead of a colour value.
+   `packages/ui/src/__tests__/panda-tokens.test.ts` parses cssgen's own
+   output and fails on any bare token name, so this can't regress silently.
+2. **A value interpolated from an import across the `@mutation/*` path alias
+   is not extracted.** Panda's static analysis follows relative imports, not
+   the alias, so a token referenced that way is invisible to codegen — use
+   the token by name (`bg: "surface"`), not through a re-exported constant.
+3. **`cx()` does not override a conflicting atomic utility; the stylesheet
+   order decides.** `cx(base, css({ padding: 0 }))` can lose to `base`'s own
+   non-zero padding class. Never compose conflicting utilities with `cx()` —
+   write one complete `css({...})`, or merge raw style objects with
+   `css(a, b)`/`css.raw`, where the later argument wins.
+4. **Multi-value token shorthands don't resolve.** `padding: "3 4"` or
+   `"0 gutterR"` emit verbatim rather than expanding — use longhands
+   (`paddingBlock`/`paddingInline`) or a token reference inside the string
+   (`` `0 {spacing.gutterR}` ``).
+
+Two adjacent facts, not Panda's fault but easy to lose time to anyway:
+legacy rules in `apps/game-web/styles.css` must stay inside `@layer base` —
+an unlayered rule beats every layered one regardless of specificity, so
+un-wrapped legacy CSS silently outranks Panda's own recipes and utilities.
+And Nx's `externalDependencies` input can't see packages nub installs (nub
+doesn't populate `nub.lock` into anything Nx's graph parses), so the `panda`
+target keys its cache invalidation on a `runtime` input that prints the
+installed `@pandacss/dev`/`@pandacss/preset-base` versions instead.
 
 The Tauri app cannot be built in most dev containers: it needs webkit2gtk on
 Linux, an Android SDK+NDK for Android, and macOS with Xcode for iOS. **Do not

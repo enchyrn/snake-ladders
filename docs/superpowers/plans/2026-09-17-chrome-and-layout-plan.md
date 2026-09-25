@@ -68,14 +68,14 @@ tasks of work written against it.
 - Consumes: nothing.
 - Produces: a working `panda codegen` and a Vite build that includes Panda's CSS. Later tasks assume `styled-system/css` and `styled-system/patterns` resolve.
 
-- [ ] **Step 1: Add the dependencies, pinned exactly**
+- [x] **Step 1: Add the dependencies, pinned exactly**
 
 ```bash
 nub add -D -E @pandacss/dev@2.0.0-beta.17
 nub add -E lucide-react@1.46.0
 ```
 
-- [ ] **Step 2: Confirm the versions landed without a caret**
+- [x] **Step 2: Confirm the versions landed without a caret**
 
 ```bash
 grep -n "pandacss\|lucide-react" package.json
@@ -85,7 +85,7 @@ Expected: `"@pandacss/dev": "2.0.0-beta.17"` and `"lucide-react": "1.46.0"`, no 
 If either shows a `^`, re-add with `-E`. A caret on a beta will drift to a
 different beta.
 
-- [ ] **Step 3: Write a minimal Panda config**
+- [x] **Step 3: Write a minimal Panda config**
 
 Tokens come in Task 3. This one only has to prove the toolchain runs.
 
@@ -102,14 +102,14 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Wire PostCSS**
+- [x] **Step 4: Wire PostCSS**
 
 ```js
 // postcss.config.cjs
 module.exports = { plugins: { "@pandacss/dev/postcss": {} } }
 ```
 
-- [ ] **Step 5: Ignore the generated output**
+- [x] **Step 5: Ignore the generated output**
 
 Append to `.gitignore`:
 
@@ -117,7 +117,7 @@ Append to `.gitignore`:
 styled-system
 ```
 
-- [ ] **Step 6: Run codegen and confirm it produces the entrypoints**
+- [x] **Step 6: Run codegen and confirm it produces the entrypoints**
 
 ```bash
 nubx panda codegen
@@ -129,7 +129,7 @@ Expected: the directory exists and contains an `index.mjs` (or `index.js`) plus
 **If this fails on a missing module:** declare the dependency — do not change the
 linker. That is CLAUDE.md's standing rule for nub's no-hoist layout.
 
-- [ ] **Step 7: Add Panda's layers to the stylesheet**
+- [x] **Step 7: Add Panda's layers to the stylesheet**
 
 At the very top of `apps/game-web/styles.css`, above the existing comment:
 
@@ -137,7 +137,7 @@ At the very top of `apps/game-web/styles.css`, above the existing comment:
 @layer reset, base, tokens, recipes, utilities;
 ```
 
-- [ ] **Step 8: Build, and confirm the toolchain survives it**
+- [x] **Step 8: Build, and confirm the toolchain survives it**
 
 ```bash
 nub run build
@@ -148,12 +148,31 @@ Vite 8.3 or TS 6.0.3, stop here and report it — do not work around it silently
 because ADR 0021 was accepted on the assumption that this step is cheap to
 reverse.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add package.json nub.lock panda.config.ts postcss.config.cjs .gitignore apps/game-web/styles.css
 git commit -m "build: adopt Panda CSS 2.0.0-beta.17 and Lucide, and prove they build"
 ```
+
+**Execution note:** the plan's own premise — "later tasks assume
+`styled-system/css` and `styled-system/patterns` resolve" — had no task that
+made it so. Nothing wired resolution: no `tsconfig` path, no Vite alias, no
+vitest alias, and no codegen step on install. The controller ruled this into
+Task 1 (Ruling R1): `styled-system/*` was added to `tsconfig.json`'s `paths`,
+a Vite alias, and a vitest alias, and codegen runs via a root
+`"prepare": "panda codegen"` script rather than an explicit CI step, so both
+`nub install` and `nub ci` regenerate it. Proved with a throwaway probe import
+from `packages/ui` through lint, typecheck, test and build.
+
+A second thing surfaced later but belongs here: `apps/game-web/styles.css`
+declared `@layer reset, base, tokens, recipes, utilities;` in this task's
+Step 7, but every rule below it was unlayered — and an unlayered rule always
+beats a layered one in the cascade, so the legacy CSS silently outranked every
+Panda recipe and utility. Found while implementing Tasks 11+12, fixed
+immediately (commit `1b6ad83`, wrapping the existing rules in `@layer base`)
+rather than deferred to Task 13, because Tasks 8, 9, 11 and 12's visuals
+depended on it.
 
 ---
 
@@ -171,7 +190,7 @@ skips codegen and leaves whatever happens to be on disk.
 - Consumes: Task 1's `panda.config.ts`.
 - Produces: an `nx run game-web:panda` target that `build` depends on.
 
-- [ ] **Step 1: Add the target and the dependency**
+- [x] **Step 1: Add the target and the dependency**
 
 Replace the `targets` block of `apps/game-web/project.json` with:
 
@@ -203,7 +222,7 @@ Replace the `targets` block of `apps/game-web/project.json` with:
 `typecheck` depends on `panda` because `styled-system`'s `.d.ts` files must
 exist before `tsc` runs, or a clean clone fails typecheck with missing modules.
 
-- [ ] **Step 2: Prove a cache hit RESTORES the output rather than skipping it**
+- [x] **Step 2: Prove a cache hit RESTORES the output rather than skipping it**
 
 This is the whole point of the task, and it is the step that catches the
 ADR 0018 defect.
@@ -220,7 +239,7 @@ again. If the directory is missing after a cache hit, `outputs` is wrong — fix
 it before continuing. A cache that restores nothing is worse than no cache,
 because it looks like it worked.
 
-- [ ] **Step 3: Confirm the full build still passes**
+- [x] **Step 3: Confirm the full build still passes**
 
 ```bash
 nub run build
@@ -228,7 +247,7 @@ nub run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/game-web/project.json
@@ -254,7 +273,7 @@ written to enforce it fails immediately on a real defect.
 - Consumes: Task 1's config.
 - Produces: `hueOf(hex: string): number` and `RESERVED_LINK_HUE: readonly [number, number]` exported from `packages/render/src/palette.ts`; Panda tokens `colors.seat.0`–`colors.seat.5`, `colors.void`, `colors.surface`, `colors.surfaceRaised`, `colors.border`, `colors.text`, `colors.textDim`, `colors.ladder`, `colors.snake`, `colors.mine`, `colors.flag`, `colors.finish`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `renderer-legibility` reserves the green family for link tinting. A seat colour
 inside that band fights the snakes.
@@ -291,7 +310,7 @@ describe("seat colours", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and watch it fail on the real defect**
+- [x] **Step 2: Run it and watch it fail on the real defect**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/palette.test.ts
@@ -302,7 +321,7 @@ with `["#4ee39b"]` — seat 4's mint sits at ~151°, inside the reserved band. T
 is a live defect, not a hypothetical: the fifth player's token already fights
 the snakes today.
 
-- [ ] **Step 3: Add the hue helper and the reserved band**
+- [x] **Step 3: Add the hue helper and the reserved band**
 
 Append to `packages/render/src/palette.ts`:
 
@@ -326,7 +345,7 @@ export const hueOf = (hex: string): number => {
 }
 ```
 
-- [ ] **Step 4: Replace the offending seat colour**
+- [x] **Step 4: Replace the offending seat colour**
 
 In `seatColours`, replace `"#4ee39b", // mint` with:
 
@@ -334,7 +353,7 @@ In `seatColours`, replace `"#4ee39b", // mint` with:
   "#3fd0c9", // teal — mint (#4ee39b, ~151°) sat inside the reserved link band
 ```
 
-- [ ] **Step 5: Run the test and watch it pass**
+- [x] **Step 5: Run the test and watch it pass**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/palette.test.ts
@@ -349,7 +368,7 @@ all six across the 300° of non-reserved arc, or distinguishing seats by shape a
 well as hue — belongs to `renderer-legibility` §"Identity without colour",
 which is unbuilt. Do not attempt it here.
 
-- [ ] **Step 6: Write the token generator**
+- [x] **Step 6: Write the token generator**
 
 ```js
 // scripts/palette-tokens.mjs
@@ -368,7 +387,7 @@ export const colourTokens = {
 }
 ```
 
-- [ ] **Step 7: Read the palette module's actual exports before wiring it**
+- [x] **Step 7: Read the palette module's actual exports before wiring it**
 
 ```bash
 grep -n "^export" packages/render/src/palette.ts
@@ -378,7 +397,7 @@ The generator above assumes a `palette` object export. If `palette.ts` exports
 individual constants instead, adjust `palette-tokens.mjs` to name them
 explicitly — do not invent an export that is not there.
 
-- [ ] **Step 8: Add spacing and type scales, and the tokens, to the config**
+- [x] **Step 8: Add spacing and type scales, and the tokens, to the config**
 
 In `panda.config.ts`, add a `theme` block:
 
@@ -404,7 +423,7 @@ import { colourTokens } from "./scripts/palette-tokens.mjs"
   },
 ```
 
-- [ ] **Step 9: Declare the one breakpoint the app actually has**
+- [x] **Step 9: Declare the one breakpoint the app actually has**
 
 The app is phone-first and stays so. The existing single `@media (max-width:
 380px)` rule becomes a named breakpoint, so the 320–380 band — where the
@@ -422,7 +441,7 @@ tight band is the **unprefixed** base. Author the base styles for 320px and
 widen at `sm`, not the other way round — inverting this is how a layout ends
 up untested at its narrowest.
 
-- [ ] **Step 10: Regenerate, build, and run the full suite**
+- [x] **Step 10: Regenerate, build, and run the full suite**
 
 ```bash
 nubx nx run game-web:panda && nub run build && nub run test
@@ -430,7 +449,7 @@ nubx nx run game-web:panda && nub run build && nub run test
 
 Expected: all PASS.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add panda.config.ts scripts/palette-tokens.mjs packages/render/src/palette.ts packages/render/src/__tests__/palette.test.ts
@@ -453,7 +472,7 @@ full-width slabs.
 **Interfaces:**
 - Produces: a `button` recipe with `variant: "primary" | "secondary" | "ghost" | "card" | "toggle"` and `size: "sm" | "md" | "lg"`, imported as `import { button } from "styled-system/recipes"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 A recipe is config, so the test pins the contract other tasks rely on rather
 than the CSS it emits.
@@ -485,7 +504,7 @@ describe("the button recipe", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
@@ -493,7 +512,7 @@ nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
 
 Expected: FAIL — `recipe()` returns `undefined`.
 
-- [ ] **Step 3: Define the recipe**
+- [x] **Step 3: Define the recipe**
 
 In `panda.config.ts`, inside `theme.extend`:
 
@@ -526,7 +545,7 @@ In `panda.config.ts`, inside `theme.extend`:
       },
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
@@ -534,7 +553,7 @@ nubx vitest run packages/ui/src/__tests__/button-recipe.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Regenerate and typecheck**
+- [x] **Step 5: Regenerate and typecheck**
 
 ```bash
 nubx nx run game-web:panda && nub run typecheck
@@ -542,12 +561,24 @@ nubx nx run game-web:panda && nub run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add panda.config.ts packages/ui/src/__tests__/button-recipe.test.ts
 git commit -m "feat: one button recipe with variants, replacing eight ad-hoc classes"
 ```
+
+**Execution note (T3/T4):** neither task's own gates caught this — the
+controller found it by reading the generated CSS directly. Panda 2.0
+beta.17 has **no implicit preset**: without `@pandacss/preset-base`,
+`theme.extend.tokens` never becomes real utilities, so the cssgen output
+emitted bare, unresolved token names verbatim (`background: surface;`
+instead of a real colour value). `@pandacss/preset-base` was added to
+`panda.config.ts`'s `presets`, and a regression test
+(`packages/ui/src/__tests__/panda-tokens.test.ts`) parses the emitted CSS and
+fails on any bare token name, so this class of defect cannot regress
+silently again. Task 7's review was held until this landed, since it builds
+directly on the recipe's colours.
 
 ---
 
@@ -564,7 +595,7 @@ un-recolourable, un-alignable.
 **Interfaces:**
 - Produces: `VenomIcon`, `MineIcon`, `LadderIcon`, `SnakeIcon`, `FlagIcon`, `MomentumIcon`, `AnchorIcon`, `StunIcon`, each `(props: { readonly size?: number; readonly title?: string }) => JSX.Element`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/ui/src/__tests__/icons.test.tsx
@@ -599,7 +630,7 @@ describe("the game's own glyphs", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/icons.test.tsx
@@ -607,7 +638,7 @@ nubx vitest run packages/ui/src/__tests__/icons.test.tsx
 
 Expected: FAIL — the module does not exist.
 
-- [ ] **Step 3: Draw the eight glyphs**
+- [x] **Step 3: Draw the eight glyphs**
 
 ```tsx
 // packages/ui/src/icons/index.tsx
@@ -667,7 +698,7 @@ export const StunIcon = (p: IconProps) => (
 )
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/icons.test.tsx
@@ -675,7 +706,7 @@ nubx vitest run packages/ui/src/__tests__/icons.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/icons packages/ui/src/__tests__/icons.test.tsx
@@ -696,7 +727,7 @@ legal player count. Claims like that are tested, not hoped.
 **Interfaces:**
 - Produces: `bands(players: number, viewportPx: number): Bands` where `Bands` is `{ header, rows, board, log, controls }`, all numbers in CSS px; and the constants `BOARD_PX = 366`, `LOG_LINE_PX = 22`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/ui/src/__tests__/bands.test.ts
@@ -731,7 +762,7 @@ describe("the match screen's band budget", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/bands.test.ts
@@ -739,7 +770,7 @@ nubx vitest run packages/ui/src/__tests__/bands.test.ts
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 ```ts
 // packages/ui/src/layout/bands.ts
@@ -777,7 +808,7 @@ export const bands = (players: number, viewportPx: number): Bands => {
 }
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/bands.test.ts
@@ -785,7 +816,7 @@ nubx vitest run packages/ui/src/__tests__/bands.test.ts
 
 Expected: PASS, including the three worked numbers from the spec.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/layout packages/ui/src/__tests__/bands.test.ts
@@ -809,7 +840,7 @@ is not one — the race is.
 - Consumes: `bands` (Task 6), `seatColour` from `@mutation/render/palette`.
 - Produces: `ProgressRows({ state, actingSeat }: { state: MatchState; actingSeat: string })`, replacing the exported `PlayerStrip` and `Progress`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/ui/src/__tests__/progress-rows.test.tsx
@@ -854,7 +885,7 @@ describe("ProgressRows", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
@@ -862,7 +893,7 @@ nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
 
 Expected: FAIL — `ProgressRows` is not exported.
 
-- [ ] **Step 3: Replace PlayerStrip and Progress with ProgressRows**
+- [x] **Step 3: Replace PlayerStrip and Progress with ProgressRows**
 
 In `packages/ui/src/HUD.tsx`, delete the `PlayerStrip` and `Progress` exports
 and add:
@@ -919,7 +950,7 @@ export const ProgressRows = ({
 
 Add `import { css } from "styled-system/css"` at the top of the file.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
@@ -927,13 +958,13 @@ nubx vitest run packages/ui/src/__tests__/progress-rows.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Update the one consumer**
+- [x] **Step 5: Update the one consumer**
 
 In `packages/app-shell/src/routes/match.tsx`, replace the `PlayerStrip` and
 `Progress` imports and usages with `ProgressRows`, passing `state={match}` and
 `actingSeat={actingSeat}`.
 
-- [ ] **Step 6: Typecheck, lint and test**
+- [x] **Step 6: Typecheck, lint and test**
 
 ```bash
 nub run typecheck && nub run lint && nub run test
@@ -942,12 +973,24 @@ nub run typecheck && nub run lint && nub run test
 Expected: all PASS. `lint` matters here — `HUD.tsx` is `layer:ui` and must not
 have acquired an import from `app-shell`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/ui/src/HUD.tsx packages/ui/src/__tests__/progress-rows.test.tsx packages/app-shell/src/routes/match.tsx
 git commit -m "feat: progress rows replace the tile numeral and the progress stub"
 ```
+
+**Execution note:** the brief's `ProgressRows` snippet drops every
+per-player status the old `PlayerStrip` showed (venom, momentum, anchored,
+stunned, done/away) and marks the acting row only with a test-only
+attribute. Overridden: the spec is silent here and the old strip carried
+this state, so rows carry it forward using Task 5's icons (venom as
+icon+digit — the honest unit under ADR 0020 rule 3) inside the 20px row
+height, and the acting row gets a visible, non-colour cue rather than relying
+on `data-acting` alone. The final review later found these badges were
+`aria-hidden` to assistive tech despite being visible cues; fixed in the
+final fix wave (`role="img"` + `aria-label` per badge, `aria-current` plus
+sr-only text on the acting row).
 
 ---
 
@@ -972,7 +1015,7 @@ canvas-picked tray would not be reachable at all.
 - Consumes: the button recipe (Task 4), the icons (Task 5).
 - Produces: `CardRail` keeps its existing props; `DiceTray({ onRoll, disabled }: { onRoll: () => void; disabled: boolean })` exported from `packages/ui/src/HUD.tsx`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/ui/src/__tests__/card-rail.test.tsx
@@ -1008,7 +1051,7 @@ describe("DiceTray", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/card-rail.test.tsx
@@ -1017,7 +1060,7 @@ nubx vitest run packages/ui/src/__tests__/card-rail.test.tsx
 Expected: FAIL — `DiceTray` is not exported, and `CardRail` renders four
 buttons because `defuse` is filtered and unaffordable cards are dropped.
 
-- [ ] **Step 3: Make the rail flex and keep disabled cards present**
+- [x] **Step 3: Make the rail flex and keep disabled cards present**
 
 In `CardRail`, change the wrapper to `css({ display: "flex", gap: "6px" })` —
 **no `overflow-x`** — and give each card `flex: "1 1 0"` with `minWidth: 0`.
@@ -1025,7 +1068,7 @@ Render all five cards; a card the player cannot afford or has already played
 renders with `disabled` rather than being filtered out. Replace the `☣{cost}`
 span with `<VenomIcon size={12} />{cost}`.
 
-- [ ] **Step 4: Add the dice tray**
+- [x] **Step 4: Add the dice tray**
 
 ```tsx
 /**
@@ -1056,7 +1099,7 @@ export const DiceTray = ({
 )
 ```
 
-- [ ] **Step 5: Run the test and verify it passes**
+- [x] **Step 5: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/card-rail.test.tsx
@@ -1064,13 +1107,13 @@ nubx vitest run packages/ui/src/__tests__/card-rail.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 6: Wire the tray into the match screen**
+- [x] **Step 6: Wire the tray into the match screen**
 
 In `match.tsx`, put `DiceTray` beside `RollButton` in the control bar, both
 sending `{ _tag: "Commit", playerId: seat }`. Both read `canRollAtom` for their
 disabled state.
 
-- [ ] **Step 7: Build and drive it**
+- [x] **Step 7: Build and drive it**
 
 ```bash
 nub run build && nub run verify:ui
@@ -1081,12 +1124,21 @@ Expected: PASS, no console errors, no horizontal overflow. **Open
 This is the survey finding; a green gate that still shows three cards means the
 flex did not take.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/ui/src/HUD.tsx packages/ui/src/__tests__/card-rail.test.tsx packages/app-shell/src/routes/match.tsx
 git commit -m "feat: the card rail flexes to five, and the dice tray is a real button"
 ```
+
+**Execution note:** the plan assumed `DiceTray` and `RollButton` could sit
+beside the five-card rail in one row. They can't: squeezed next to a tray and
+Roll, the cards drop to ~26px, violating both the ≥44px tap constraint and
+the spec's ~70px-per-card premise. Ruling: the control bar becomes two rows —
+the five-card rail full width, then `DiceTray` + `RollButton` below it.
+`bands.ts`'s `CONTROLS_PX = 130` was written to budget exactly these two
+~64px rows, and Task 9 lays them out in that order. (The measured height
+later settled at ~139px, reconciled in Task 9's own note below.)
 
 ---
 
@@ -1101,7 +1153,7 @@ git commit -m "feat: the card rail flexes to five, and the dice tray is a real b
 - Consumes: `bands` (Task 6), `ProgressRows` (Task 7), `DiceTray` (Task 8).
 - Produces: `EventLog({ state, mode }: { state: MatchState; mode?: "preview" | "full" })`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/ui/src/__tests__/event-log-preview.test.tsx
@@ -1137,7 +1189,7 @@ describe("EventLog", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/event-log-preview.test.tsx
@@ -1145,14 +1197,14 @@ nubx vitest run packages/ui/src/__tests__/event-log-preview.test.tsx
 
 Expected: FAIL — `mode` is not a prop; preview renders all four lines.
 
-- [ ] **Step 3: Add the mode**
+- [x] **Step 3: Add the mode**
 
 In `EventLog.tsx`, accept `mode: "preview" | "full" = "full"` and slice the
 lines to the last two in preview. **Do not early-return `null` for an empty
 timeline in preview mode** — return the empty `<ul>` with its `aria-live`
 attribute, so the live region is present before the first round.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/event-log-preview.test.tsx
@@ -1160,7 +1212,7 @@ nubx vitest run packages/ui/src/__tests__/event-log-preview.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Lay the match screen out as five bands**
+- [x] **Step 5: Lay the match screen out as five bands**
 
 Rewrite `MatchScreen`'s returned tree as, top to bottom: a 52px header (turn
 text, round-log button, settings button — the settings button is inert until
@@ -1172,7 +1224,7 @@ Use `bands(match.players.length, window.innerHeight)` only for the log band's
 `maxHeight`; the board band gets a literal `h: "board"` token so it cannot be
 squeezed by a flex miscalculation.
 
-- [ ] **Step 6: Turn `⟲ Reset view` into an icon button**
+- [x] **Step 6: Turn `⟲ Reset view` into an icon button**
 
 `BoardCanvas.tsx:130` renders `⟲ Reset view` — an emoji in a text node, so it
 is a different picture per platform. Replace the glyph with Lucide's
@@ -1180,13 +1232,13 @@ is a different picture per platform. Replace the glyph with Lucide's
 only after the player has orbited, so it has no established shape to recognise
 and an icon alone would be a puzzle.
 
-- [ ] **Step 7: Make the legend conditional**
+- [x] **Step 7: Make the legend conditional**
 
 `MineLegend` renders only when the minesweeper module is on **and** no tile has
 been revealed yet. Once a tile is revealed the board shows what the legend
 explains, and it retires.
 
-- [ ] **Step 8: Build and drive it**
+- [x] **Step 8: Build and drive it**
 
 ```bash
 nub run build && nub run verify:ui
@@ -1197,12 +1249,26 @@ confirm: the board is visibly the dominant element, the progress rows are at the
 top, the log sits below the board rather than above it, and the legend is gone
 once a tile is revealed.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/app-shell/src/routes/match.tsx packages/ui/src/BoardCanvas.tsx packages/ui/src/EventLog.tsx packages/ui/src/__tests__/event-log-preview.test.tsx
 git commit -m "feat: the match screen as five bands, with the log below the board"
 ```
+
+**Execution note:** the measured control bar came in at 138.6px against
+`bands.ts`'s `CONTROLS_PX = 130` budget from Task 8's note — `CONTROLS_PX`
+was reconciled to 139 and the band tests rederived against the real number
+rather than the guess. `MineLegend` still rendered the raw `⚑`/`✸` emoji
+glyphs (missed by Task 5's icon pass because it wasn't touched there); this
+task's Step 7 replaced them with `FlagIcon`/`MineIcon`. Also: `verify:ui`'s
+"nothing was narrated after rolling" failure was reproduced here — 1/4 on the
+unmodified base, 1/6 on the branch — and traced only as far as a hypothesis
+(WebGL main-thread contention); it is pre-existing, not introduced by this
+plan, and the fix belongs in `drive-app.mjs` or CI flags, outside this plan's
+scope. It resurfaced in the final fix wave's own gate runs (2/5 in
+development, 2/24 on a scratch probe of the pre-fix tree) and is flagged
+below as an open thread for a task of its own.
 
 ---
 
@@ -1220,7 +1286,7 @@ the plan's only correctness-grade fix.
 **Interfaces:**
 - Produces: `joinState(rooms: ReadonlyArray<unknown>, elapsedMs: number): "searching" | "found" | "none"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/app-shell/src/app/__tests__/join-state.test.ts
@@ -1246,7 +1312,7 @@ describe("joinState", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/app-shell/src/app/__tests__/join-state.test.ts
@@ -1254,7 +1320,7 @@ nubx vitest run packages/app-shell/src/app/__tests__/join-state.test.ts
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 ```ts
 // packages/app-shell/src/app/join-state.ts
@@ -1271,7 +1337,7 @@ export const joinState = (rooms: ReadonlyArray<unknown>, elapsedMs: number): Joi
   rooms.length > 0 ? "found" : elapsedMs < SEARCH_GRACE_MS ? "searching" : "none"
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/app-shell/src/app/__tests__/join-state.test.ts
@@ -1279,7 +1345,7 @@ nubx vitest run packages/app-shell/src/app/__tests__/join-state.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Render all three states**
+- [x] **Step 5: Render all three states**
 
 In `join.tsx`: change the heading to "Join a game"; track elapsed time since
 mount; render a live "Looking for games on this Wi-Fi" indicator in `searching`,
@@ -1289,7 +1355,7 @@ the room list in `found`, and in `none` an explanation plus the address field
 Leave `join-link.ts`'s arrival behaviour alone — a scanned QR still fills the
 field and opens the disclosure, and that is already tested.
 
-- [ ] **Step 6: Build and drive it**
+- [x] **Step 6: Build and drive it**
 
 ```bash
 nub run build && nub run verify:ui
@@ -1306,12 +1372,24 @@ If that port is not serving, reuse the pattern from `scripts/drive-app.mjs`'s
 exported `serveDist`. Expected: the screenshot shows either a searching
 indicator or a "no games found" block — **never the blank gap it shows today.**
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/app-shell/src/app/join-state.ts packages/app-shell/src/app/__tests__/join-state.test.ts packages/app-shell/src/routes/join.tsx
 git commit -m "fix: the join screen renders nothing when no rooms are found"
 ```
+
+**Execution note:** the plan's Step 5 said "keep the disclosure only in
+`found`", which would hide a QR arrival's pre-filled address field for the
+whole 4s `searching` window — a guest who scanned a code would watch it
+vanish for four seconds before it reappeared. Overridden: when an arrival is
+present the address field stays visible in every state (promoted in
+`searching`/`none`, inside the opened disclosure in `found`), since a
+scanned-and-then-hidden field would itself be the "dead page" this task
+exists to fix. The final review separately found the `searching` copy
+contradictory for an arrival ("Looking for games…" above "The code didn't
+show up automatically…"); fixed in the final fix wave with
+arrival-appropriate wording (`join-state.ts`'s `promotedHint`).
 
 ---
 
@@ -1320,42 +1398,42 @@ git commit -m "fix: the join screen renders nothing when no rooms are found"
 **Files:**
 - Modify: `packages/app-shell/src/routes/lobby.tsx`
 
-- [ ] **Step 1: Collapse the module cards into rows**
+- [x] **Step 1: Collapse the module cards into rows**
 
 Each module becomes a single `toggle`-variant button: name on the left, state on
 the right, blurb revealed on demand rather than as a permanent paragraph. Four
 paragraphs currently push `Start` below the fold.
 
-- [ ] **Step 2: Move the twists' prose here**
+- [x] **Step 2: Move the twists' prose here**
 
 The home screen's "The twists" section text becomes these rows' on-demand
 blurbs. Under ADR 0020 the twists belong at the toggle that turns them on, not
 narrated on the front door.
 
-- [ ] **Step 3: Fix the doubled label**
+- [x] **Step 3: Fix the doubled label**
 
 The field keeps its "Add a player" placeholder; the button becomes an icon
 button with `aria-label="Add player"`. Two near-identical labels side by side
 was one too many.
 
-- [ ] **Step 4: Change the "On" colour**
+- [x] **Step 4: Change the "On" colour**
 
 The toggle's active state must not use the reserved link-tint band. Use
 `colors.seat.0` (cyan) or `colors.finish`, not a green. Task 3's predicate
 covers seats, not this — check it by eye against `RESERVED_LINK_HUE`.
 
-- [ ] **Step 5: Add the seat swatch to each player row**
+- [x] **Step 5: Add the seat swatch to each player row**
 
 A filled circle in `seatColour(player.seat)`, which is where plan 2's colour
 picker will attach.
 
-- [ ] **Step 6: Leave the room code and QR exactly as they are**
+- [x] **Step 6: Leave the room code and QR exactly as they are**
 
 They are the one part of the current lobby that works. In particular the QR's
 quiet zone is drawn **inside the SVG** (`QUIET_ZONE = 4`) and must not become
 CSS padding again — that was a real defect, and a test pins it.
 
-- [ ] **Step 7: Build, drive, and look**
+- [x] **Step 7: Build, drive, and look**
 
 ```bash
 nub run build && nub run verify:ui
@@ -1364,7 +1442,7 @@ nub run build && nub run verify:ui
 Expected: PASS. **Open `screenshots/2-lobby.png`** and confirm `Start` is
 reachable without scrolling past four paragraphs.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/app-shell/src/routes/lobby.tsx
@@ -1378,23 +1456,23 @@ git commit -m "feat: lobby module rows, one add-player label, and seat swatches"
 **Files:**
 - Modify: `packages/app-shell/src/routes/home.tsx`
 
-- [ ] **Step 1: Give the three actions a hierarchy**
+- [x] **Step 1: Give the three actions a hierarchy**
 
 "Pass and play on this device" becomes `variant="primary"` and goes first — it
 is the only action that works in every environment. "Join a game" and "Host on
 Wi-Fi" become `secondary`. Today all three are identical slabs with the
 *disabled* one first.
 
-- [ ] **Step 2: Put the host button's reason on the button**
+- [x] **Step 2: Put the host button's reason on the button**
 
 When hosting is unavailable in a browser, the reason belongs on the disabled
 control, not in a paragraph below all three explaining which one it refers to.
 
-- [ ] **Step 3: Delete "The twists"**
+- [x] **Step 3: Delete "The twists"**
 
 Its text moved to the lobby in Task 11. Keep one line saying what the game is.
 
-- [ ] **Step 4: Build, drive, and look**
+- [x] **Step 4: Build, drive, and look**
 
 ```bash
 nub run build && nub run verify:ui
@@ -1403,7 +1481,7 @@ nub run build && nub run verify:ui
 Expected: PASS. **Open `screenshots/1-home.png`** and confirm the primary action
 is visibly primary and the wall of prose is gone.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/app-shell/src/routes/home.tsx
@@ -1421,19 +1499,19 @@ survey screenshots.
 - Modify: `packages/ui/src/PwaPrompt.tsx`
 - Modify: `apps/game-web/styles.css`
 
-- [ ] **Step 1: Make the toast inline**
+- [x] **Step 1: Make the toast inline**
 
 Remove its `position: fixed` and render it in the flow of the screen that raises
 it, so it can never overlay a control.
 
-- [ ] **Step 2: Reduce the stylesheet to what is genuinely global**
+- [x] **Step 2: Reduce the stylesheet to what is genuinely global**
 
 Delete every rule now expressed as a token or recipe. What remains: the
 `@layer` declaration, the `:root` custom properties the WebGL side still reads,
 `box-sizing`, `html/body/#root` sizing, and the `-webkit-tap-highlight-color`
 reset. Everything else is dead.
 
-- [ ] **Step 3: Confirm nothing was using what you deleted**
+- [x] **Step 3: Confirm nothing was using what you deleted**
 
 ```bash
 nub run build && nub run verify:ui
@@ -1443,7 +1521,7 @@ Expected: PASS, no horizontal overflow, no console errors. A deleted rule that
 was load-bearing shows up here as a broken layout in the screenshots — **look at
 all five.**
 
-- [ ] **Step 4: Check the narrowest supported width**
+- [x] **Step 4: Check the narrowest supported width**
 
 `drive-app.mjs` drives at 390. The 320–380 band is the one the `sm` breakpoint
 exists for and the one nothing has ever looked at:
@@ -1457,7 +1535,7 @@ If the driver has no width flag, write a throwaway script against its exported
 320×800, and delete the script afterwards. Expected: no horizontal overflow on
 any screen, and all five cards still meet 44px.
 
-- [ ] **Step 5: Run every gate**
+- [x] **Step 5: Run every gate**
 
 ```bash
 nub run test && nub run typecheck && nub run lint && nub run build
@@ -1468,7 +1546,7 @@ Expected: all PASS. `cargo` is included because the plan touched nothing in
 `crates/`, so a failure there means something unrelated broke and is worth
 knowing before the checkpoint.
 
-- [ ] **Step 6: Confirm no emoji survived**
+- [x] **Step 6: Confirm no emoji survived**
 
 ```bash
 grep -rn "☣\|»\|⚓\|💤\|⚑\|✸\|⟲" packages/ui/src packages/app-shell/src --include=*.tsx
@@ -1477,12 +1555,38 @@ grep -rn "☣\|»\|⚓\|💤\|⚑\|✸\|⟲" packages/ui/src packages/app-shell/
 Expected: no matches. The `‹` in the two back buttons becomes a Lucide
 `ChevronLeft`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/ui/src/PwaPrompt.tsx apps/game-web/styles.css
 git commit -m "refactor: inline the PWA toast and reduce styles.css to globals"
 ```
+
+**Execution note:** this task's own review found `BoardCanvas.tsx` had
+hand-mirrored the gutter `max()` expression instead of reusing the
+`GUTTER_LEFT`/`GUTTER_RIGHT` constants — folded into fix round 1 (commit
+`2fbff6b`). That fix also uncovered the trap that shaped the rest of the
+branch: **Panda cannot extract a value interpolated from an import across the
+`@mutation/*` path alias**, so `match.tsx`'s gutter padding, written through
+that alias, was never picked up by codegen and had to be hand-mirrored as
+literals in three places instead of referenced as a token. The re-review's
+new Important (make the gutter a Panda token referenced by name rather than
+triplicated literals) was deliberately deferred to the final whole-branch
+review's fix wave rather than spent on another dispatch here.
+
+The final review then found a second, more consequential instance of the
+same class of bug: `packages/ui/src/layout/screen.ts`'s `matchScreenClass`
+used `cx(screenClass, css({ padding: 0, gap: 0, ... }))` to override the base
+screen's padding and gap — but **`cx()` only concatenates class names; it
+does not resolve which conflicting atomic utility wins**, and the stylesheet
+order left the *base* screen's non-zero padding and gap beating the
+override. The match screen silently kept 16px of padding and inset the board
+band to 358px instead of the spec's full-bleed 366px. Fixed in the final fix
+wave by giving `matchScreenClass` its own complete `css({...})` rather than
+composing with `cx()`; the same pattern was fixed at `match.tsx`'s round-log
+heading. **Rule for any future Panda code in this repo: never compose
+conflicting utilities with `cx()` — write one complete `css({...})`, or merge
+raw style objects with `css(a, b)` where the later argument wins.**
 
 ---
 
@@ -1493,25 +1597,47 @@ git commit -m "refactor: inline the PWA toast and reduce styles.css to globals"
 - Modify: `docs/superpowers/plans/2026-09-17-chrome-and-layout-plan.md`
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Tick every checkbox in this plan** and add a short note under any
+- [x] **Step 1: Tick every checkbox in this plan** and add a short note under any
       task where the implementation found something the plan did not anticipate.
       That note is the expensive part to rediscover.
 
-- [ ] **Step 2: Add Panda to CLAUDE.md's command block**
+- [x] **Step 2: Add Panda to CLAUDE.md's command block**
 
 `nubx nx run game-web:panda` regenerates `styled-system`, and `build`,
 `serve` and `typecheck` now depend on it. Note that `styled-system` is
 gitignored, so a fresh clone must run a build before `tsc` will resolve it.
 
-- [ ] **Step 3: Update the handoff** with the gate numbers, what is verified,
+- [x] **Step 3: Update the handoff** with the gate numbers, what is verified,
       and the next task — plan 2, spec A's settings subsystem.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/ CLAUDE.md
 git commit -m "docs: checkpoint the chrome and layout plan"
 ```
+
+**Execution note:** a final whole-branch review (`f8ab630..2fbff6b`, opus)
+ran after Task 13 and before this task, deliberately — Ruling: the checkpoint
+records the verified end state, and one written before the final fixes would
+be stale on arrival. It found 0 Critical, 7 Important and 10 Minor issues
+beyond what each per-task review had already caught; most are folded into the
+notes above (badges silent to AT under Task 7, the `cx()` override trap under
+Task 13, the `searching`-state copy under Task 10). The rest, addressed in one
+fix wave (commits `2c76cb4..8c8ecf8`, all re-reviewed clean): the live region
+was truncated to two lines instead of holding the whole round (ADR 0020 rule
+2 — fixed by clipping the preview *visually* while keeping every line in the
+`aria-live` list); the `ui` and `render` packages had no `test` Nx target and
+so never ran in CI; a multi-seat header with the seat-switcher inline broke
+the band budget (the switcher moved to its own band under the header, per a
+ruling that the 20px progress rows must not become the tap targets — that
+would violate the 44px rule); the mine legend's "retires to the round-log
+sheet" behaviour was half-built; and the gutter/header literals became real
+Panda tokens. Three items were ruled note-only rather than code, and are
+recorded in `docs/handoff.md` and CLAUDE.md rather than fixed here: no
+`strictTokens` enforcement on spacing values (ADR 0021 debt), a few unbuilt
+spec niceties (the join screen's "live indicator" is text only), and the
+Panda traps themselves, now in CLAUDE.md's "Panda traps" paragraph.
 
 ---
 
