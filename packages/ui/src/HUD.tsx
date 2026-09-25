@@ -1,42 +1,81 @@
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
 import { countColour, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
+import { css } from "styled-system/css"
 
 const CARDS: ReadonlyArray<CardKind> = ["anchor", "reverse", "double", "swap", "defuse"]
 
-export const PlayerStrip = ({
+/**
+ * One row per player: swatch, name, and a bar showing how far along the board
+ * they are. This replaces both the tile numeral in the old PlayerStrip and the
+ * 5%-wide stub the old Progress rendered — a player reads the race off the
+ * bars' relative lengths (ADR 0020). The tile number stays on the board.
+ */
+export const ProgressRows = ({
   state,
-  me,
+  actingSeat,
 }: {
   readonly state: MatchState
-  readonly me: string
-}) => (
-  <ul className="players">
-    {state.players.map((player) => (
-      <li
-        key={player.id}
-        className={[
-          "player",
-          player.id === me ? "is-me" : "",
-          player.finishedAtRound !== null ? "is-done" : "",
-          player.connected ? "" : "is-away",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <span className="pip" style={{ background: seatColour(player.seat) }} />
-        <span className="player-name">{player.name}</span>
-        <span className="player-stats">
-          <span title="tile">{player.position}</span>
-          {player.venom > 0 && <span className="venom" title="venom">☣{player.venom}</span>}
-          {player.momentum > 0 && <span className="momentum" title="momentum">»{player.momentum}</span>}
-          {player.anchored && <span title="anchored">⚓</span>}
-          {player.stunned > 0 && <span title="sitting out">💤</span>}
-        </span>
-      </li>
-    ))}
-  </ul>
-)
+  readonly actingSeat: string
+}) => {
+  const top = lastTile(state.config.size)
+  return (
+    <ul
+      className={css({
+        listStyleType: "none",
+        margin: 0,
+        padding: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: "9px",
+      })}
+    >
+      {state.players.map((player) => (
+        <li
+          key={player.id}
+          data-acting={player.id === actingSeat}
+          className={css({ display: "flex", alignItems: "center", gap: "9px" })}
+        >
+          <span
+            className={css({ width: "14px", height: "14px", borderRadius: "50%", flex: "none" })}
+            style={{ background: seatColour(player.seat) }}
+          />
+          <span
+            className={css({
+              fontSize: "sm",
+              fontWeight: 600,
+              width: "54px",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
+            })}
+          >
+            {player.name}
+          </span>
+          <span
+            role="progressbar"
+            aria-label={player.name}
+            aria-valuenow={player.position}
+            aria-valuemin={0}
+            aria-valuemax={top}
+            className={css({
+              flexGrow: 1,
+              height: "10px",
+              borderRadius: "5px",
+              background: "surface",
+              overflow: "hidden",
+            })}
+          >
+            <span
+              className={css({ display: "block", height: "100%", borderRadius: "5px" })}
+              style={{ width: `${(player.position / top) * 100}%`, background: seatColour(player.seat) }}
+            />
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 export const CardRail = ({
   me,
@@ -72,24 +111,6 @@ export const CardRail = ({
           </button>
         )
       })}
-    </div>
-  )
-}
-
-export const Progress = ({ state }: { readonly state: MatchState }) => {
-  const top = lastTile(state.config.size)
-  return (
-    <div className="progress" aria-hidden>
-      {state.players.map((player) => (
-        <div
-          key={player.id}
-          className="progress-bar"
-          style={{
-            width: `${(player.position / top) * 100}%`,
-            background: seatColour(player.seat),
-          }}
-        />
-      ))}
     </div>
   )
 }
