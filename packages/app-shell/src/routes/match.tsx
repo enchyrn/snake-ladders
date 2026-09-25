@@ -8,8 +8,7 @@ import type { MatchClient } from "../store/match-client"
 import { BoardCanvas } from "@mutation/ui/BoardCanvas"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { EventLog } from "@mutation/ui/EventLog"
-import { CardRail, DiceTray, ProgressRows } from "@mutation/ui/HUD"
-import { css, cx } from "styled-system/css"
+import { ControlBar, ProgressRows } from "@mutation/ui/HUD"
 
 /** Isolated so the Roll button re-renders on its own — not on every card play,
  *  every tile reveal, or the roster twitching — since `canRollAtom` is the
@@ -132,23 +131,17 @@ export const MatchScreen = () => {
         </div>
       )}
 
-      {/* Two rows, not one: five cards sharing a row with the dice tray and
-       * Roll squeezed each card under the 44px tap minimum (~26px at phone
-       * width) and collapsed every card's name to nothing. Cards get the
-       * full-width row (~70px each at 390px, per the spec's own math);
-       * the tray and Roll — both routes to the same Commit — share the row
-       * below. `align-items: stretch` on `.control-bar` (legacy) still
-       * applies on the cross axis once flex-direction turns to column here,
-       * so each row gets the bar's full width. */}
-      <div className={cx("control-bar", css({ display: "flex", flexDirection: "column", gap: "6px" }))}>
-        <CardRail me={actingPlayer} state={match} onPlay={playCard} disabled={match.phase !== "committing"} />
-        <div className={css({ display: "flex", gap: "8px" })}>
-          <DiceTray
-            onRoll={() => client.send({ _tag: "Commit", playerId: actingSeat })}
-            disabled={!canRollNow}
-          />
+      <div className="control-bar">
+        <ControlBar
+          me={actingPlayer}
+          state={match}
+          onPlay={playCard}
+          cardsDisabled={match.phase !== "committing"}
+          onRoll={() => client.send({ _tag: "Commit", playerId: actingSeat })}
+          rollDisabled={!canRollNow}
+        >
           <RollButton client={client} seat={actingSeat} />
-        </div>
+        </ControlBar>
       </div>
     </main>
   )

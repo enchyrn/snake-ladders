@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
 import { countColour, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
@@ -168,10 +169,10 @@ export const CardRail = ({
     // No `overflow-x`: the rail's five cards (four without minesweeper) flex
     // to fit the control bar rather than scrolling out of reach — the survey
     // found a half-clipped "Double" behind the old fixed-width, scrolling rail.
-    // This is its own full-width row in `.control-bar` (match.tsx puts the
-    // dice tray and Roll on a second row below it), so it needs no `flex` of
-    // its own here — the column parent's `align-items: stretch` gives it the
-    // full row width, which five cards then divide evenly below.
+    // This is its own full-width row (`ControlBar` below puts the dice tray
+    // and Roll on a second row after it), so it needs no `flex` of its own
+    // here — the column parent's `align-items: stretch`/`width: 100%` gives
+    // it the full row width, which five cards then divide evenly below.
     <div className={css({ display: "flex", gap: "6px" })}>
       {CARDS.filter((card) => card !== "defuse" || hasMines).map((card) => {
         const cost = cardCost[card]
@@ -237,6 +238,46 @@ export const DiceTray = ({
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
     </span>
   </button>
+)
+
+/**
+ * The control bar's two rows: the card rail alone, full width, then the dice
+ * tray sharing a second row with whatever else can trigger a roll (`Roll`,
+ * until plan 2's `rollButton: hidden` removes it) — `children`, so this stays
+ * in `@mutation/ui` without reaching up for `RollButton`'s atoms, which live
+ * in app-shell (the layer boundary only allows the other direction).
+ *
+ * One row was the original shape; sharing it with the dice tray and Roll
+ * crushed every card under the 44px tap minimum (~26px at phone width) and
+ * its name to nothing. This is composition only — the bar's own chrome
+ * (sticky position, background, padding) stays with whatever places it, so a
+ * future layout (the five-band one Task 9 adds) drops this in without
+ * inheriting positioning it would have to undo.
+ */
+export const ControlBar = ({
+  me,
+  state,
+  onPlay,
+  cardsDisabled,
+  onRoll,
+  rollDisabled,
+  children,
+}: {
+  readonly me: Player | undefined
+  readonly state: MatchState
+  readonly onPlay: (card: CardKind) => void
+  readonly cardsDisabled: boolean
+  readonly onRoll: () => void
+  readonly rollDisabled: boolean
+  readonly children?: ReactNode
+}) => (
+  <div className={css({ display: "flex", flexDirection: "column", gap: "6px", width: "100%" })}>
+    <CardRail me={me} state={state} onPlay={onPlay} disabled={cardsDisabled} />
+    <div className={css({ display: "flex", gap: "8px" })}>
+      <DiceTray onRoll={onRoll} disabled={rollDisabled} />
+      {children}
+    </div>
+  </div>
 )
 
 /**

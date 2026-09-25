@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
 import { initialMatch, newPlayer } from "@mutation/engine/match"
 import { defaultConfig } from "@mutation/engine/types"
-import { CardRail, DiceTray } from "../HUD"
+import { CardRail, ControlBar, DiceTray } from "../HUD"
 
 // `initialMatch` starts with an empty roster — players join via a `Join`
 // action, not at construction — so the brief's `state().players[0]!` is
@@ -53,5 +53,46 @@ describe("DiceTray", () => {
     const html = renderToStaticMarkup(<DiceTray onRoll={() => {}} disabled={false} />)
     expect(html).toContain("<button")
     expect(html).toContain("aria-label")
+  })
+})
+
+describe("ControlBar", () => {
+  // Sharing one row between the five cards, the dice tray and Roll crushed
+  // every card under the 44px tap minimum (~26px at phone width). The fix is
+  // two *separate* row containers — the cards' own row closes before the
+  // tray/Roll row opens — not just "the tray happens to render after the
+  // cards" or "the cards render at all", which the `size: "sm"` check above
+  // is blind to. This is the static half of that regression a real browser
+  // layout still has to confirm (the row containers exist; whether they
+  // still render at a legible width is a flex computation
+  // `renderToStaticMarkup` cannot perform — see task-8-report.md for the
+  // driven-app measurements).
+  it("puts the cards and the roll controls in separate row containers", () => {
+    const me = { ...state().players[0]!, venom: 0 }
+    const html = renderToStaticMarkup(
+      <ControlBar
+        me={me}
+        state={state()}
+        onPlay={() => {}}
+        cardsDisabled={false}
+        onRoll={() => {}}
+        rollDisabled={false}
+      >
+        <button type="button">Roll</button>
+      </ControlBar>,
+    )
+
+    // The dice tray's button must be the first thing inside a *fresh* <div>
+    // — i.e. the cards' own row div closed (`</div>`) immediately before a
+    // new row div opened — rather than sitting as a direct sibling of the
+    // card buttons inside one shared row.
+    expect(html).toMatch(/<\/div><div[^>]*><button[^>]*aria-label="Roll the dice"/)
+
+    // Sanity: both rows are actually present with their expected buttons,
+    // so the regex above isn't vacuously matching an unrelated div boundary.
+    expect(html.match(/<button/g)).toHaveLength(7) // 5 cards + dice tray + the injected Roll child
+    expect(html).toContain(">anchor<")
+    expect(html).toContain('aria-label="Roll the dice"')
+    expect(html).toContain(">Roll<")
   })
 })
