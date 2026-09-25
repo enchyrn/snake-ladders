@@ -98,4 +98,16 @@ export default [
       ],
     },
   },
+  {
+    // panda.config.ts sits at the workspace root, outside every project, so
+    // the project graph has no target project for it: the boundary rule
+    // reports any relative import of it as reaching an "external resource"
+    // unconditionally, before `allow`/`depConstraints` (which only apply once
+    // a target project is found) are consulted. This test's whole job is to
+    // pin the button recipe as it is actually defined in that config, so it
+    // reads panda.config.ts directly rather than the generated output — the
+    // rule is switched off for this one file instead of routed around it.
+    files: ["packages/ui/src/__tests__/button-recipe.test.ts"],
+    rules: { "@nx/enforce-module-boundaries": "off" },
+  },
 ]

@@ -25,6 +25,36 @@ export default defineConfig({
       // min-width, so `sm` means "380px and wider" — the tight 320–380px
       // band is the unprefixed base, not the prefixed variant.
       breakpoints: { sm: "380px" },
+      // Replaces eight independently styled classes (.primary, .roll,
+      // .module-toggle, .card, .add-player, .remove-player, .view-reset,
+      // .seat-switch) that drifted apart — the join screen's button was
+      // small and left-aligned while home's were full-width slabs.
+      recipes: {
+        button: {
+          className: "btn",
+          base: {
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            gap: "2", borderRadius: "10px", fontFamily: "inherit", fontWeight: 600,
+            cursor: "pointer", border: "1px solid transparent",
+            _disabled: { opacity: 0.45, cursor: "default" },
+          },
+          variants: {
+            variant: {
+              primary: { bg: "finish", color: "void", fontWeight: 700 },
+              secondary: { bg: "surfaceRaised", color: "text", borderColor: "border" },
+              ghost: { bg: "transparent", color: "textDim" },
+              card: { bg: "surfaceRaised", color: "text", borderColor: "border", flexDirection: "column", gap: "1" },
+              toggle: { bg: "surfaceRaised", color: "text", borderColor: "border" },
+            },
+            size: {
+              sm: { minHeight: "tap", px: "3", fontSize: "xs" },
+              md: { minHeight: "tap", px: "4", fontSize: "md" },
+              lg: { minHeight: "tap", px: "5", fontSize: "lg", height: "64px" },
+            },
+          },
+          defaultVariants: { variant: "secondary", size: "md" },
+        },
+      },
     },
   },
 })
