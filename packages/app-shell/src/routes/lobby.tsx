@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
+import { Plus } from "lucide-react"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
 import { useSession } from "../app/session"
@@ -9,6 +10,14 @@ import { QrCode } from "@mutation/ui/QrCode"
 import { seatColour } from "@mutation/render/palette"
 import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "../store/atoms"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
+import { button } from "styled-system/recipes"
+import { css, cx } from "styled-system/css"
+
+// Task 3's reserved-link-hue predicate covers seats, not chrome — checked by
+// eye here. `seat.0` (cyan) sits well outside the green band the renderer
+// reserves for snakes and ladders, unlike the `--snake-head` green the old
+// `.module-toggle.is-active` rule used.
+const onColour = css({ borderColor: "seat.0", color: "seat.0" })
 
 export const LobbyScreen = () => {
   const session = useSession()
@@ -159,8 +168,13 @@ export const LobbyScreen = () => {
               placeholder="Add a player"
               aria-label="New player name"
             />
-            <button type="submit" disabled={!guestName.trim() || match.players.length >= 6}>
-              Add player
+            <button
+              type="submit"
+              className={cx(button({ variant: "secondary", size: "md" }), css({ flex: "none", width: "tap", paddingInline: "0" }))}
+              aria-label="Add player"
+              disabled={!guestName.trim() || match.players.length >= 6}
+            >
+              <Plus size={18} aria-hidden />
             </button>
           </form>
         )}
@@ -168,22 +182,44 @@ export const LobbyScreen = () => {
 
       <section className="rules">
         <h3>Rule modules</h3>
-        <ul className="module-list">
+        <ul
+          className={css({
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: "2",
+          })}
+        >
           {allModules.map((module) => {
             const active = match.config.modules.includes(module)
             return (
               <li key={module}>
                 <button
                   type="button"
-                  className={`module-toggle${active ? " is-active" : ""}`}
+                  className={cx(
+                    button({ variant: "toggle", size: "md" }),
+                    css({ width: "100%", justifyContent: "space-between" }),
+                    active ? onColour : undefined,
+                  )}
                   disabled={!canHost}
                   aria-pressed={active}
                   onClick={() => toggleModule(module)}
                 >
-                  <span className="module-name">{moduleLabels[module]}</span>
-                  <span className="module-state">{active ? "On" : "Off"}</span>
+                  <span>{moduleLabels[module]}</span>
+                  <span className={active ? undefined : css({ color: "textDim" })}>
+                    {active ? "On" : "Off"}
+                  </span>
                 </button>
-                <p className="hint">{moduleBlurbs[module]}</p>
+                {/* Blurb on demand: the four paragraphs that used to sit here
+                    permanently are what pushed Start below the fold. */}
+                <details>
+                  <summary className={css({ fontSize: "xs", color: "textDim", cursor: "pointer", paddingBlock: "1" })}>
+                    What this does
+                  </summary>
+                  <p className="hint">{moduleBlurbs[module]}</p>
+                </details>
               </li>
             )
           })}
