@@ -6,6 +6,15 @@ import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { ChevronRight } from "lucide-react"
 import { AnchorIcon, FlagIcon, MineIcon, MomentumIcon, StunIcon, VenomIcon } from "./icons"
+import { ROW_PX, ROWS_PAD_PX } from "./layout/bands"
+
+/** Text a screen reader speaks where the eye reads a glyph instead. */
+const srOnlyClass = css({ srOnly: true })
+
+/** A status glyph plus its count, named as one thing: `role="img"` is what
+ *  makes assistive tech read the label — on a plain span, whose only content
+ *  is an `aria-hidden` icon, it was silently ignored. */
+const badgeClass = css({ display: "flex", alignItems: "center", gap: "2px" })
 
 const CARDS: ReadonlyArray<CardKind> = ["anchor", "reverse", "double", "swap", "defuse"]
 
@@ -26,13 +35,18 @@ export const ProgressRows = ({
   return (
     <ul
       className={css({
+        flex: "none",
         listStyleType: "none",
         margin: 0,
-        padding: 0,
+        paddingLeft: "gutterL",
+        paddingRight: "gutterR",
         display: "flex",
         flexDirection: "column",
         gap: "9px",
       })}
+      // ROWS_PAD_PX and ROW_PX are what bands.ts budgets for this band, so
+      // they are applied from the same constants rather than restated.
+      style={{ paddingBlock: `${ROWS_PAD_PX / 2}px` }}
     >
       {state.players.map((player) => {
         const isActing = player.id === actingSeat
@@ -42,6 +56,8 @@ export const ProgressRows = ({
           <li
             key={player.id}
             data-acting={isActing}
+            aria-current={isActing ? "true" : undefined}
+            style={{ height: `${ROW_PX}px` }}
             className={css({
               display: "flex",
               alignItems: "center",
@@ -63,7 +79,12 @@ export const ProgressRows = ({
                 justifyContent: "center",
               })}
             >
-              {isActing && <ChevronRight size={14} aria-hidden="true" />}
+              {isActing && (
+                <>
+                  <ChevronRight size={14} aria-hidden="true" />
+                  <span className={srOnlyClass}>Acting: </span>
+                </>
+              )}
             </span>
             <span
               className={css({ width: "14px", height: "14px", borderRadius: "50%", flex: "none" })}
@@ -116,30 +137,24 @@ export const ProgressRows = ({
               })}
             >
               {player.venom > 0 && (
-                <span
-                  aria-label={`${player.venom} venom`}
-                  className={css({ display: "flex", alignItems: "center", gap: "2px" })}
-                >
+                <span role="img" aria-label={`${player.venom} venom`} className={badgeClass}>
                   <VenomIcon size={14} />
                   {player.venom}
                 </span>
               )}
               {player.momentum > 0 && (
-                <span
-                  aria-label={`${player.momentum} momentum`}
-                  className={css({ display: "flex", alignItems: "center", gap: "2px" })}
-                >
+                <span role="img" aria-label={`${player.momentum} momentum`} className={badgeClass}>
                   <MomentumIcon size={14} />
                   {player.momentum}
                 </span>
               )}
               {player.anchored && (
-                <span aria-label="anchored" className={css({ display: "flex", alignItems: "center" })}>
+                <span role="img" aria-label="anchored" className={badgeClass}>
                   <AnchorIcon size={14} />
                 </span>
               )}
               {player.stunned > 0 && (
-                <span aria-label="sitting out" className={css({ display: "flex", alignItems: "center" })}>
+                <span role="img" aria-label="sitting out" className={badgeClass}>
                   <StunIcon size={14} />
                 </span>
               )}
@@ -184,12 +199,11 @@ export const CardRail = ({
             type="button"
             className={cx(
               button({ variant: "card", size: "sm" }),
-              // Five cards at 390px leave each about 43px of label room
-              // inside the recipe's own padding — enough to truncate every
-              // name past "swap". Tighter padding claims some of that back;
-              // below `sm` (320–379px) there is no claiming it back, so the
-              // label still truncates there, which is fine.
-              css({ flex: "1 1 0", minWidth: 0, paddingInline: { base: "3", sm: "1" } }),
+              // Five cards share the row, and the recipe's own padding
+              // would leave each name about 43px at 390 — enough to truncate
+              // every one past "swap". Tighter padding claims that back, and
+              // matters most on the narrowest phones.
+              css({ flex: "1 1 0", minWidth: 0, paddingInline: "1" }),
             )}
             disabled={disabled || !affordable || alreadyPlayed}
             title={cardBlurbs[card]}
@@ -201,13 +215,11 @@ export const CardRail = ({
                 fontSize: "xs",
                 overflow: "hidden",
                 maxWidth: "100%",
-                // At 390px+ (`sm`) the name wraps to a second line instead of
-                // being cut off — the button has no fixed height, so it just
-                // grows past the 44px floor. Below `sm`, back to a single
-                // truncated line: there is no width left to wrap into.
-                whiteSpace: { base: "nowrap", sm: "normal" },
-                textOverflow: { base: "ellipsis", sm: "clip" },
-                overflowWrap: { sm: "break-word" },
+                // One line, cut with an ellipsis if it must be. Wrapping at
+                // `sm` broke "Reverse" mid-word; with the match screen's
+                // gutters no longer doubled, the names fit at 390.
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
                 textAlign: "center",
               })}
             >
@@ -216,6 +228,7 @@ export const CardRail = ({
             <span className={css({ display: "flex", alignItems: "center", gap: "2px", color: "flag", fontSize: "xs" })}>
               <VenomIcon size={12} />
               {cost}
+              <span className={srOnlyClass}> venom</span>
             </span>
           </button>
         )

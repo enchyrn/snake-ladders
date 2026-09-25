@@ -53,6 +53,38 @@ describe("ProgressRows", () => {
     expect(restingRow).not.toContain("lucide-chevron-right")
   })
 
+  // The chevron is aria-hidden, so on its own it told a screen reader nothing.
+  it("tells assistive tech which row is acting, not only the eye", () => {
+    const html = renderToStaticMarkup(<ProgressRows state={withPlayers([1, 1])} actingSeat="p1" />)
+    const rows = html.split("<li").slice(1)
+    const actingRow = rows.find((row) => row.includes('data-acting="true"'))
+    const restingRow = rows.find((row) => row.includes('data-acting="false"'))
+    expect(actingRow).toContain('aria-current="true"')
+    expect(actingRow).toMatch(/class="[^"]*sr_true[^"]*">Acting: </)
+    expect(restingRow).not.toContain("aria-current")
+    expect(restingRow).not.toContain("Acting")
+  })
+
+  // An aria-label on a plain <span> whose only content is an aria-hidden icon
+  // is ignored by assistive tech; `role="img"` is what makes it the name.
+  it.each([
+    [{ venom: 5 }, "5 venom"],
+    [{ momentum: 2 }, "2 momentum"],
+    [{ anchored: true }, "anchored"],
+    [{ stunned: 1 }, "sitting out"],
+  ] as const)("names the %o badge as an image", (overrides, label) => {
+    const html = renderToStaticMarkup(<ProgressRows state={withPlayer(overrides)} actingSeat="p0" />)
+    expect(html).toMatch(new RegExp(`<span role="img" aria-label="${label}"`))
+  })
+
+  // bands.ts budgets ROW_PX per row and ROWS_PAD_PX for the band; the rows
+  // are held to those numbers rather than to whatever their content measures.
+  it("applies the row height and band padding the budget assumes", () => {
+    const html = renderToStaticMarkup(<ProgressRows state={withPlayers([1, 1])} actingSeat="p0" />)
+    expect(html).toMatch(/^<ul[^>]*style="padding-block:6px"/)
+    expect(html.match(/<li[^>]*style="height:20px"/g)).toHaveLength(2)
+  })
+
   it("shows venom, with its balance, only while a player is carrying any", () => {
     const carrying = renderToStaticMarkup(<ProgressRows state={withPlayer({ venom: 5 })} actingSeat="p0" />)
     expect(carrying).toContain('aria-label="5 venom"')

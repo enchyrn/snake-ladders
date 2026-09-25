@@ -14,17 +14,29 @@ const withTimeline = (): MatchState => ({
 })
 
 describe("EventLog", () => {
-  it("shows the last two lines in preview mode", () => {
+  // The preview shows two lines, but clips the rest visually rather than
+  // dropping them: this list is the live region, and slicing it to two lines
+  // meant a screen reader heard only the end of each round.
+  it("keeps every line of the round inside the preview's live region", () => {
     const html = renderToStaticMarkup(<EventLog state={withTimeline()} mode="preview" />)
-    expect(html.match(/<li/g)).toHaveLength(2)
+    expect(html).toMatch(/^<ul[^>]*aria-live="polite"/)
+    expect(html.match(/<li/g)).toHaveLength(4)
+    for (const n of [1, 2, 3, 4]) expect(html).toContain(`a rolled ${n}`)
   })
 
-  // ADR 0020 rule 2: this list is how a screen-reader player receives a round
-  // at all, so no mode may take it out of the tree.
-  it("keeps the live region in every mode", () => {
-    for (const mode of ["preview", "full"] as const) {
-      const html = renderToStaticMarkup(<EventLog state={withTimeline()} mode={mode} />)
-      expect(html, mode).toContain('aria-live="polite"')
-    }
+  // ADR 0020 rule 2: the preview is never taken out of the tree, so it is the
+  // screen's one live region. The full log is for reading back; a second live
+  // copy would announce every line twice while the sheet is open.
+  it("is live in preview mode and plain in full mode", () => {
+    const preview = renderToStaticMarkup(<EventLog state={withTimeline()} mode="preview" />)
+    const full = renderToStaticMarkup(<EventLog state={withTimeline()} mode="full" />)
+    expect(preview.match(/aria-live=/g)).toHaveLength(1)
+    expect(full).not.toContain("aria-live")
+  })
+
+  it("renders the live region even before anything has been narrated", () => {
+    const empty = { ...withTimeline(), timeline: [] }
+    const html = renderToStaticMarkup(<EventLog state={empty} mode="preview" />)
+    expect(html).toContain('aria-live="polite"')
   })
 })

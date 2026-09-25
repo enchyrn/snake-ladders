@@ -25,6 +25,18 @@ describe("CardRail", () => {
     expect(html).toContain("disabled")
   })
 
+  // The cost is drawn as a venom glyph plus a digit; without a word for the
+  // glyph a screen reader announced "anchor 1".
+  it("names each card's cost with its unit", () => {
+    const me = { ...state().players[0]!, venom: 0 }
+    const html = renderToStaticMarkup(
+      <CardRail me={me} state={state()} onPlay={() => {}} disabled={false} />,
+    )
+    const buttons = html.split("<button").slice(1)
+    expect(buttons).toHaveLength(5)
+    for (const card of buttons) expect(card).toMatch(/\d<span class="[^"]*sr_true[^"]*"> venom<\/span>/)
+  })
+
   // The control bar used to squeeze the rail into a shared row with the dice
   // tray and Roll, driving every card under the 44px tap minimum (~26px at
   // phone width) — this only checks the static half of that regression: every

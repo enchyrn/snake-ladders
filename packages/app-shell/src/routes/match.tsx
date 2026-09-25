@@ -1,8 +1,7 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession } from "../app/session"
-import { useViewport } from "../app/hooks"
 import type { CardKind } from "@mutation/engine/types"
 import { actingSeatAtom, canRollAtom, matchAtom, ownedActableAtom, seatsAtom } from "../store/atoms"
 import type { MatchClient } from "../store/match-client"
@@ -10,11 +9,12 @@ import { BoardCanvas } from "@mutation/ui/BoardCanvas"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { EventLog } from "@mutation/ui/EventLog"
 import { ControlBar, ProgressRows } from "@mutation/ui/HUD"
-import { bands } from "@mutation/ui/layout/bands"
+import { RoundLogSheet } from "@mutation/ui/RoundLogSheet"
+import { seatColour } from "@mutation/render/palette"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
-import { History, Settings, X } from "lucide-react"
-import { headingClass, matchScreenClass } from "@mutation/ui/layout/screen"
+import { History, Settings } from "lucide-react"
+import { gutterBandClass, headingClass, matchScreenClass } from "@mutation/ui/layout/screen"
 import { noticeBanner } from "@mutation/ui/Banners"
 
 /** Isolated so the Roll button re-renders on its own — not on every card play,
@@ -58,7 +58,10 @@ export const MatchScreen = () => {
   // always shows the two-line preview (ADR 0020 rule 2 never takes the live
   // region out of the tree, so the preview keeps narrating underneath).
   const [showFullLog, setShowFullLog] = useState(false)
-  const viewport = useViewport()
+  const roundLogButton = useRef<HTMLButtonElement | null>(null)
+  // While the sheet is open, everything behind it is inert — except the log
+  // preview, which holds nothing focusable and is the live region.
+  const behindSheet = showFullLog || undefined
 
   useEffect(() => {
     if (!client) void navigate({ to: "/" })
@@ -70,7 +73,6 @@ export const MatchScreen = () => {
   const nameOf = (id: string) => match.players.find((p) => p.id === id)?.name ?? id
   const hasMines = match.config.modules.includes("minesweeper")
   const winner = match.winners[0]
-  const logBand = bands(match.players.length, viewport.height)
 
   const playCard = (card: CardKind) => {
     if (card === "defuse") {
@@ -96,28 +98,29 @@ export const MatchScreen = () => {
 
   return (
     <main className={matchScreenClass}>
-      <NoticeBanner />
-      <DesyncBanner />
-      {armedDefuse && <p className={noticeBanner}>Tap a tile within reach to disarm it.</p>}
+      <div className={cx(gutterBandClass, css({ flex: "none" }))} inert={behindSheet}>
+        <NoticeBanner />
+        <DesyncBanner />
+        {armedDefuse && <p className={noticeBanner}>Tap a tile within reach to disarm it.</p>}
+      </div>
 
       {/* Band 1: header — whose turn, round-log, settings (ADR 0020's chrome
        * home for the two controls that are not the board or the roll). */}
       <header
-        // Panda's static extraction only resolves literal values, not the
-        // imported `HEADER_PX` — a template-interpolated constant here
-        // produces a classname with no matching rule (silently 0px). The
-        // literal has to mirror `HEADER_PX` in layout/bands.ts by hand.
+        inert={behindSheet}
         className={css({
           flex: "none",
-          minHeight: "52px",
+          minHeight: "header",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: "3",
-          paddingInline: "4",
+          paddingTop: "env(safe-area-inset-top)",
+          paddingLeft: "gutterL",
+          paddingRight: "gutterR",
         })}
       >
-        <div className={css({ display: "flex", flexDirection: "column", gap: "2", minWidth: 0 })}>
+        <div className={css({ minWidth: 0 })}>
           {seats.length > 1 && actingPlayer && (
             <p
               className={css({
@@ -134,23 +137,10 @@ export const MatchScreen = () => {
                 : `Playing as ${actingPlayer.name}`}
             </p>
           )}
-          {ownedActable.length > 1 && (
-            <div className={css({ display: "flex", gap: "2", flexWrap: "wrap" })}>
-              {ownedActable.map((seat) => (
-                <button
-                  key={seat}
-                  type="button"
-                  className={button({ variant: seat === actingSeat ? "primary" : "ghost", size: "sm" })}
-                  onClick={() => client.setActingSeat(seat)}
-                >
-                  {nameOf(seat)}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         <div className={css({ display: "flex", gap: "2", flex: "none" })}>
           <button
+            ref={roundLogButton}
             type="button"
             aria-label="Round log"
             className={headerIconButton}
@@ -168,26 +158,83 @@ export const MatchScreen = () => {
         </div>
       </header>
 
+      {/* Band 1b: the seat switcher, only in simultaneous pass-and-play with
+       * more than one local seat that can act. Its own band, one row, the
+       * buttons sharing it the way the card rail's cards do: wrapping inside
+       * the header grew it to ~170px at six seats and pushed the control bar
+       * over the board. bands.ts budgets it; the log is what gives way. */}
+      {ownedActable.length > 1 && (
+        <div
+          inert={behindSheet}
+          role="group"
+          aria-label="Act as"
+          className={cx(gutterBandClass, css({ flex: "none", display: "flex", gap: "1", paddingBottom: "2" }))}
+        >
+          {ownedActable.map((seat) => {
+            const player = match.players.find((p) => p.id === seat)
+            return (
+              <button
+                key={seat}
+                type="button"
+                aria-pressed={seat === actingSeat}
+                className={cx(
+                  button({ variant: seat === actingSeat ? "primary" : "secondary", size: "sm" }),
+                  css({ flex: "1 1 0", minWidth: 0, paddingInline: "1" }),
+                )}
+                // The seat's colour as an inset underline, tying the button to
+                // its progress row: a swatch beside the name cost the width
+                // six buttons do not have.
+                style={player ? { boxShadow: `inset 0 -3px 0 ${seatColour(player.seat)}` } : undefined}
+                onClick={() => client.setActingSeat(seat)}
+              >
+                <span className={css({ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" })}>
+                  {nameOf(seat)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* Band 2: progress rows. */}
-      <ProgressRows state={match} actingSeat={actingSeat} />
+      <div inert={behindSheet} className={css({ display: "contents" })}>
+        <ProgressRows state={match} actingSeat={actingSeat} />
+      </div>
 
       {/* Band 3: the board — fixed at the `board` token so a flex
        * miscalculation elsewhere in the tree can never squeeze it. */}
-      <div className={css({ position: "relative", flex: "none", minHeight: 0, h: "board", w: "100%" })}>
+      <div
+        inert={behindSheet}
+        className={css({ position: "relative", flex: "none", h: "board", w: "board", maxW: "100%", marginInline: "auto" })}
+      >
         <BoardCanvas state={match} onPickTile={hasMines ? pickTile : undefined} />
       </div>
 
-      {/* Band 4: the log preview — takes whatever the other bands leave,
-       * capped by the pure band budget rather than an open-ended flex-grow. */}
+      {/* Band 4: the log preview — the one band that flexes. It takes what
+       * the fixed bands leave and is the first to give way; bands.ts is the
+       * tested arithmetic that says it never has to take from the board.
+       * A tap opens the full log; the header button is the keyboard path. */}
       <div
-        className={css({ flex: "1 1 auto", minHeight: 0, overflow: "hidden" })}
-        style={{ maxHeight: `${logBand.log}px` }}
+        className={cx(
+          gutterBandClass,
+          css({
+            flex: "1 1 0",
+            minHeight: 0,
+            overflow: "hidden",
+            paddingTop: "1",
+            cursor: "pointer",
+            // The preview hides itself below one whole line (EventLog.tsx).
+            containerType: "size",
+          }),
+        )}
+        onClick={() => setShowFullLog(true)}
       >
         <EventLog state={match} mode="preview" />
       </div>
 
       {match.phase === "finished" && (
         <div
+          inert={behindSheet}
           className={css({
             position: "absolute",
             inset: 0,
@@ -197,14 +244,8 @@ export const MatchScreen = () => {
             alignItems: "center",
             justifyContent: "center",
             gap: "3",
-            // Same limit as the header's `HEADER_PX` above: Panda's static
-            // extraction cannot follow `GUTTER_LEFT` across a package-alias
-            // import (it resolved fine inside BoardCanvas.tsx's own package,
-            // via a relative import, but not through `@mutation/ui/...` —
-            // confirmed by the generated class having no matching rule, so
-            // this padding was silently 0 until this literal replaced it).
-            // Mirrors `GUTTER_LEFT` in `packages/ui/src/layout/screen.ts`.
-            padding: "max(16px, env(safe-area-inset-left))",
+            paddingLeft: "gutterL",
+            paddingRight: "gutterR",
             background: "rgba(8, 11, 16, 0.92)",
             textAlign: "center",
           })}
@@ -227,17 +268,20 @@ export const MatchScreen = () => {
 
       {/* Band 5: the control bar — card rail, then dice tray and Roll. */}
       <div
+        inert={behindSheet}
         className={css({
-          position: "sticky",
-          bottom: 0,
-          zIndex: 4,
+          flex: "none",
+          // Pinned to the bottom by the log's flex above it, and by this if
+          // the log is ever absent — never by `sticky`, which is what let the
+          // bar ride up over the board when the header overgrew.
+          marginTop: "auto",
           display: "flex",
           alignItems: "stretch",
           gap: "0.6rem",
-          // Mirrors `GUTTER_LEFT`/`GUTTER_RIGHT` in `packages/ui/src/layout/screen.ts`
-          // by hand — see the comment on the result-overlay's padding above.
-          padding:
-            "0.6rem max(16px, env(safe-area-inset-right)) max(0.6rem, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
+          paddingTop: "0.6rem",
+          paddingRight: "gutterR",
+          paddingBottom: "max(0.6rem, env(safe-area-inset-bottom))",
+          paddingLeft: "gutterL",
           background: "surface",
           borderTop: "1px solid",
           borderColor: "border",
@@ -256,35 +300,7 @@ export const MatchScreen = () => {
       </div>
 
       {showFullLog && (
-        <div
-          role="dialog"
-          aria-label="Round log"
-          className={css({
-            position: "absolute",
-            inset: 0,
-            zIndex: 6,
-            display: "flex",
-            flexDirection: "column",
-            background: "rgba(8, 11, 16, 0.92)",
-            padding: "4",
-            gap: "3",
-          })}
-        >
-          <div className={css({ display: "flex", alignItems: "center", justifyContent: "space-between" })}>
-            <h2 className={cx(headingClass, css({ margin: 0, fontSize: "lg" }))}>Round log</h2>
-            <button
-              type="button"
-              aria-label="Close round log"
-              className={headerIconButton}
-              onClick={() => setShowFullLog(false)}
-            >
-              <X size={18} aria-hidden="true" />
-            </button>
-          </div>
-          <div className={css({ overflowY: "auto", flex: "1 1 auto" })}>
-            <EventLog state={match} mode="full" />
-          </div>
-        </div>
+        <RoundLogSheet state={match} onClose={() => setShowFullLog(false)} restoreFocusTo={roundLogButton} />
       )}
     </main>
   )
