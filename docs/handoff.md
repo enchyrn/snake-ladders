@@ -1460,10 +1460,10 @@ Three traps, and the first is the one that matters:
 
 ```bash
 git clone <repo> && cd snake-ladders
-git checkout main
+git checkout main   # or claude/snake-ladders-cross-device-3uu177 until plan 1 is merged
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
-nub run test && nub run typecheck   # 101 tests, clean types
+nub run test && nub run typecheck   # 261 tests, clean types
 ```
 
 A Codespace and a Claude Code web session run `scripts/provision.sh`
