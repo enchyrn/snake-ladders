@@ -22,3 +22,16 @@ export type ManualPlacement = "hidden" | "promoted" | "disclosure"
  */
 export const manualPlacement = (state: JoinState, hasArrival: boolean): ManualPlacement =>
   state === "found" ? "disclosure" : hasArrival || state === "none" ? "promoted" : "hidden"
+
+/**
+ * The line above a promoted address field. With a scanned code the field is
+ * promoted before the search has finished, so while it is still running the
+ * copy cannot claim the room failed to appear — it sits right under
+ * "Looking for games…".
+ */
+export const promotedHint = (state: JoinState, hasArrival: boolean): string =>
+  hasArrival
+    ? state === "searching"
+      ? "Read from the code you scanned — tap Join, or wait a moment for the game to be found."
+      : "The code didn't show up automatically. Check the address below, then tap Join."
+    : "No games showed up on this Wi-Fi. Enter the address shown on the host's screen, or check that both devices are on the same network."

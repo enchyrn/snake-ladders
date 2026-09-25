@@ -4,7 +4,7 @@ import { Effect, Either } from "effect"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { roomCode, seedFromRoom } from "../app/hooks"
 import { joinArrival } from "../app/join-link"
-import { joinState, manualPlacement, SEARCH_GRACE_MS } from "../app/join-state"
+import { joinState, manualPlacement, promotedHint, SEARCH_GRACE_MS } from "../app/join-state"
 import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
@@ -207,11 +207,7 @@ export const JoinScreen = () => {
 
       {placement === "promoted" && (
         <>
-          <p className={cx(paragraphClass, hintClass)}>
-            {arrival
-              ? "The code didn't show up automatically. Check the address below, then tap Join."
-              : "No games showed up on this Wi-Fi. Enter the address shown on the host's screen, or check that both devices are on the same network."}
-          </p>
+          <p className={cx(paragraphClass, hintClass)}>{promotedHint(state, arrival !== null)}</p>
           <div className={manualClass}>{manualFields}</div>
         </>
       )}

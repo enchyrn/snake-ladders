@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { joinState, manualPlacement, SEARCH_GRACE_MS } from "../join-state"
+import { joinState, manualPlacement, promotedHint, SEARCH_GRACE_MS } from "../join-state"
 
 describe("joinState", () => {
   it("is searching while the grace period is open and nothing has answered", () => {
@@ -39,5 +39,25 @@ describe("manualPlacement", () => {
   // link would rightly sit through.
   it("promotes the field for an arrival even while still searching", () => {
     expect(manualPlacement("searching", true)).toBe("promoted")
+  })
+})
+
+describe("promotedHint", () => {
+  // A scanned code promotes the field while discovery is still running, and
+  // "didn't show up automatically" sat directly under "Looking for games…" —
+  // a verdict the search had not reached yet.
+  it("does not announce a failed search while the search is still running", () => {
+    const hint = promotedHint("searching", true)
+    expect(hint).not.toMatch(/didn't show up/)
+    expect(hint).toMatch(/code you scanned/)
+    expect(hint).toMatch(/tap Join/)
+  })
+
+  it("says the code did not show up once the search has given up", () => {
+    expect(promotedHint("none", true)).toMatch(/didn't show up automatically/)
+  })
+
+  it("points a guest with no code at the host's screen", () => {
+    expect(promotedHint("none", false)).toMatch(/No games showed up/)
   })
 })

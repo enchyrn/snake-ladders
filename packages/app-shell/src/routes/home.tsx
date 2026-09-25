@@ -53,6 +53,8 @@ export const HomeScreen = () => {
     }
   }
 
+  const hostDisabled = busy !== null || !session.canHost
+
   return (
     <main className={screenClass}>
       <header>
@@ -110,17 +112,23 @@ export const HomeScreen = () => {
         </button>
         <button
           type="button"
+          // The recipe dims a disabled button as a whole, and opacity on a
+          // parent cannot be undone by a child — which took the reason below
+          // to about 1.8:1. So the button opts out and dims only its label;
+          // the reason is why it is disabled, and stays readable.
           className={cx(
             button({ variant: "secondary", size: "md" }),
-            css({ flexDirection: "column", gap: "1", paddingBlock: "2" }),
+            css({ flexDirection: "column", gap: "1", paddingBlock: "2", _disabled: { opacity: 1 } }),
           )}
-          disabled={busy !== null || !session.canHost}
+          disabled={hostDisabled}
           title={!session.canHost ? "Browsers can't open the socket other devices connect to" : undefined}
           onClick={() => void startMatch("network")}
         >
-          <span>{busy === "network" ? "Opening…" : "Host on Wi-Fi"}</span>
+          <span className={hostDisabled ? css({ opacity: 0.45 }) : undefined}>
+            {busy === "network" ? "Opening…" : "Host on Wi-Fi"}
+          </span>
           {!session.canHost && (
-            <span className={css({ fontSize: "xs", fontWeight: 400, color: "textDim" })}>
+            <span className={css({ fontSize: "xs", fontWeight: 400, color: "text" })}>
               Needs the installed app — browsers can't host
             </span>
           )}

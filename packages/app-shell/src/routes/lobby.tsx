@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronLeft, Plus } from "lucide-react"
+import { ChevronDown, ChevronLeft, Plus, X } from "lucide-react"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
 import { useSession } from "../app/session"
@@ -108,18 +108,10 @@ export const LobbyScreen = () => {
   const playersClass = css({ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", alignItems: "stretch", gap: "0.15rem" })
   const playerRowClass = css({ display: "flex", alignItems: "center", gap: "0.5em", padding: "0.3rem 0" })
   const pipClass = css({ width: "0.7em", height: "0.7em", borderRadius: "50%", flex: "none" })
-  const removePlayerClass = css({
-    flex: "none",
-    padding: "0.1em 0.5em",
-    fontSize: "1rem",
-    lineHeight: 1.4,
-    background: "transparent",
-    border: "1px solid #2a3b4d",
-    borderRadius: "0.4em",
-    color: "inherit",
-    opacity: 0.7,
-    _hover: { opacity: 1 },
-  })
+  const removePlayerClass = cx(
+    button({ variant: "ghost", size: "sm" }),
+    css({ flex: "none", width: "tap", paddingInline: "0" }),
+  )
   const addPlayerClass = css({ display: "flex", gap: "2", marginTop: "0.6rem" })
 
   return (
@@ -190,7 +182,7 @@ export const LobbyScreen = () => {
                       client.send({ _tag: "Leave", playerId: player.id })
                     }}
                   >
-                    ×
+                    <X size={18} aria-hidden="true" />
                   </button>
                 )}
             </li>

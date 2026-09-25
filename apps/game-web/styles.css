@@ -38,4 +38,13 @@
     overscroll-behavior-y: none;
   }
 
+  /* Form controls do not inherit type or colour by default; without this a
+   * button or field falls back to the UA's font and black text wherever a
+   * recipe does not set its own. */
+  button,
+  input {
+    font: inherit;
+    color: inherit;
+  }
+
 }
