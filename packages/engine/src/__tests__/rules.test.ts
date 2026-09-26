@@ -356,6 +356,24 @@ describe("minesweeper module", () => {
     expect(succeeds(boom, commit("a"))).toBe(true)
   })
 
+  // `settle` resolves the sat-out round straight after the blast, and each
+  // resolution used to replace the timeline, so the roll, the blast and the
+  // stun were overwritten by that silent round's empty one. The player landed
+  // back at the start with nothing narrated and nothing animated.
+  it("keeps the blast's narration when a stunned round auto-advances", () => {
+    const s = scenario({
+      modules: ["minesweeper"],
+      mines: [24],
+      players: [{ id: "a", position: 20 }],
+      dice: [4, 1, 1],
+    })
+    const boom = run(s, commit("a"))
+    expect(boom.round).toBe(s.round + 2)
+    expect(events(boom, "Rolled")).toHaveLength(1)
+    expect(events(boom, "MineTripped")).toHaveLength(1)
+    expect(events(boom, "Stunned")).toHaveLength(1)
+  })
+
   it("lets an anchor absorb a blast", () => {
     const s = scenario({
       modules: ["minesweeper", "mutation"],

@@ -333,6 +333,29 @@ describe("MatchClient", () => {
   })
 })
 
+// The intermittent "nothing was narrated after rolling" in verify:ui: about
+// one seed in nine sends a solo pass-and-play player's first roll onto a mine,
+// and the round came back sequenced and applied but with an empty timeline.
+// Seed 9 is one of them. This is the whole pass-and-play path — real local
+// transport, real fold — with no browser.
+describe("a solo pass-and-play roll", () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it("is narrated even when it trips a mine and the next round auto-advances", async () => {
+    const solo = new MatchClient(makeLocalTransport(), defaultConfig(9), "local", "a")
+    solo.send(join("a"))
+    await flush()
+    solo.send({ _tag: "Start" })
+    await flush()
+    solo.send({ _tag: "Commit", playerId: "a" })
+    await flush()
+
+    expect(solo.state.applied).toBe(3)
+    expect(solo.state.match.round).toBe(3)
+    expect(solo.state.match.timeline.map((e) => e._tag)).toContain("Rolled")
+  })
+})
+
 describe("local transport", () => {
   it("delivers a submitted action back as a numbered commit", async () => {
     const service = makeLocalTransport()

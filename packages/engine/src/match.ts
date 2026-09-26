@@ -75,6 +75,11 @@ export const canCommit = (state: MatchState, playerId: string): boolean =>
 /**
  * Resolve, then keep resolving while nobody is able to act — otherwise a round
  * in which every player is stunned would deadlock the match.
+ *
+ * The timelines are joined, not replaced. Each `resolveRound` writes only its
+ * own round's events, so the silent round a lone stunned player sits out used
+ * to overwrite the roll, blast and stun that stunned them — the round folded
+ * with nothing to narrate and nothing for the board to replay.
  */
 const settle = (state: MatchState): MatchState => {
   let cur = resolveRound(state)
@@ -84,7 +89,8 @@ const settle = (state: MatchState): MatchState => {
     pendingCommitters(cur).length === 0 &&
     guard++ < cur.players.length + 1
   ) {
-    cur = resolveRound(cur)
+    const next = resolveRound(cur)
+    cur = { ...next, timeline: [...cur.timeline, ...next.timeline] }
   }
   return cur
 }
