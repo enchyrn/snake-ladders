@@ -21,15 +21,23 @@ export interface RegisterServiceWorker {
   }): ApplyUpdate
 }
 
-// Was `position: fixed`, which is exactly what sat on top of the lobby's
-// module list and the join screen's room list — an element that floats can
-// always end up over a control. Static, at the end of whatever screen raised
-// it, means it only ever pushes content rather than covering it.
+// Floating, and it has to be. Placed in flow after the routed screen, every
+// screen being at least a viewport tall put it below the fold, where the only
+// control that applies an update was never seen. It floated before too, and
+// sat over the lobby's lower controls — which is why it stays off the match
+// screen entirely (the prompt's own `suppressed`), why the update toast can be
+// put away, and why the text-only one lets taps through.
 const toast = css({
+  position: "fixed",
+  // Clear of the home indicator and the rounded corners: the viewport is
+  // viewport-fit=cover, so an inset of zero here sits under both.
+  bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
+  left: "max(env(safe-area-inset-left, 0px), 0.75rem)",
+  right: "max(env(safe-area-inset-right, 0px), 0.75rem)",
+  zIndex: 50,
   display: "flex",
   alignItems: "center",
   gap: "3",
-  marginTop: "4",
   paddingBlock: "3",
   paddingInline: "4",
   borderRadius: "12px",
@@ -49,7 +57,15 @@ const toast = css({
  * design exists to prevent. So the player chooses when to take it, and the
  * natural moment is between matches.
  */
-export const PwaPrompt = ({ register }: { register: RegisterServiceWorker }) => {
+export const PwaPrompt = ({
+  register,
+  suppressed = false,
+}: {
+  readonly register: RegisterServiceWorker
+  /** Hold both toasts back without unmounting, so registration runs once and
+   *  a waiting update is still offered when the player leaves the match. */
+  readonly suppressed?: boolean
+}) => {
   const [updateReady, setUpdateReady] = useState(false)
   const [offlineReady, setOfflineReady] = useState(false)
   const applyRef = useRef<ApplyUpdate | null>(null)
@@ -67,6 +83,8 @@ export const PwaPrompt = ({ register }: { register: RegisterServiceWorker }) => 
     const timer = setTimeout(() => setOfflineReady(false), 4000)
     return () => clearTimeout(timer)
   }, [offlineReady])
+
+  if (suppressed) return null
 
   if (updateReady) {
     return (
@@ -92,7 +110,7 @@ export const PwaPrompt = ({ register }: { register: RegisterServiceWorker }) => 
 
   if (offlineReady) {
     return (
-      <div className={toast} role="status">
+      <div className={cx(toast, css({ pointerEvents: "none" }))} role="status">
         <span className={css({ flex: 1 })}>Ready to play offline.</span>
       </div>
     )
