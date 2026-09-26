@@ -886,9 +886,45 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-**Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished.**
+**Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished;
+amended 2026-09-26 after a code and security review of PR #4 and a fix pass
+for its five confirmed regressions** — see "The PR #4 review" below.
 Everything below is committed. Unlike the last few checkpoints, it is **not**
 on `main` — read the branch note before assuming otherwise.
+
+### The PR #4 review (2026-09-26)
+
+A `/code-review` and a `/security-review` ran against PR #4 before merging.
+**Security: nothing at or above the bar** — the PR adds no HTML sinks, no new
+network paths, no deserialisation and no privileged operations; peer names
+still reach the page only as React text. **Code: fifteen findings.** Five were
+confirmed against the tree as regressions this PR introduced, and all five are
+fixed, each red before its fix and green after:
+
+| # | Finding | Fix | How it was shown red |
+|---|---|---|---|
+| 1 | The update/offline toast rendered in flow after `<Outlet />`, below every full-height screen — never seen | `5e81b2a` — floats again, clear of the insets; suppressed on `/match` (an update reloads the page and drops the match); the text-only toast lets taps through | `drive-app --https` now records the toast's rect on insertion: y=860 on an 844 viewport before, 790 after |
+| 2 | Networked turn-based: the progress rows marked the device's own seat as acting on every phone | `113c208` — the row follows `activeSeat`; under `simultaneous`, the chosen seat | unit test, red against the old `HUD.tsx` |
+| 3 | Banner band above the header had no safe-area padding — the desync banner drew under the notch | `7b03da4` — the inset pads the match screen, not the header | CDP `Emulation.setSafeAreaInsetsOverride` (top 47): band at y=0 before, 47 after |
+| 4 | The match screen now scrolls on a short phone, and the absolute win overlay covered only the unscrolled first screenful | `7b03da4` — `position: fixed` | one-seat match played to the end at 390x520, scrolled 68px: overlay spanned -68..452 before, 0..520 after |
+| 5 | In a browser the join screen hid the address field behind a 4s search that cannot succeed, then blamed the Wi-Fi | `1fad568` — `joinState` takes `canDiscover` (`session.canHost`); a browser is `unavailable`: field at once, honest copy, no polling | unit tests; driven, the field and copy are there at 300ms |
+
+Two things worth knowing from that pass. **The fixture in
+`progress-rows.test.tsx` has every module on, `simultaneous` included**
+(`defaultConfig`), so a test meant to be turn-based went red for the wrong
+reason on its first write — it only proved the fix once its config dropped the
+modules and it was re-run against the stashed old code. And **Chromium 1194
+supports `Emulation.setSafeAreaInsetsOverride`**, so a notch can be emulated in
+a driven run; nothing in `drive-app.mjs` uses it yet, and the probes that did
+were throwaway. Finding 4's round-log sheet was a false alarm: opening it moves
+focus inside, which scrolls the screen back to the top.
+
+The ten findings not fixed are in "Open threads from the chrome-and-layout
+pass" below, as their own entries.
+
+`/security-review` fails at its first step in a fresh clone with
+`ambiguous argument 'origin/HEAD...'`: the clone has no `origin/HEAD`. Run
+`git remote set-head origin main` once, then invoke it again.
 
 ### Where the work stands
 
@@ -1340,7 +1376,29 @@ prose elsewhere names a thread rather than citing its number.
    assigns names to the seats it creates and may simply have repeated one —
    check the default-name generator (wherever it lives; not audited as part of
    this pass) before assuming it's a real collision bug.
-6. **Still: play a match on two real devices.** Unchanged from every prior
+6. **Unfixed findings from the PR #4 review (2026-09-26)**, plausible but
+   not reproduced, roughly most-worth-doing first:
+   - The join address field remounts when the placement flips from
+     `promoted` to `disclosure` (`<div>` → `<details>`), so a beacon arriving
+     mid-edit drops focus and closes the keyboard (`join.tsx`, the two
+     placement branches).
+   - `bands()` ignores the safe-area insets, so on a notched phone the 6-seat
+     log gets under two lines. Now reproducible: emulate the notch over CDP.
+   - The done/away rows have no accessible name (colour and strikethrough
+     only). Pre-existing, but PR #4's description claims icons with names.
+   - The live log keys lines by `${i}-${line}`: two consecutive rounds with
+     identical narration mutate nothing and announce nothing. Pre-existing,
+     but that list is now the only live region.
+   - The whole flexing log band opens the round-log sheet — ~170px of empty
+     tap target at 2 players.
+   - The end of the join search is not announced (the `role="status"` node
+     unmounts rather than updating).
+   - Seat 4's teal is ~23° from seat 0's cyan at similar luminance.
+   - The board is a fixed 366px on every viewport — small on a laptop,
+     scrolls in landscape. Spec B's choice; the cost is recorded here.
+   - `HUD.tsx` restates the 9px row gap rather than importing `ROW_GAP_PX`.
+   - `styles-layering.test.ts` carries what-comments against CLAUDE.md's rule.
+7. **Still: play a match on two real devices.** Unchanged from every prior
    checkpoint — see "What the chrome-and-layout pass verified" above and "What
    is unproven" below. This pass changes what that test will show; it does not
    run it.
@@ -1348,8 +1406,10 @@ prose elsewhere names a thread rather than citing its number.
 ### State of the gates, as of this checkpoint
 
 **Re-run in full on branch `claude/snake-ladders-cross-device-3uu177` at
-`8c8ecf8` (2026-09-25), working tree clean before this checkpoint's own docs
-commit.** This is the tip of plan 1, after the final review's fix wave:
+`7b03da4` (2026-09-26), after the PR #4 review's fix pass** — lint, typecheck,
+test (**267 passed**, 30 files), build, `verify:ui` and `drive-app --https`
+all clean. The table below is the earlier run at `8c8ecf8`, the tip of plan 1
+after the final review's fix wave; only the test count has moved since:
 
 | Gate | Result |
 |---|---|
@@ -1485,7 +1545,7 @@ git clone <repo> && cd snake-ladders
 git checkout main   # or claude/snake-ladders-cross-device-3uu177 until plan 1 is merged
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
-nub run test && nub run typecheck   # 261 tests, clean types
+nub run test && nub run typecheck   # 267 tests, clean types
 ```
 
 A Codespace and a Claude Code web session run `scripts/provision.sh`
