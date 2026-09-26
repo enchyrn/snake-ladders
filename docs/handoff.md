@@ -5,16 +5,14 @@ pick it up without re-deriving anything. Start at **"Resuming From This
 Checkpoint"** near the end; everything before it is the history that led
 there.
 
-**Correction, 2026-09-25: `claude/snake-ladders-cross-device-3uu177` is
-active again, and the paragraph below is out of date.** It described the name
-as abandoned as of 2026-09-16, when everything it carried had been folded into
-`main`. Since then the harness has mandated doing new work on a branch of
-that same name rather than directly on `main` (see "Resuming From This
-Checkpoint" → "Where the work stands"), so the name was reused for the
-chrome-and-layout plan. That branch is **not** the one described as abandoned
-below and is **not yet merged into `main`** — do not assume `main` is
-current, and do not read the sentence below as still true of the branch that
-now exists under this name.
+**Correction, 2026-09-26: `claude/snake-ladders-cross-device-3uu177` is the
+harness's working branch, and the paragraph below is out of date.** It
+described the name as abandoned as of 2026-09-16. The harness has since
+mandated doing new work on a branch of that name rather than directly on
+`main`, so it carried the chrome-and-layout plan, which merged as PR #4
+(`58a8739`, 2026-09-26). The branch was then fast-forwarded to that merge,
+so it starts each new piece of work level with `main`; each piece reaches
+`main` through its own PR.
 
 `claude/snake-ladders-cross-device-3uu177`, which earlier revisions of this
 file described, is abandoned and fully absorbed into `main`. *(Historical —
@@ -890,8 +888,8 @@ run `34762050952` built the APK with them in place.
 **Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished;
 amended 2026-09-26 after a code and security review of PR #4 and a fix pass
 for its five confirmed regressions** — see "The PR #4 review" below.
-Everything below is committed. Unlike the last few checkpoints, it is **not**
-on `main` — read the branch note before assuming otherwise.
+Everything below is committed and **on `main`**: PR #4 merged on 2026-09-26
+as `58a8739`, carrying plan 1, the review fixes and the engine fix below.
 
 ### The PR #4 review (2026-09-26)
 
@@ -979,14 +977,11 @@ plan's per-task execution notes, the final summary is PR #4's description, and
 `git log f8ab630..HEAD` has the per-fix commit messages. Do not go looking for
 `progress.md`.
 
-**PR #4 is open against `main`**
-(<https://github.com/enchyrn/snake-ladders/pull/4>, opened 2026-09-25 at the
-owner's request). Its description is the best one-page account of the plan:
-what changed, the four Panda defects, the gate numbers, and what is known
-and not fixed. Nothing watches it — no PR subscription and no scheduled
-check-in — so check its CI and review state by hand before doing anything
-else on this branch. A red check or a review comment there comes before
-plan 2.
+**PR #4 is merged** (<https://github.com/enchyrn/snake-ladders/pull/4>,
+merge commit `58a8739`, 2026-09-26, green on all five checks). Its
+description is the best one-page account of the plan: what changed, the four
+Panda defects, the review fixes, the engine fix, the gate numbers, and what is
+known and not fixed.
 
 The whole game rebuilt its chrome on Panda CSS tokens/recipes and Lucide
 icons: the match screen is five budgeted bands (header, progress rows, a fixed
@@ -1000,16 +995,16 @@ this plan does not do" section is still accurate — the renderer itself,
 `Scene.play`'s eight undepicted `TimelineEvent` variants, and light mode are
 all untouched.
 
-**Branch: `claude/snake-ladders-cross-device-3uu177`, and it is NOT yet on
-`main`.** This reverses what the previous checkpoint said about working
-directly on `main` — the SDD ledger's own ruling records why: "work on
-`claude/snake-ladders-cross-device-3uu177` (main merged in, no force-push),
-not directly on `main` — harness mandates this branch; handoff's 'work on
-main' predates it." The branch carries `main` merged in at `f8ab630` (tree ==
-`main` at that point) plus the entire chrome-and-layout plan on top — nothing
-from `main`'s history is missing, and nothing here is a fork that needs
-reconciling. **Merging it into `main` is the owner's decision — through PR
-#4 — not something to do automatically on the next session.**
+**Branch: `claude/snake-ladders-cross-device-3uu177`, fast-forwarded to
+`main` after PR #4 merged.** New work goes on this branch, not directly on
+`main` — the SDD ledger's ruling recorded why: "harness mandates this branch;
+handoff's 'work on main' predates it." Each plan reaches `main` through its
+own PR, and **merging is the owner's decision**, never something a session
+does on its own. Once a PR merges, bring the branch level with `main` by
+fast-forward (`git merge --ff-only origin/main`) before the next piece of
+work. A `git checkout -B` reset to the same end state was refused by the
+session's permission classifier as destructive; the fast-forward is the
+non-rewriting way to get there.
 
 Key commits, in order: `f8ab630`..`2fbff6b` is the plan's 14 tasks (Task 1
 `2d7f2da`, the mid-plan `@layer base` fix `1b6ad83`, Task 8 `c6c71d0`, Task 9
@@ -1535,12 +1530,12 @@ Three traps, and the first is the one that matters:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. **Check out `claude/snake-ladders-cross-device-3uu177`, not `main`.** Plan
-   1 (chrome and layout) is complete on this branch and not yet merged;
-   `main` does not have it. Confirm with `git log --oneline -1` — it should
-   show a docs commit on top of `8c8ecf8`, not the `03e1cd1`-era history
-   alone. Then check PR #4's CI and review state; if it has been merged,
-   start from `main` instead.
+2. **Work on `claude/snake-ladders-cross-device-3uu177`.** Plan 1 is merged
+   (PR #4, `58a8739`) and the branch was fast-forwarded to it, so the branch
+   and `main` start level. Confirm with `git log --oneline origin/main..HEAD`,
+   which should list only this checkpoint's docs commit (or nothing, if
+   `main` has moved on and you have fast-forwarded again). Plan 2 becomes its
+   own PR.
 3. **Start plan 2**: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
    using `superpowers:subagent-driven-development` or `superpowers:executing-plans`
    as the plan's own first line requires. Its dependency on plan 1 (a real
@@ -1563,7 +1558,7 @@ Three traps, and the first is the one that matters:
 
 ```bash
 git clone <repo> && cd snake-ladders
-git checkout main   # or claude/snake-ladders-cross-device-3uu177 until plan 1 is merged
+git checkout main   # plan 1 is merged; new work goes on the harness's branch
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
 nub run test && nub run typecheck   # 269 tests, clean types
