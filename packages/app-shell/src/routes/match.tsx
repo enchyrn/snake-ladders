@@ -115,7 +115,6 @@ export const MatchScreen = () => {
           alignItems: "center",
           justifyContent: "space-between",
           gap: "3",
-          paddingTop: "env(safe-area-inset-top)",
           paddingLeft: "gutterL",
           paddingRight: "gutterR",
         })}
@@ -235,8 +234,11 @@ export const MatchScreen = () => {
       {match.phase === "finished" && (
         <div
           inert={behindSheet}
+          // Fixed, not absolute: the screen scrolls when the bands outgrow a
+          // short phone, and an absolute overlay covers only the unscrolled
+          // first screenful — the control bar stayed uncovered beneath it.
           className={css({
-            position: "absolute",
+            position: "fixed",
             inset: 0,
             zIndex: 5,
             display: "flex",

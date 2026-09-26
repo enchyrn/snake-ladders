@@ -18,7 +18,7 @@ export const screenClass = css({
 })
 
 /** The match screen: the board owns it, so it fills the viewport exactly and
- *  nothing pads it — each band carries its own gutters.
+ *  only the notch pads it — each band carries its own gutters.
  *
  *  Its own complete rule rather than `cx(screenClass, css({ padding: 0 }))`:
  *  `cx` only concatenates atomic class names, and which of two conflicting
@@ -32,6 +32,9 @@ export const matchScreenClass = css({
   height: "100dvh",
   display: "flex",
   flexDirection: "column",
+  // On the screen, not the header: the banner band sits above the header, so
+  // an inset carried by the header left the desync banner under the notch.
+  paddingTop: "env(safe-area-inset-top)",
   position: "relative",
   overflowX: "hidden",
   overflowY: "auto",
