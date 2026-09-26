@@ -49,6 +49,8 @@ export const JoinScreen = () => {
       .catch(() => setError(unexpected))
   }, [session])
 
+  // Only the installed app has UDP, so only it can hear a host's beacons.
+  const canDiscover = session.canHost
   const rooms = useQuery({
     queryKey: ["lan-rooms"],
     queryFn: () => Effect.runPromise(session.transport("network").rooms),
@@ -56,6 +58,7 @@ export const JoinScreen = () => {
     // without spinning the radio harder than the host is already using it.
     refetchInterval: 1000,
     initialData: [] as ReadonlyArray<RoomView>,
+    enabled: canDiscover,
   })
 
   // Elapsed time since mount, for `joinState` below. A `setTimeout`, not a
@@ -68,7 +71,7 @@ export const JoinScreen = () => {
     return () => clearTimeout(id)
   }, [])
 
-  const state = joinState(rooms.data, elapsedMs)
+  const state = joinState(rooms.data, canDiscover, elapsedMs)
   const placement = manualPlacement(state, arrival !== null)
 
   const runEnter = async (addr: string, seed: number) => {

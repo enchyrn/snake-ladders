@@ -3,19 +3,27 @@ import { joinState, manualPlacement, promotedHint, SEARCH_GRACE_MS } from "../jo
 
 describe("joinState", () => {
   it("is searching while the grace period is open and nothing has answered", () => {
-    expect(joinState([], 0)).toBe("searching")
-    expect(joinState([], SEARCH_GRACE_MS - 1)).toBe("searching")
+    expect(joinState([], true, 0)).toBe("searching")
+    expect(joinState([], true, SEARCH_GRACE_MS - 1)).toBe("searching")
   })
 
   // The state that does not exist today: after the grace period with no rooms,
   // the screen must say so rather than render nothing.
   it("gives up once the grace period closes", () => {
-    expect(joinState([], SEARCH_GRACE_MS)).toBe("none")
+    expect(joinState([], true, SEARCH_GRACE_MS)).toBe("none")
+  })
+
+  // A browser has no UDP, so its discovery is a no-op that can never find a
+  // room. Four seconds of "Looking for games…" followed by blaming the Wi-Fi
+  // was a wait for an answer that was never coming.
+  it("does not search at all where this build cannot discover rooms", () => {
+    expect(joinState([], false, 0)).toBe("unavailable")
+    expect(joinState([], false, SEARCH_GRACE_MS)).toBe("unavailable")
   })
 
   it("shows rooms the moment any arrive, however early", () => {
-    expect(joinState([{}], 0)).toBe("found")
-    expect(joinState([{}], SEARCH_GRACE_MS * 10)).toBe("found")
+    expect(joinState([{}], true, 0)).toBe("found")
+    expect(joinState([{}], true, SEARCH_GRACE_MS * 10)).toBe("found")
   })
 })
 
@@ -27,6 +35,11 @@ describe("manualPlacement", () => {
 
   it("hides the field while searching with nothing to fill it", () => {
     expect(manualPlacement("searching", false)).toBe("hidden")
+  })
+
+  it("promotes the field at once where there is no search to wait for", () => {
+    expect(manualPlacement("unavailable", false)).toBe("promoted")
+    expect(manualPlacement("unavailable", true)).toBe("promoted")
   })
 
   it("promotes the field once the search gives up, arrival or not", () => {
@@ -59,5 +72,18 @@ describe("promotedHint", () => {
 
   it("points a guest with no code at the host's screen", () => {
     expect(promotedHint("none", false)).toMatch(/No games showed up/)
+  })
+
+  // Nothing searched, so nothing failed: the copy must not blame the network.
+  it("does not blame the Wi-Fi where no search ran", () => {
+    const hint = promotedHint("unavailable", false)
+    expect(hint).not.toMatch(/showed up|same network/)
+    expect(hint).toMatch(/host's screen/)
+  })
+
+  it("points an arrival at the scanned code where no search ran", () => {
+    const hint = promotedHint("unavailable", true)
+    expect(hint).not.toMatch(/didn't show up|wait a moment/)
+    expect(hint).toMatch(/code you scanned/)
   })
 })
