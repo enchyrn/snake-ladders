@@ -65,6 +65,29 @@ describe("ProgressRows", () => {
     expect(restingRow).not.toContain("Acting")
   })
 
+  // A networked device owns one seat, so its acting seat is always its own —
+  // marking that would tell every player it was their turn during everyone
+  // else's. Turn-based, the row follows the engine's active seat instead.
+  it("marks the active seat, not this device's own, when turns are taken in order", () => {
+    const base = withPlayers([1, 1])
+    const state = { ...base, config: { ...base.config, modules: [] }, activeSeat: 1 }
+    const html = renderToStaticMarkup(<ProgressRows state={state} actingSeat="p0" />)
+    const rows = html.split("<li").slice(1)
+    expect(rows[0]).toContain('data-acting="false"')
+    expect(rows[1]).toContain('data-acting="true"')
+  })
+
+  // Under `simultaneous` every seat rolls at once, so there is no one whose
+  // turn it is; the row marks the seat this device is choosing for.
+  it("marks this device's chosen seat when everyone rolls at once", () => {
+    const base = withPlayers([1, 1])
+    const state = { ...base, config: { ...base.config, modules: ["simultaneous" as const] } }
+    const html = renderToStaticMarkup(<ProgressRows state={state} actingSeat="p1" />)
+    const rows = html.split("<li").slice(1)
+    expect(rows[0]).toContain('data-acting="false"')
+    expect(rows[1]).toContain('data-acting="true"')
+  })
+
   // An aria-label on a plain <span> whose only content is an aria-hidden icon
   // is ignored by assistive tech; `role="img"` is what makes it the name.
   it.each([

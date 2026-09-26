@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
 import { countColour, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
+import * as Simul from "@mutation/engine/rules/simultaneous"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { ChevronRight } from "lucide-react"
@@ -32,6 +33,12 @@ export const ProgressRows = ({
   readonly actingSeat: string
 }) => {
   const top = lastTile(state.config.size)
+  // Turn-based, the marked row is the engine's active seat: `actingSeat` is
+  // only which of *this device's* seats is choosing, and a networked device
+  // owns one, so marking it told every player it was their turn. Under
+  // `simultaneous` nobody's turn is anyone else's, and the chosen seat is the
+  // honest answer.
+  const markedSeat = Simul.enabled(state.config) ? actingSeat : state.players[state.activeSeat]?.id
   return (
     <ul
       className={css({
@@ -49,7 +56,7 @@ export const ProgressRows = ({
       style={{ paddingBlock: `${ROWS_PAD_PX / 2}px` }}
     >
       {state.players.map((player) => {
-        const isActing = player.id === actingSeat
+        const isActing = player.id === markedSeat
         const isDone = player.finishedAtRound !== null
         const isAway = !player.connected
         return (
