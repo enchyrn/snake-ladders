@@ -230,6 +230,23 @@ const drive = async (served, browser) => {
     console.log(`  screenshot -> ${join(OUT, `${name}.png`)}`)
   }
 
+  // Recorded where the toast lands at the instant it is inserted: it retires
+  // itself after four seconds, so looking for it afterwards races its exit.
+  // It once rendered in flow below a full-height screen, i.e. never on screen.
+  if (HTTPS) {
+    await page.addInitScript(() => {
+      new MutationObserver((_, observer) => {
+        const el = [...document.querySelectorAll('[role="status"]')].find((n) =>
+          /ready to play offline/i.test(n.textContent ?? ""),
+        )
+        if (!el) return
+        const r = el.getBoundingClientRect()
+        window.__offlineToast = { top: r.top, bottom: r.bottom, viewport: innerHeight }
+        observer.disconnect()
+      }).observe(document, { childList: true, subtree: true })
+    })
+  }
+
   const entry = `${served.origin}${BASE || "/"}`
   console.log(`Serving ${DIST} at ${entry}`)
   await page.goto(entry, { waitUntil: "networkidle" })
@@ -259,6 +276,14 @@ const drive = async (served, browser) => {
       (await context.waitForEvent("serviceworker", { timeout: 15_000 }).catch(() => null))
     console.log("service worker:", worker ? worker.url() : "none registered")
     if (!worker) problems.push("no service worker registered on a secure origin")
+    const toast = await page
+      .waitForFunction(() => window.__offlineToast, null, { timeout: 15_000 })
+      .then((h) => h.jsonValue())
+      .catch(() => null)
+    console.log("offline toast:", toast)
+    if (!toast) problems.push('the "ready to play offline" toast never appeared')
+    else if (toast.top < 0 || toast.bottom > toast.viewport)
+      problems.push(`the offline toast rendered off screen (top ${toast.top}, viewport ${toast.viewport})`)
   }
 
   await page.getByRole("button", { name: /pass and play/i }).click()

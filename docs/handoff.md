@@ -1,12 +1,24 @@
 # Handoff
 
-State of `main` as of 2026-09-16, written so another session — or the same
-person on a different machine — can pick it up without re-deriving anything.
-Start at **"Resuming From This Checkpoint"** near the end; everything before
-it is the history that led there.
+Written so another session — or the same person on a different machine — can
+pick it up without re-deriving anything. Start at **"Resuming From This
+Checkpoint"** near the end; everything before it is the history that led
+there.
+
+**Correction, 2026-09-25: `claude/snake-ladders-cross-device-3uu177` is
+active again, and the paragraph below is out of date.** It described the name
+as abandoned as of 2026-09-16, when everything it carried had been folded into
+`main`. Since then the harness has mandated doing new work on a branch of
+that same name rather than directly on `main` (see "Resuming From This
+Checkpoint" → "Where the work stands"), so the name was reused for the
+chrome-and-layout plan. That branch is **not** the one described as abandoned
+below and is **not yet merged into `main`** — do not assume `main` is
+current, and do not read the sentence below as still true of the branch that
+now exists under this name.
 
 `claude/snake-ladders-cross-device-3uu177`, which earlier revisions of this
-file described, is abandoned and fully absorbed into `main`.
+file described, is abandoned and fully absorbed into `main`. *(Historical —
+see the correction above.)*
 
 ## Current checkpoint (2026-09-15)
 
@@ -705,13 +717,14 @@ owner can make.
 
 ## Known flakes
 
-Both reproduce standalone, both pass on a second run, and neither has ever
-been traced to a change in the diff that hit it. Re-run once before treating
-either as a real failure.
+Nothing currently listed. Two entries have left, both because they were real
+bugs:
 
-- **`verify:ui` and `verify:ui:pages` can miss the narration on a cold start** —
-  `log: []` and then a 30s timeout on "nothing was narrated after rolling". It
-  is the narration timing, not the roll: the retry shows the entry present.
+- **`verify:ui`'s "nothing was narrated after rolling" was never a flake.** It
+  was the engine discarding a round's timeline — see "The roll that was never
+  narrated" under "Resuming From This Checkpoint". What made it look like
+  timing — a retry showing the entry present — was only a second run
+  drawing a different random seed.
 (The `EADDRINUSE` flake that used to live here is fixed: the relay and every
 test that starts one now bind port 0 and read back what the OS assigns, so
 `startRelay` reports the real port through a getter. Verified by running two
@@ -874,42 +887,136 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-**Checkpoint written 2026-09-16, updated after the two quick wins and again
-after ADR 0020 — the feel ADR — was written.**
-Everything below is committed and on `main`; nothing lives only in a
-conversation.
+**Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished;
+amended 2026-09-26 after a code and security review of PR #4 and a fix pass
+for its five confirmed regressions** — see "The PR #4 review" below.
+Everything below is committed. Unlike the last few checkpoints, it is **not**
+on `main` — read the branch note before assuming otherwise.
+
+### The PR #4 review (2026-09-26)
+
+A `/code-review` and a `/security-review` ran against PR #4 before merging.
+**Security: nothing at or above the bar** — the PR adds no HTML sinks, no new
+network paths, no deserialisation and no privileged operations; peer names
+still reach the page only as React text. **Code: fifteen findings.** Five were
+confirmed against the tree as regressions this PR introduced, and all five are
+fixed, each red before its fix and green after:
+
+| # | Finding | Fix | How it was shown red |
+|---|---|---|---|
+| 1 | The update/offline toast rendered in flow after `<Outlet />`, below every full-height screen — never seen | `5e81b2a` — floats again, clear of the insets; suppressed on `/match` (an update reloads the page and drops the match); the text-only toast lets taps through | `drive-app --https` now records the toast's rect on insertion: y=860 on an 844 viewport before, 790 after |
+| 2 | Networked turn-based: the progress rows marked the device's own seat as acting on every phone | `113c208` — the row follows `activeSeat`; under `simultaneous`, the chosen seat | unit test, red against the old `HUD.tsx` |
+| 3 | Banner band above the header had no safe-area padding — the desync banner drew under the notch | `7b03da4` — the inset pads the match screen, not the header | CDP `Emulation.setSafeAreaInsetsOverride` (top 47): band at y=0 before, 47 after |
+| 4 | The match screen now scrolls on a short phone, and the absolute win overlay covered only the unscrolled first screenful | `7b03da4` — `position: fixed` | one-seat match played to the end at 390x520, scrolled 68px: overlay spanned -68..452 before, 0..520 after |
+| 5 | In a browser the join screen hid the address field behind a 4s search that cannot succeed, then blamed the Wi-Fi | `1fad568` — `joinState` takes `canDiscover` (`session.canHost`); a browser is `unavailable`: field at once, honest copy, no polling | unit tests; driven, the field and copy are there at 300ms |
+
+Two things worth knowing from that pass. **The fixture in
+`progress-rows.test.tsx` has every module on, `simultaneous` included**
+(`defaultConfig`), so a test meant to be turn-based went red for the wrong
+reason on its first write — it only proved the fix once its config dropped the
+modules and it was re-run against the stashed old code. And **Chromium 1194
+supports `Emulation.setSafeAreaInsetsOverride`**, so a notch can be emulated in
+a driven run; nothing in `drive-app.mjs` uses it yet, and the probes that did
+were throwaway. Finding 4's round-log sheet was a false alarm: opening it moves
+focus inside, which scrolls the screen back to the top.
+
+The ten findings not fixed are in "Open threads from the chrome-and-layout
+pass" below, as their own entries.
+
+`/security-review` fails at its first step in a fresh clone with
+`ambiguous argument 'origin/HEAD...'`: the clone has no `origin/HEAD`. Run
+`git remote set-head origin main` once, then invoke it again.
+
+### The roll that was never narrated — closed 2026-09-26
+
+The intermittent `verify:ui` failure ("nothing was narrated after rolling",
+2/24 and 2/5 on earlier builds, ~1 in 10 overall) was **an engine bug, not
+the transport, the fold or the UI.** A temporary trace across `send` →
+`submit` → emit → `receive` → `drain` caught a failing run in 25: the Commit
+*was* sequenced and applied (`apply | 2 | Commit | ok`) and came back with an
+empty timeline and `phase=committing`. Every candidate in the original task
+card — `canRollAtom` timing, a sequence gap in `local.ts`, a late
+subscription, an acting-seat mismatch — is ruled out by that one line.
+
+**Cause:** `settle` (`packages/engine/src/match.ts`) keeps resolving while
+nobody can act, and each `resolveRound` *replaces* `timeline` with its own
+round's events. A solo player whose roll trips a mine is stunned, so nobody
+can act, so `settle` resolves the sat-out round at once — and that silent
+round's empty timeline overwrote the roll, the blast and the stun. The player
+went back to the start with nothing in the log and nothing for the board to
+replay. The driver plays solo with a random seed; **337 of 3000 seeds** hit
+it, which is the ~11% the gate showed. The same overwrite hits any
+multi-player round in which every remaining player ends stunned.
+
+**Fix:** `settle` concatenates the timelines of the rounds it resolves
+(`timelineRound` stays the last one's, so a card played next round still
+starts a fresh timeline). Game state is otherwise identical — the same 337
+seeds still auto-advance, and now 0 of them lose the roll.
+`determinism.test.ts` passes. Pinned twice, both red without the fix: an
+engine test beside "auto-advances rather than deadlocking"
+(`rules.test.ts`, which only ever checked the phase), and a match-client
+test driving seed 9 through the real local transport. After the fix:
+**20/20 consecutive `nub run verify:ui`** on a fresh build.
+
+Not shown by any of this: that the *concatenated* timeline animates well on
+the board. The UI gate plays a random seed and cannot choose one that hits a
+mine, so watch a blast on the next device run.
 
 ### Where the work stands
 
-**The host-served join is implemented and merged.** PR #3 went into `main` as
-the merge commit `03e1cd1`; all six tasks of
-`docs/superpowers/plans/2026-09-16-host-served-join-plan.md` are done and
-ticked. A guest scans a QR on the host's lobby, the host serves them the game
-over plain HTTP on the port it was already listening on, and they join the room.
-No install, no relay machine, no certificate.
+**Plan 1 — `docs/superpowers/plans/2026-09-17-chrome-and-layout-plan.md` — is
+complete.** All 14 tasks are done and ticked, each with an execution note
+recording what the plan text did not anticipate; a final whole-branch review
+(0 Critical, 7 Important, 10 Minor) ran after Task 13 and its fix wave landed
+before this checkpoint, per that review's own ruling that a checkpoint written
+before the final fixes would be stale on arrival.
 
-**Work happens directly on `main` now, at the owner's instruction
-(2026-09-16).** No feature branch, no PR: the two quick wins below were
-committed straight to it.
+**The SDD ledger and its reports no longer exist.** They lived in the
+gitignored `.superpowers/sdd/2026-09-17-chrome-and-layout-plan/` workspace,
+which the skill deletes once the final review is clean. Everything durable in
+them was carried out first: every ruling and what it costs if wrong is in the
+plan's per-task execution notes, the final summary is PR #4's description, and
+`git log f8ab630..HEAD` has the per-fix commit messages. Do not go looking for
+`progress.md`.
 
-`claude/snake-ladders-cross-device-3uu177` is **abandoned**. Everything it
-carried is on `main` — the merge `03e1cd1` plus its three documentation
-commits, cherry-picked across as `8c98595`, `801a59e` and `e4ae3ef` so that
-abandoning the branch loses no recorded state. Do not add to it and do not
-read it for history; `main` is complete.
+**PR #4 is open against `main`**
+(<https://github.com/enchyrn/snake-ladders/pull/4>, opened 2026-09-25 at the
+owner's request). Its description is the best one-page account of the plan:
+what changed, the four Panda defects, the gate numbers, and what is known
+and not fixed. Nothing watches it — no PR subscription and no scheduled
+check-in — so check its CI and review state by hand before doing anything
+else on this branch. A red check or a review comment there comes before
+plan 2.
 
-The gates below were re-run **on the merged `main`**, not only on the branch:
-a green feature branch does not prove a green merge.
+The whole game rebuilt its chrome on Panda CSS tokens/recipes and Lucide
+icons: the match screen is five budgeted bands (header, progress rows, a fixed
+366px board, a log preview, a two-row control bar) instead of ad-hoc CSS; a
+seat-switcher band for multi-seat pass-and-play; every emoji glyph replaced
+with an SVG icon; the join screen's dead blank state replaced with
+searching/found/none; the lobby and home screens reflowed; and
+`apps/game-web/styles.css` reduced from 784 lines to only what is genuinely
+global. `docs/superpowers/plans/2026-09-17-chrome-and-layout-plan.md`'s "What
+this plan does not do" section is still accurate — the renderer itself,
+`Scene.play`'s eight undepicted `TimelineEvent` variants, and light mode are
+all untouched.
 
-| Commit | What |
-|---|---|
-| `a976cd7` | Task 1 — the serving rules as pure functions (`crates/lan-sync/src/assets.rs`) |
-| `fb02bf4` | Task 2 — the host's third request branch, and six socket tests |
-| `d7fdbdc` | Task 3 — `local_address()`, and assets threaded through `Session::host` |
-| `c03f82a` | A correction to what the address probe's target range guarantees |
-| `7487e22` | A traversal fix the plan's own security claim did not survive — see below |
-| `9b6f3be` | Task 4 — the Tauri adapter. **CI's Android APK job is green on this sha** |
-| `3c1f0fc` | Task 5 — the lobby QR, its quiet zone, and the `.tsx` test gap |
+**Branch: `claude/snake-ladders-cross-device-3uu177`, and it is NOT yet on
+`main`.** This reverses what the previous checkpoint said about working
+directly on `main` — the SDD ledger's own ruling records why: "work on
+`claude/snake-ladders-cross-device-3uu177` (main merged in, no force-push),
+not directly on `main` — harness mandates this branch; handoff's 'work on
+main' predates it." The branch carries `main` merged in at `f8ab630` (tree ==
+`main` at that point) plus the entire chrome-and-layout plan on top — nothing
+from `main`'s history is missing, and nothing here is a fork that needs
+reconciling. **Merging it into `main` is the owner's decision — through PR
+#4 — not something to do automatically on the next session.**
+
+Key commits, in order: `f8ab630`..`2fbff6b` is the plan's 14 tasks (Task 1
+`2d7f2da`, the mid-plan `@layer base` fix `1b6ad83`, Task 8 `c6c71d0`, Task 9
+`f3f3539`, Task 13 `e3c94ed` + fix `2fbff6b`); `2c76cb4`..`8c8ecf8` is the
+final review's fix wave. `8c8ecf8` is the last code commit; `c8ce199` (this
+checkpoint), `e3a1f39` (the local-setup snippet) and the PR #4 note are docs
+only.
 
 ### Two defects found while implementing, both worth remembering
 
@@ -933,6 +1040,31 @@ has to be read off a screen by a phone camera. It is now drawn **inside the
 SVG** (`QUIET_ZONE = 4`), where no stylesheet can remove it, and pinned by a
 test. Invisible in the source; obvious in a screenshot. That is the fourth time
 on this branch that looking at the rendered page found what reading it did not.
+
+### What the chrome-and-layout pass verified, and what it did not
+
+**Verified, by driving the built app in Chromium and reading the
+screenshots** (`final-{390,320}-*.png` in the SDD directory; gitignored, not
+in the repo — regenerate with `nub run build && nub run verify:ui`, or the
+throwaway-`serveDist` pattern the plan's Task 13 Step 4 used for 320px):
+
+- Both 390×844 (the standard driven width) and 320×800 (the narrowest
+  supported width, the `sm` breakpoint's whole reason to exist).
+- 2-player and 6-player pass-and-play, the latter with `simultaneous` and
+  every module on, both before and after a roll.
+- At every size and player count measured: no overlaps, no button under 44px,
+  no horizontal overflow, the board holds its full 366×366, the log gives way
+  before the board does. Measured bands at 390×844, 6 players, simultaneous
+  on: header 52, seat switcher 52, progress rows 177, board 366×366, log
+  preview ~63, control bar ~134 (px).
+
+**Not verified — this pass never touched a real device.** No phone, no
+tablet, no iOS anything. Everything above is a Chromium screenshot at a fixed
+viewport; a real device's DPI, safe-area insets, and touch behaviour (as
+opposed to Playwright's synthetic pointer events) are all untested. This is
+the same gap the rest of this file already tracks under "play a match on two
+real devices" — chrome-and-layout does not close it, only changes what that
+test will show once someone runs it.
 
 ### What is unproven, and it is the important part
 
@@ -1119,58 +1251,29 @@ above polish.
 
 ### The task to start on
 
-**The two quick wins are done** (`5c393ea`, `56e9e5e`, both on `main`). What
-is left, in order:
+**Plan 1 (spec B, chrome and layout) is done** — see "Where the work stands"
+above. **Plan 2 is next: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
+9 tasks, implementing spec A
+(`docs/superpowers/specs/2026-09-16-settings-and-input-design.md`).** Start
+there directly; there is no gate before it the way plan 1's Task 1 was one.
 
-1. ~~**Write the feel ADR**~~ — **done 2026-09-16**, as ADR 0020
-   "A boardgame, not a number game", Accepted. See the brainstorm table above
-   for what writing it turned up that the brainstorm had not. Docs only; no
-   code changed, so no gate moved.
-2. ~~**Write the settings spec**~~ — **done 2026-09-16**, as
-   `docs/superpowers/specs/2026-09-16-settings-and-input-design.md`. It became
-   **spec A of two**: the owner asked mid-brainstorm to revisit every menu and
-   HUD and to consider new assets, which is a second subsystem, so it was
-   decomposed rather than absorbed. **Spec B — the chrome and layout pass — is
-   the task to start on**, and it needs a screenshot survey of the current
-   screens before anything else. It must absorb `renderer-legibility` §Chrome
-   and `share-and-start-menu` §"The start menu" rather than compete with them,
-   and it inherits the asset question: the game has **no assets at all** today
-   — no `public/`, no icons, no fonts, 784 lines of CSS in one stylesheet with
-   a single media query, and every glyph an emoji in a text node.
+**Its stated dependency on plan 1 is now met.** Spec A's `rollButton: hidden`
+setting needs a dice tray that is a real DOM control, not a canvas raycast
+target — plan 1's Task 8 built exactly that: `DiceTray` is exported from
+`packages/ui/src/HUD.tsx`, alongside `ControlBar` (extracted to its own
+component during Task 8's fix round) and `CardRail`. `RollButton` stays the
+other keyboard-reachable path to `Commit`, so hiding it via the new setting
+will not remove the only accessible route the way it would have before the
+tray existed.
 
-   **Spec B is written too** — `2026-09-17-chrome-and-layout-design.md`, plus
-   **ADR 0021** (Panda CSS `2.0.0-beta.17` and Lucide, adopted with the beta
-   cost stated). The match layout is drawn rather than described, at
-   <https://claude.ai/artifact/MXucAxxrRbVbr1uo8ZYAAR>, artboard
-   "A — CHOSEN: edges + progress rows".
+**The header's settings button is built and inert, exactly as plan 1 left
+it.** It renders in the 52px header band (`match.tsx`) but has no click
+handler and opens nothing — plan 1's Task 9 put it there on purpose, ahead of
+plan 2, rather than leave a gap to add later. Wiring it up is plan 2's job.
 
-   **Both implementation plans are written, and the work is ready to start.**
-
-   | Plan | Tasks | Covers |
-   |---|---|---|
-   | `plans/2026-09-17-chrome-and-layout-plan.md` | 14 | Spec B. **Run this one first.** |
-   | `plans/2026-09-17-settings-and-input-plan.md` | 9 | Spec A. Runs second. |
-
-   **The order is deliberate and reverses what this file used to say.** Earlier
-   revisions named the settings spec as next; that was written before spec B
-   existed. ADR 0021 requires the Panda beta to be proven before anything is
-   written against it, and the dice tray that spec A's `rollButton: hidden`
-   depends on is built in plan 1's Task 8. Building settings UI first would
-   mean building it twice.
-
-   **Plan 1, Task 1 is a gate, not a formality.** Panda `2.0.0-beta.17` is
-   unverified against React 19.3, Vite 8.3, TS 6.0.3 and nub's non-hoisting
-   linker. If it fails there, stop and report rather than working around it —
-   ADR 0021 was accepted on the assumption that failure is cheap at that point
-   and expensive eight tasks later.
-
-   Two things in plan 1 fail on real defects the moment they are written, which
-   is intentional: Task 3's seat-colour predicate (`#4ee39b` is inside the
-   reserved link band) and Task 10's join-state test (the screen has one state
-   and needs three).
-
-   Five things the settings brainstorm established that spec B or its plan
-   will need:
+Read plan 1's own record of what the settings brainstorm established before
+starting plan 2 — most of it is still exactly as written, unchanged by plan
+1's implementation:
 
    - **The layer rule decides the architecture, not taste.** `layer:ui` may
      depend only on `engine` and `render`, so `BoardCanvas`, `EventLog` and
@@ -1180,11 +1283,12 @@ is left, in order:
    - **Settings is an overlay, not a route.** A `/settings` route replaces the
      match screen, unmounting `BoardCanvas` and discarding the clip queue of a
      round mid-replay.
-   - **There is no tappable dice tray.** `Scene.pick` raycasts the board plane
-     only; the dice are WebGL objects nothing picks. The tray has to be built,
-     and as a DOM control — `RollButton` is currently the only
-     keyboard-reachable path to `Commit`, so hiding it behind a raycast would
-     be an accessibility regression.
+   - ~~**There is no tappable dice tray.**~~ **Built, by plan 1's Task 8.**
+     `Scene.pick` still raycasts the board plane only — the dice remain WebGL
+     objects nothing picks — but `DiceTray` (`packages/ui/src/HUD.tsx`) is a
+     real DOM `<button>`, so plan 2's `rollButton: hidden` setting can hide
+     `RollButton` without removing the only keyboard-reachable path to
+     `Commit`.
    - **iOS haptics are feasible but unreachable.** WebKit has never shipped the
      Vibration API, so no web path reaches them; a Tauri v2 plugin would, but
      only in the installed iOS app, which ADR 0011 keeps manual and which is
@@ -1197,28 +1301,31 @@ is left, in order:
      `MineDefused`, `CardPlayed`, `VenomGained`, `BoardBreathed`, `Stunned` and
      `Finished` have no board depiction at all.
 
-   And five from spec B's screenshot survey, which is the part that could
-   only be learned by looking:
+   Five more came from spec B's screenshot survey, and **plan 1 closed all
+   five** — this was, in effect, spec B's punch list:
 
-   - **The board is square and the phone is 1:2.2.** At 390 wide the board
-     maxes out at 366×366 — 43% of the height, flat. Tilting it for
-     perspective makes it *shorter*: today's tilt costs ~90px. "Fill the
-     screen" was never on the table; the design question is what the other
-     ~430px does.
-   - **The band budget closes by arithmetic**, because `match.ts:195` caps a
-     match at six players. Even at six the board keeps its full 366 and ~119px
-     remains. That is a table, not a hope.
-   - **`seatColours[4]` is `#4ee39b`** — mint, inside the green band
-     `renderer-legibility` reserves for link tinting. The fifth player's token
-     already fights the snakes, today, before anyone is allowed to pick a
-     colour.
-   - **The join screen's empty room list renders nothing at all** — no
-     spinner, no empty state. A guest whose discovery fails cannot tell the app
-     from a dead page. It has one state and needs three.
-   - **The card rail is not broken, only undiscoverable.** `.cards` is
-     `overflow-x: auto`, so the two off-screen cards are reachable; this was
-     checked before it was written down. Flexing five cards across 366px
-     removes the problem by construction.
+   - ~~The board is square and the phone is 1:2.2.~~ **Unchanged by design**:
+     the board still maxes out at 366×366 at 390 wide. Plan 1 gave it a fixed
+     band rather than trying to fill more of the screen with it; the other
+     ~430px is now the header, progress rows, log and control bar,
+     budgeted by `packages/ui/src/layout/bands.ts`.
+   - ~~The band budget closes by arithmetic.~~ **Built, and rederived twice**
+     — once against the measured control-bar height (Task 9), once to add a
+     seat-switcher band for multi-seat pass-and-play (final review). `bands()`
+     stays the tested arithmetic; the match screen itself now uses plain flex
+     at runtime rather than reading `bands()`'s pixel values directly.
+   - ~~`seatColours[4]` is `#4ee39b`.~~ **Fixed, Task 3.** It's `#3fd0c9`
+     (teal) now, ~177° — 23° clear of seat 0's cyan and outside the reserved
+     link-tint band. The plan's own margin note: six hues minus a 65° reserved
+     band is genuinely tight, and distinguishing seats by shape as well as hue
+     (`renderer-legibility` §"Identity without colour") is still unbuilt.
+   - ~~The join screen's empty room list renders nothing at all.~~ **Fixed,
+     Task 10.** `packages/app-shell/src/app/join-state.ts` gives it three
+     states (`searching`/`found`/`none`); `none` explains itself and promotes
+     the address field rather than rendering a gap.
+   - ~~The card rail is not broken, only undiscoverable.~~ **Fixed, Task 8.**
+     The five cards flex across the full width instead of scrolling
+     horizontally; all five are visible without a hint.
 
    The floor ADR 0020 demanded is settled and derived rather than chosen:
    speed scales each clip's duration and every clip clamps to
@@ -1227,13 +1334,14 @@ is left, in order:
    them. Presets are 1× / 1.5× / 2.5×; the clamp, not the multiplier, is what
    keeps a beat visible, which is why `quick` can be 2.5×.
 
-3. **Fix `verify-ui` so it builds first** — see the trap below. It is a
-   deliberate non-fix in this pass and it is small, but it is an Nx graph
-   edit, and this repo has already been bitten once by an Nx attribution
-   change that looked trivial.
+**`verify-ui` still does not build first** — see the trap in "State of the
+gates" below. Plan 1 did not fix it (out of scope for a docs-and-chrome pass),
+so it is still a deliberate non-fix, still small, and still an Nx graph edit
+this repo has already been bitten once by in a different attribution change
+that looked trivial.
 
 `venom`'s two defects (stranded without `mutation`, nothing worth buying)
-still gate any second currency, unchanged by this pass.
+still gate any second currency, unchanged by plan 1.
 
 **Then: play a match on two real devices.** That remains the highest-value
 action nothing in a container can do, and the quick wins are worth landing
@@ -1258,30 +1366,93 @@ shared relay descriptor and QR transport phase) is **no longer blocked** — ope
 thread 1 is closed. Task 2 of that plan remains hardware-blocked for the same
 reason as above.
 
+### Open threads from the chrome-and-layout pass, in priority order
+
+None of these block plan 2. (The former first thread, the Roll that never
+resolved, is closed — see "The roll that was never narrated" above.)
+Numbered by position, same rule as the older
+"Open threads" list above this section: closing one renumbers the rest, so
+prose elsewhere names a thread rather than citing its number.
+
+1. **Card and seat names truncate at 320px.** Measured directly: "Anchor",
+   "Reverse", "Double" and "Defuse" all clip to a few characters
+   (`final-320-match-2p.png`, `final-320-match-6p.png`); "Adder"/"Viper" in the
+   seat switcher truncate with the seat-colour dot shown, and fit without it.
+   The final fix wave narrowed this (tighter card padding at every width, not
+   only below `sm`) but did not eliminate it — there just isn't enough width
+   at 320px for a 5-across flex row of full English card names.
+2. **ADR 0021's "a spacing value cannot be invented" is not enforced.** Raw
+   rem/px literals still appear in `match.tsx` and `HUD.tsx` (`0.6rem`, `9px`,
+   `4px`, …) and `strictTokens` is off in `panda.config.ts`. Turning it on and
+   fixing what breaks is real, deferred follow-up work.
+3. **The join screen's "live" indicator while searching is text only** — no
+   spinner, no animation, just the sentence saying so. Spec B asked for a live
+   indicator; this is the literal minimum that satisfies "not a blank gap"
+   (Task 10) without being the polished version the spec pictured.
+4. **A duplicate default player name ("Cobra" twice) showed up in a 6-seat
+   drive, and it is unconfirmed whether the app or the driver produced it.**
+   The final fix wave's controller saw it in `final-390-match-6p-rolled.png`
+   and flagged it rather than chasing it, since `scripts/drive-app.mjs`
+   assigns names to the seats it creates and may simply have repeated one —
+   check the default-name generator (wherever it lives; not audited as part of
+   this pass) before assuming it's a real collision bug.
+5. **Unfixed findings from the PR #4 review (2026-09-26)**, plausible but
+   not reproduced, roughly most-worth-doing first:
+   - The join address field remounts when the placement flips from
+     `promoted` to `disclosure` (`<div>` → `<details>`), so a beacon arriving
+     mid-edit drops focus and closes the keyboard (`join.tsx`, the two
+     placement branches).
+   - `bands()` ignores the safe-area insets, so on a notched phone the 6-seat
+     log gets under two lines. Now reproducible: emulate the notch over CDP.
+   - The done/away rows have no accessible name (colour and strikethrough
+     only). Pre-existing, but PR #4's description claims icons with names.
+   - The live log keys lines by `${i}-${line}`: two consecutive rounds with
+     identical narration mutate nothing and announce nothing. Pre-existing,
+     but that list is now the only live region.
+   - The whole flexing log band opens the round-log sheet — ~170px of empty
+     tap target at 2 players.
+   - The end of the join search is not announced (the `role="status"` node
+     unmounts rather than updating).
+   - Seat 4's teal is ~23° from seat 0's cyan at similar luminance.
+   - The board is a fixed 366px on every viewport — small on a laptop,
+     scrolls in landscape. Spec B's choice; the cost is recorded here.
+   - `HUD.tsx` restates the 9px row gap rather than importing `ROW_GAP_PX`.
+   - `styles-layering.test.ts` carries what-comments against CLAUDE.md's rule.
+6. **Still: play a match on two real devices.** Unchanged from every prior
+   checkpoint — see "What the chrome-and-layout pass verified" above and "What
+   is unproven" below. This pass changes what that test will show; it does not
+   run it.
+
 ### State of the gates, as of this checkpoint
 
-**Re-run in full on `main` at `1f58541` (2026-09-17), working tree clean.**
-This session changed documentation only — no code moved — so the numbers below
-are unchanged from `56e9e5e` and were re-measured rather than copied forward:
+**Re-run in full on branch `claude/snake-ladders-cross-device-3uu177` at
+`7b03da4` (2026-09-26), after the PR #4 review's fix pass** — lint, typecheck,
+test (**267 passed**, 30 files), build, `verify:ui` and `drive-app --https`
+all clean. **Then again after the narration fix:** 269 tests, and
+`verify:ui` 20/20 consecutive on one fresh build. The table below is the earlier run at `8c8ecf8`, the tip of plan 1
+after the final review's fix wave; only the test count has moved since:
 
 | Gate | Result |
 |---|---|
-| `nub run test` | **185 passed**, 19 files |
-| `nub run typecheck` | clean |
 | `nub run lint` | clean |
+| `nub run typecheck` | clean |
+| `nub run test` | **261 passed**, 30 files |
 | `nub run build` | clean |
-| `nub run verify:ui` | clean, on a freshly built `dist/` |
-| `cargo test -p lan-sync` | **58 passed** (26 + 21 + 11) |
+| `nub run build && nub run verify:ui` | clean — "No console errors, no page errors, no horizontal overflow." |
+| `nubx nx run-many -t test --skip-nx-cache` | **6 projects** (`app-shell`, `engine`, `render`, `game-web`, `net`, `ui`), all pass, plus `game-web:panda`. `ui` and `render` are new since the last checkpoint — the final review found they had no `test` Nx target at all and so never ran under CI's `run-many`; fixed in the final fix wave. |
+| `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session) |
 
 Two notes for whoever runs these next. `nub` is not on `PATH` in a fresh cloud
 session: `export PATH="$HOME/.local/share/mise/shims:$PATH"` first, because
 `mise x --` fails on the `java` and `rust` tool resolution before it gets to
-running anything. And the survey screenshots this session's specs are built on
-live in `screenshots/`, which is gitignored — regenerate them with
-`nub run build && nub run verify:ui` rather than looking for them in the repo.
+running anything. And this pass's own screenshots (`final-{390,320}-*.png`,
+`t13-*.png`, …) were deleted along with the SDD workspace. `screenshots/`
+holds only the latest `verify:ui` run and is gitignored, so regenerate
+rather than look for them. The 320px and 6-player views need a throwaway
+script built on `serveDist`, because the driver has no width flag.
 
-The historical table below is from `56e9e5e` and is kept for the commentary
-under it, which is still accurate:
+The historical tables below predate this branch's work and are kept for the
+commentary under them, which is still accurate:
 
 | Gate | Result |
 |---|---|
@@ -1364,26 +1535,38 @@ Three traps, and the first is the one that matters:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. There is no plan in flight and no open PR, and work goes straight onto
-   `main`. The host-served join plan is fully ticked, with an execution note
-   under each task recording what it did not anticipate. Read those notes
-   before assuming the plan text is what shipped.
-3. **Build before you drive.** `nub run verify:ui` does not build; see the
+2. **Check out `claude/snake-ladders-cross-device-3uu177`, not `main`.** Plan
+   1 (chrome and layout) is complete on this branch and not yet merged;
+   `main` does not have it. Confirm with `git log --oneline -1` — it should
+   show a docs commit on top of `8c8ecf8`, not the `03e1cd1`-era history
+   alone. Then check PR #4's CI and review state; if it has been merged,
+   start from `main` instead.
+3. **Start plan 2**: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
+   using `superpowers:subagent-driven-development` or `superpowers:executing-plans`
+   as the plan's own first line requires. Its dependency on plan 1 (a real
+   dice-tray DOM control) is met — see "The task to start on" above.
+4. Plan 1 is fully ticked, with an execution note under every task recording
+   what the plan text did not anticipate — read those before assuming the
+   plan text is what shipped, same rule as applies to the older
+   host-served-join plan ("Two defects found while implementing", above).
+5. **Build before you drive.** `nub run verify:ui` does not build; see the
    gates section. This is the trap most likely to make the next session
-   believe a broken change is fine.
-4. For hardware work, `docs/android-debugging.md`. For the design behind what
-   just shipped, `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
-   and ADR 0019, whose consequences section now records that the listener
-   speaks three protocols rather than two.
+   believe a broken change is fine. It was true at the last checkpoint and
+   plan 1 did not touch it — still true.
+6. For hardware work, `docs/android-debugging.md`. For the design behind the
+   earlier host-served join, `docs/superpowers/specs/2026-09-16-host-served-join-design.md`
+   and ADR 0019. For the design behind plan 1, ADR 0020 (the feel ADR), ADR
+   0021 (the Panda/Lucide adoption), and `docs/superpowers/specs/2026-09-17-chrome-and-layout-design.md`.
+   For plan 2, `docs/superpowers/specs/2026-09-16-settings-and-input-design.md`.
 
 ## Continuing locally
 
 ```bash
 git clone <repo> && cd snake-ladders
-git checkout main
+git checkout main   # or claude/snake-ladders-cross-device-3uu177 until plan 1 is merged
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
-nub run test && nub run typecheck   # 101 tests, clean types
+nub run test && nub run typecheck   # 269 tests, clean types
 ```
 
 A Codespace and a Claude Code web session run `scripts/provision.sh`

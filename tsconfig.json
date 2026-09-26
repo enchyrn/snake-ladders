@@ -17,6 +17,7 @@
     "resolveJsonModule": true,
     "types": ["vite/client", "node"],
     "paths": {
+      "styled-system/*": ["./styled-system/*"],
       "@mutation/engine/*": ["./packages/engine/src/*"],
       "@mutation/net/*": ["./packages/net/src/*"],
       "@mutation/render/*": ["./packages/render/src/*"],

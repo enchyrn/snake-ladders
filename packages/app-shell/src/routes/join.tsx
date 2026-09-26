@@ -4,9 +4,22 @@ import { Effect, Either } from "effect"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { roomCode, seedFromRoom } from "../app/hooks"
 import { joinArrival } from "../app/join-link"
+import { joinState, manualPlacement, promotedHint, SEARCH_GRACE_MS } from "../app/join-state"
 import { onceAtATime } from "../app/once-at-a-time"
 import { useSession } from "../app/session"
 import { unexpected, type RoomView } from "@mutation/net/transport"
+import { button } from "styled-system/recipes"
+import { css, cx } from "styled-system/css"
+import {
+  barClass,
+  errorClass,
+  headingClass,
+  hintClass,
+  paragraphClass,
+  screenClass,
+  textInputClass,
+} from "@mutation/ui/layout/screen"
+import { ChevronLeft } from "lucide-react"
 
 export const JoinScreen = () => {
   const session = useSession()
@@ -36,6 +49,8 @@ export const JoinScreen = () => {
       .catch(() => setError(unexpected))
   }, [session])
 
+  // Only the installed app has UDP, so only it can hear a host's beacons.
+  const canDiscover = session.canHost
   const rooms = useQuery({
     queryKey: ["lan-rooms"],
     queryFn: () => Effect.runPromise(session.transport("network").rooms),
@@ -43,7 +58,21 @@ export const JoinScreen = () => {
     // without spinning the radio harder than the host is already using it.
     refetchInterval: 1000,
     initialData: [] as ReadonlyArray<RoomView>,
+    enabled: canDiscover,
   })
+
+  // Elapsed time since mount, for `joinState` below. A `setTimeout`, not a
+  // repeating interval: the only thing that matters is the single instant the
+  // grace period closes, so there is exactly one timer and it fires once,
+  // rather than one that has to notice its own deadline and stop itself.
+  const [elapsedMs, setElapsedMs] = useState(0)
+  useEffect(() => {
+    const id = setTimeout(() => setElapsedMs(SEARCH_GRACE_MS), SEARCH_GRACE_MS)
+    return () => clearTimeout(id)
+  }, [])
+
+  const state = joinState(rooms.data, canDiscover, elapsedMs)
+  const placement = manualPlacement(state, arrival !== null)
 
   const runEnter = async (addr: string, seed: number) => {
     setError(null)
@@ -105,64 +134,88 @@ export const JoinScreen = () => {
     void enter(addr.trim(), seed)
   }
 
+  const manualClass = css({ border: "1px solid", borderColor: "border", borderRadius: "10px", padding: "3" })
+
+  const manualFields = (
+    <>
+      <input
+        className={cx(textInputClass, css({ width: "100%", margin: "0.5rem 0" }))}
+        value={manual}
+        placeholder="192.168.1.24:5000@7QF2"
+        autoCapitalize="characters"
+        onChange={(e) => setManual(e.target.value)}
+      />
+      <button type="button" className={button({ size: "md" })} disabled={joining} onClick={enterManually}>
+        Join
+      </button>
+    </>
+  )
+
   return (
-    <main className="screen">
-      <header className="bar">
-        <button type="button" onClick={() => void navigate({ to: "/" })}>
-          ‹ Back
+    <main className={screenClass}>
+      <header className={barClass}>
+        <button type="button" className={button({ size: "md" })} onClick={() => void navigate({ to: "/" })}>
+          <ChevronLeft size={16} aria-hidden="true" /> Back
         </button>
-        <h2>Games nearby</h2>
+        <h2 className={headingClass}>Join a game</h2>
       </header>
 
-      {rooms.data.length === 0 && (
-        <p className="hint">
-          Looking for rooms on this Wi-Fi. Both devices need to be on the same
+      {state === "searching" && (
+        <p className={cx(paragraphClass, hintClass)} role="status">
+          Looking for games on this Wi-Fi. Both devices need to be on the same
           network — a phone hotspot works, and neither device needs internet.
         </p>
       )}
 
-      <ul className="rooms">
-        {rooms.data.map((room) => (
-          <li key={room.room}>
-            <button
-              type="button"
-              disabled={joining || room.locked || room.players >= room.capacity}
-              onClick={() => void enter(room.addr, room.seed)}
-            >
-              <span className="room-code">{room.room}</span>
-              <span className="room-host">{room.host}</span>
-              <span className="room-count">
-                {room.players}/{room.capacity}
-                {room.locked ? " · in progress" : ""}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {state === "found" && (
+        <ul className={css({ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2" })}>
+          {rooms.data.map((room) => (
+            <li key={room.room}>
+              <button
+                type="button"
+                className={cx(
+                  button({ size: "md" }),
+                  css({ width: "100%", display: "flex", justifyContent: "space-between", gap: "2", textAlign: "left" }),
+                )}
+                disabled={joining || room.locked || room.players >= room.capacity}
+                onClick={() => void enter(room.addr, room.seed)}
+              >
+                <span className={css({ fontWeight: 700, letterSpacing: "0.05em" })}>{room.room}</span>
+                <span className={css({ flex: 1, color: "textDim" })}>{room.host}</span>
+                <span className="room-count">
+                  {room.players}/{room.capacity}
+                  {room.locked ? " · in progress" : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <details
-        className="manual"
-        open={byAddress}
-        onToggle={(e) => setByAddress(e.currentTarget.open)}
-      >
-        <summary>Join by address</summary>
-        <p className="hint">
-          {arrival
-            ? "Read from the code you scanned. Check the room, then tap Join."
-            : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
-        </p>
-        <input
-          value={manual}
-          placeholder="192.168.1.24:5000@7QF2"
-          autoCapitalize="characters"
-          onChange={(e) => setManual(e.target.value)}
-        />
-        <button type="button" disabled={joining} onClick={enterManually}>
-          Join
-        </button>
-      </details>
+      {placement === "disclosure" && (
+        <details
+          className={manualClass}
+          open={byAddress}
+          onToggle={(e) => setByAddress(e.currentTarget.open)}
+        >
+          <summary>Join by address</summary>
+          <p className={cx(paragraphClass, hintClass)}>
+            {arrival
+              ? "Read from the code you scanned. Check the room, then tap Join."
+              : "Use this when the network blocks discovery broadcasts, or on an iPhone that has not been granted the local-network permission. The host screen shows both parts."}
+          </p>
+          {manualFields}
+        </details>
+      )}
 
-      {error && <p className="error">{error}</p>}
+      {placement === "promoted" && (
+        <>
+          <p className={cx(paragraphClass, hintClass)}>{promotedHint(state, arrival !== null)}</p>
+          <div className={manualClass}>{manualFields}</div>
+        </>
+      )}
+
+      {error && <p className={cx(paragraphClass, errorClass)}>{error}</p>}
     </main>
   )
 }

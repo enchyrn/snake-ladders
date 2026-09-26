@@ -10,6 +10,52 @@ import type { MatchState } from "@mutation/engine/types"
 import type { TimelineEvent } from "@mutation/engine/events"
 import { showRound } from "./round-playback"
 import { MineLegend } from "./HUD"
+import { RotateCcw } from "lucide-react"
+import { css, cx } from "styled-system/css"
+import { button } from "styled-system/recipes"
+
+const canvasClass = css({
+  display: "block",
+  width: "100%",
+  height: "100%",
+  // The board handles its own drag-to-look and tap-to-pick; the page must
+  // not also try to scroll or zoom underneath a finger on it.
+  touchAction: "none",
+})
+
+// Overlays that belong to the board itself: the reset-view button and the
+// minefield key. They sit inside the board's own wrapper, so they never
+// cover the roster or the control bar, and they let pointer events through
+// to the canvas everywhere but on their own controls.
+const overlayClass = css({
+  position: "absolute",
+  inset: 0,
+  zIndex: 2,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "flex-end",
+  alignItems: "flex-end",
+  gap: "2",
+  paddingRight: "gutterR",
+  paddingBottom: "0.5rem",
+  paddingLeft: "gutterL",
+  pointerEvents: "none",
+})
+
+const viewResetClass = cx(
+  button({ variant: "secondary", size: "sm" }),
+  css({
+    pointerEvents: "auto",
+    padding: "0.3em 0.75em",
+    fontSize: "0.85rem",
+    background: "rgba(8, 11, 16, 0.75)",
+    backdropFilter: "blur(6px)",
+    borderColor: "revealedEdge",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  }),
+)
 
 interface Props {
   readonly state: MatchState
@@ -52,6 +98,9 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
   settledRef.current = onSettled
   const pressRef = useRef<Press | null>(null)
   const [viewMoved, setViewMoved] = useState(false)
+  // Tile 0 is the start pad and is always revealed (board.ts), so it is
+  // excluded — this asks whether the *player* has revealed anything yet.
+  const hasRevealedTile = state.board.tiles.slice(1).some((tile) => tile.revealed)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -119,18 +168,22 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
     <>
       <canvas
         ref={canvasRef}
-        className="board-canvas"
+        className={canvasClass}
         onPointerDown={onPickTile ? handlePointerDown : undefined}
         onPointerUp={onPickTile ? handlePointerUp : undefined}
         onPointerCancel={onPickTile ? handlePointerCancel : undefined}
       />
-      <div className="board-overlay">
+      <div className={overlayClass}>
         {viewMoved && (
-          <button type="button" className="view-reset" onClick={resetView}>
-            ⟲ Reset view
+          <button type="button" className={viewResetClass} onClick={resetView}>
+            <RotateCcw size={14} aria-hidden="true" /> Reset view
           </button>
         )}
-        {onPickTile && <MineLegend />}
+        {/* Retires once a tile is revealed: the board then shows what the
+         * legend explains, so a permanent key would just be narrating the
+         * board back at the player (ADR 0020). Index 0 is the start pad and
+         * is always revealed, so it is excluded from the check. */}
+        {onPickTile && !hasRevealedTile && <MineLegend />}
       </div>
     </>
   )

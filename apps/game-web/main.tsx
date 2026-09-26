@@ -7,6 +7,7 @@ import {
   createRouter,
   Outlet,
   RouterProvider,
+  useRouterState,
 } from "@tanstack/react-router"
 import { StrictMode, lazy } from "react"
 import { createRoot } from "react-dom/client"
@@ -39,16 +40,21 @@ const QueryDevtools = import.meta.env.DEV
     )
   : () => null
 
-const rootRoute = createRootRoute({
-  component: () => (
+const Root = () => {
+  // Taking an update reloads the page, and a reload mid-match drops the match;
+  // the natural moment is between matches, so the prompt waits for one.
+  const inMatch = useRouterState({ select: (s) => s.location.pathname === "/match" })
+  return (
     <>
       <Outlet />
-      <PwaPrompt register={registerServiceWorker} />
+      <PwaPrompt register={registerServiceWorker} suppressed={inMatch} />
       <RouterDevtools />
       <QueryDevtools />
     </>
-  ),
-})
+  )
+}
+
+const rootRoute = createRootRoute({ component: Root })
 
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomeScreen })
 const joinRoute = createRoute({ getParentRoute: () => rootRoute, path: "/join", component: JoinScreen })

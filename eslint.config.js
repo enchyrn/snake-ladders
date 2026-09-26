@@ -52,7 +52,14 @@ export default [
           // so the exception is one visible line rather than a `../../../..`
           // that reaches past the rule unseen. Splitting the sequencer out of
           // the executable would retire it.
-          allow: ["@mutation/relay"],
+          // `../../../../panda.config` (packages/ui/src/__tests__/button-recipe.test.ts):
+          // the button recipe's test pins the config as actually defined, so
+          // it has to read panda.config.ts directly rather than the
+          // generated output. That file sits at the workspace root, outside
+          // every project, so the boundary rule can never resolve it to a
+          // target project — `allow` is the one thing this rule checks
+          // before that resolution even happens.
+          allow: ["@mutation/relay", "../../../../panda.config"],
           depConstraints: [
             // The reducer is the bottom of the world. It may import nothing
             // internal at all: every rule in CLAUDE.md's determinism contract

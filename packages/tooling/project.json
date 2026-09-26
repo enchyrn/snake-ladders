@@ -8,6 +8,10 @@
     "icons": { "executor": "nx:run-commands", "options": { "command": "node scripts/make-pwa-icons.mjs" } },
     "verify-ui": { "executor": "nx:run-commands", "options": { "command": "node scripts/drive-app.mjs" } },
     "verify-ui-pages": { "executor": "nx:run-commands", "options": { "command": "node scripts/drive-app.mjs --base-path /snake-ladders" } },
-    "pages-build": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p apps/game-web/tsconfig.json && PUBLIC_BASE_PATH=\"${PUBLIC_BASE_PATH:-${GITHUB_REPOSITORY#*/}}\" vite build --config apps/game-web/vite.config.ts" } }
+    "pages-build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [{ "projects": ["game-web"], "target": "panda" }],
+      "options": { "command": "tsc --noEmit -p apps/game-web/tsconfig.json && PUBLIC_BASE_PATH=\"${PUBLIC_BASE_PATH:-${GITHUB_REPOSITORY#*/}}\" vite build --config apps/game-web/vite.config.ts" }
+    }
   }
 }

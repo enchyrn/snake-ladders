@@ -6,6 +6,7 @@
   "tags": ["layer:ui"],
   "targets": {
     "lint": { "executor": "nx:run-commands", "options": { "command": "eslint packages/ui" } },
-    "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p packages/ui/tsconfig.json" } }
+    "typecheck": { "executor": "nx:run-commands", "options": { "command": "tsc --noEmit -p packages/ui/tsconfig.json" } },
+    "test": { "executor": "nx:run-commands", "dependsOn": [{ "projects": ["game-web"], "target": "panda" }], "options": { "command": "vitest run packages/ui" } }
   }
 }

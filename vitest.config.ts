@@ -4,6 +4,9 @@ import { fileURLToPath, URL } from "node:url"
 export default defineConfig({
   resolve: {
     alias: {
+      // Panda's codegen output lives at the repo root, not in node_modules;
+      // see the matching alias in apps/game-web/vite.config.ts.
+      "styled-system": fileURLToPath(new URL("./styled-system", import.meta.url)),
       "@mutation/engine": fileURLToPath(new URL("./packages/engine/src", import.meta.url)),
       "@mutation/net": fileURLToPath(new URL("./packages/net/src", import.meta.url)),
       "@mutation/render": fileURLToPath(new URL("./packages/render/src", import.meta.url)),

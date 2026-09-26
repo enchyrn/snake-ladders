@@ -1,0 +1,90 @@
+import { defineConfig } from "@pandacss/dev"
+import { colourTokens } from "./scripts/palette-tokens.mjs"
+
+export default defineConfig({
+  preflight: false, // apps/game-web/styles.css already owns the resets
+  include: ["./packages/**/src/**/*.{ts,tsx}", "./apps/game-web/**/*.{ts,tsx}"],
+  exclude: [],
+  outdir: "styled-system",
+  jsxFramework: undefined, // no styled() factory: this codebase writes plain JSX
+  // beta.17 ships no default presets — omitting this left every utility
+  // (bg, px, w, h, truncate, …) undefined, so css()/recipes emitted bare
+  // token names like `background: surface` instead of `var(--colors-surface)`.
+  // `preset-base` is the utilities/conditions layer only; `preset-panda`
+  // (the other half of what `panda init` scaffolds) is deliberately left
+  // out because its default palette and tokens would compete with the ones
+  // generated from palette.ts above.
+  presets: ["@pandacss/preset-base"],
+  theme: {
+    extend: {
+      tokens: {
+        colors: colourTokens,
+        spacing: {
+          "1": { value: "4px" }, "2": { value: "8px" }, "3": { value: "12px" },
+          "4": { value: "16px" }, "5": { value: "24px" }, "6": { value: "32px" },
+          // The side gutters every screen pads to, one per edge because the
+          // notch is on one side at a time in landscape. Use them as
+          // longhands (`paddingLeft: "gutterL"`) or as `{spacing.gutterL}`
+          // inside a string: a bare multi-token shorthand is emitted verbatim.
+          gutterL: { value: "max(16px, env(safe-area-inset-left))" },
+          gutterR: { value: "max(16px, env(safe-area-inset-right))" },
+        },
+        fontSizes: {
+          xs: { value: "12px" }, sm: { value: "13px" }, md: { value: "15px" },
+          lg: { value: "18px" }, xl: { value: "24px" }, display: { value: "32px" },
+        },
+        // `board` and `header` are BOARD_PX and HEADER_PX in
+        // packages/ui/src/layout/bands.ts; panda-tokens.test.ts pins them.
+        sizes: { tap: { value: "44px" }, board: { value: "366px" }, header: { value: "52px" } },
+      },
+      // The app is phone-first and stays so. Panda's breakpoints are
+      // min-width, so `sm` means "380px and wider" — the tight 320–380px
+      // band is the unprefixed base, not the prefixed variant.
+      breakpoints: { sm: "380px" },
+      // Replaces eight independently styled classes (.primary, .roll,
+      // .module-toggle, .card, .add-player, .remove-player, .view-reset,
+      // .seat-switch) that drifted apart — the join screen's button was
+      // small and left-aligned while home's were full-width slabs.
+      recipes: {
+        button: {
+          className: "btn",
+          base: {
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            gap: "2", borderRadius: "10px", fontFamily: "inherit", fontWeight: 600,
+            cursor: "pointer", border: "1px solid transparent",
+            // Anything the player presses gets a real target and never fights
+            // the browser's own gestures (double-tap zoom, text selection on
+            // a fast tap) — was a bare `button {}` rule in styles.css, so
+            // every button needs it, not just the ones with their own variant.
+            touchAction: "manipulation",
+            userSelect: "none",
+            "-webkit-user-select": "none",
+            _disabled: { opacity: 0.45, cursor: "default" },
+          },
+          variants: {
+            variant: {
+              // Opacity alone is not enough for a saturated fill: at 45% on a
+              // dark ground a gold button still reads as the main action
+              // while refusing to respond to a tap. A disabled primary gives
+              // up its fill and looks like what it is.
+              primary: {
+                bg: "finish", color: "void", fontWeight: 700,
+                _disabled: { bg: "surfaceRaised", borderColor: "border", color: "textDim", fontWeight: 500 },
+              },
+              secondary: { bg: "surfaceRaised", color: "text", borderColor: "border" },
+              ghost: { bg: "transparent", color: "textDim" },
+              card: { bg: "surfaceRaised", color: "text", borderColor: "border", flexDirection: "column", gap: "1" },
+              toggle: { bg: "surfaceRaised", color: "text", borderColor: "border" },
+            },
+            size: {
+              sm: { minHeight: "tap", px: "3", fontSize: "xs" },
+              md: { minHeight: "tap", px: "4", fontSize: "md" },
+              lg: { minHeight: "tap", px: "5", fontSize: "lg", height: "64px" },
+            },
+          },
+          defaultVariants: { variant: "secondary", size: "md" },
+        },
+      },
+    },
+  },
+})
