@@ -717,13 +717,14 @@ owner can make.
 
 ## Known flakes
 
-Both reproduce standalone, both pass on a second run, and neither has ever
-been traced to a change in the diff that hit it. Re-run once before treating
-either as a real failure.
+Nothing currently listed. Two entries have left, both because they were real
+bugs:
 
-- **`verify:ui` and `verify:ui:pages` can miss the narration on a cold start** —
-  `log: []` and then a 30s timeout on "nothing was narrated after rolling". It
-  is the narration timing, not the roll: the retry shows the entry present.
+- **`verify:ui`'s "nothing was narrated after rolling" was never a flake.** It
+  was the engine discarding a round's timeline — see "The roll that was never
+  narrated" under "Resuming From This Checkpoint". What made it look like
+  timing — a retry showing the entry present — was only a second run
+  drawing a different random seed.
 (The `EADDRINUSE` flake that used to live here is fixed: the relay and every
 test that starts one now bind port 0 and read back what the OS assigns, so
 `startRelay` reports the real port through a getter. Verified by running two
@@ -925,6 +926,41 @@ pass" below, as their own entries.
 `/security-review` fails at its first step in a fresh clone with
 `ambiguous argument 'origin/HEAD...'`: the clone has no `origin/HEAD`. Run
 `git remote set-head origin main` once, then invoke it again.
+
+### The roll that was never narrated — closed 2026-09-26
+
+The intermittent `verify:ui` failure ("nothing was narrated after rolling",
+2/24 and 2/5 on earlier builds, ~1 in 10 overall) was **an engine bug, not
+the transport, the fold or the UI.** A temporary trace across `send` →
+`submit` → emit → `receive` → `drain` caught a failing run in 25: the Commit
+*was* sequenced and applied (`apply | 2 | Commit | ok`) and came back with an
+empty timeline and `phase=committing`. Every candidate in the original task
+card — `canRollAtom` timing, a sequence gap in `local.ts`, a late
+subscription, an acting-seat mismatch — is ruled out by that one line.
+
+**Cause:** `settle` (`packages/engine/src/match.ts`) keeps resolving while
+nobody can act, and each `resolveRound` *replaces* `timeline` with its own
+round's events. A solo player whose roll trips a mine is stunned, so nobody
+can act, so `settle` resolves the sat-out round at once — and that silent
+round's empty timeline overwrote the roll, the blast and the stun. The player
+went back to the start with nothing in the log and nothing for the board to
+replay. The driver plays solo with a random seed; **337 of 3000 seeds** hit
+it, which is the ~11% the gate showed. The same overwrite hits any
+multi-player round in which every remaining player ends stunned.
+
+**Fix:** `settle` concatenates the timelines of the rounds it resolves
+(`timelineRound` stays the last one's, so a card played next round still
+starts a fresh timeline). Game state is otherwise identical — the same 337
+seeds still auto-advance, and now 0 of them lose the roll.
+`determinism.test.ts` passes. Pinned twice, both red without the fix: an
+engine test beside "auto-advances rather than deadlocking"
+(`rules.test.ts`, which only ever checked the phase), and a match-client
+test driving seed 9 through the real local transport. After the fix:
+**20/20 consecutive `nub run verify:ui`** on a fresh build.
+
+Not shown by any of this: that the *concatenated* timeline animates well on
+the board. The UI gate plays a random seed and cannot choose one that hits a
+mine, so watch a blast on the next device run.
 
 ### Where the work stands
 
@@ -1332,51 +1368,35 @@ reason as above.
 
 ### Open threads from the chrome-and-layout pass, in priority order
 
-None of these block plan 2. Numbered by position, same rule as the older
+None of these block plan 2. (The former first thread, the Roll that never
+resolved, is closed — see "The roll that was never narrated" above.)
+Numbered by position, same rule as the older
 "Open threads" list above this section: closing one renumbers the rest, so
 prose elsewhere names a thread rather than citing its number.
 
-1. **The intermittent `verify:ui` "nothing narrated after rolling" failure is
-   a real bug, not a known flake, and deserves its own task.** It was
-   reproduced on the *unmodified base* tree (1/4 runs) as well as on the
-   finished branch (1/6, then 2/5 and 2/24 in later probes), so this pass did
-   not introduce it. The final fix wave instrumented a failing run: the Roll
-   button is enabled, `elementFromPoint` hits it, both `pointerdown` and
-   `click` reach it — and no commit resolves anyway (position stays 0,
-   timeline stays empty, no notice). That rules out a swallowed or covered
-   click. The reporter's own hypothesis (WebGL main-thread contention) is
-   unproven. The existing "Known flakes" entry below, which predates this
-   pass and describes the same symptom more vaguely, should be superseded by
-   whatever task investigates this. A suggested-task card, "Fix Roll clicks
-   that never resolve a commit", was queued in the Claude app on 2026-09-25
-   with this evidence. Candidates it names: `canRollAtom` timing, a buffered
-   commit stuck on a sequence gap in `packages/net/src/local.ts`, a
-   subscription attached after the first frame, or an acting-seat/`playerId`
-   mismatch. It asks for a unit test at the transport or match-client level
-   that fails without the fix.
-2. **Card and seat names truncate at 320px.** Measured directly: "Anchor",
+1. **Card and seat names truncate at 320px.** Measured directly: "Anchor",
    "Reverse", "Double" and "Defuse" all clip to a few characters
    (`final-320-match-2p.png`, `final-320-match-6p.png`); "Adder"/"Viper" in the
    seat switcher truncate with the seat-colour dot shown, and fit without it.
    The final fix wave narrowed this (tighter card padding at every width, not
    only below `sm`) but did not eliminate it — there just isn't enough width
    at 320px for a 5-across flex row of full English card names.
-3. **ADR 0021's "a spacing value cannot be invented" is not enforced.** Raw
+2. **ADR 0021's "a spacing value cannot be invented" is not enforced.** Raw
    rem/px literals still appear in `match.tsx` and `HUD.tsx` (`0.6rem`, `9px`,
    `4px`, …) and `strictTokens` is off in `panda.config.ts`. Turning it on and
    fixing what breaks is real, deferred follow-up work.
-4. **The join screen's "live" indicator while searching is text only** — no
+3. **The join screen's "live" indicator while searching is text only** — no
    spinner, no animation, just the sentence saying so. Spec B asked for a live
    indicator; this is the literal minimum that satisfies "not a blank gap"
    (Task 10) without being the polished version the spec pictured.
-5. **A duplicate default player name ("Cobra" twice) showed up in a 6-seat
+4. **A duplicate default player name ("Cobra" twice) showed up in a 6-seat
    drive, and it is unconfirmed whether the app or the driver produced it.**
    The final fix wave's controller saw it in `final-390-match-6p-rolled.png`
    and flagged it rather than chasing it, since `scripts/drive-app.mjs`
    assigns names to the seats it creates and may simply have repeated one —
    check the default-name generator (wherever it lives; not audited as part of
    this pass) before assuming it's a real collision bug.
-6. **Unfixed findings from the PR #4 review (2026-09-26)**, plausible but
+5. **Unfixed findings from the PR #4 review (2026-09-26)**, plausible but
    not reproduced, roughly most-worth-doing first:
    - The join address field remounts when the placement flips from
      `promoted` to `disclosure` (`<div>` → `<details>`), so a beacon arriving
@@ -1398,7 +1418,7 @@ prose elsewhere names a thread rather than citing its number.
      scrolls in landscape. Spec B's choice; the cost is recorded here.
    - `HUD.tsx` restates the 9px row gap rather than importing `ROW_GAP_PX`.
    - `styles-layering.test.ts` carries what-comments against CLAUDE.md's rule.
-7. **Still: play a match on two real devices.** Unchanged from every prior
+6. **Still: play a match on two real devices.** Unchanged from every prior
    checkpoint — see "What the chrome-and-layout pass verified" above and "What
    is unproven" below. This pass changes what that test will show; it does not
    run it.
@@ -1408,7 +1428,8 @@ prose elsewhere names a thread rather than citing its number.
 **Re-run in full on branch `claude/snake-ladders-cross-device-3uu177` at
 `7b03da4` (2026-09-26), after the PR #4 review's fix pass** — lint, typecheck,
 test (**267 passed**, 30 files), build, `verify:ui` and `drive-app --https`
-all clean. The table below is the earlier run at `8c8ecf8`, the tip of plan 1
+all clean. **Then again after the narration fix:** 269 tests, and
+`verify:ui` 20/20 consecutive on one fresh build. The table below is the earlier run at `8c8ecf8`, the tip of plan 1
 after the final review's fix wave; only the test count has moved since:
 
 | Gate | Result |
@@ -1545,7 +1566,7 @@ git clone <repo> && cd snake-ladders
 git checkout main   # or claude/snake-ladders-cross-device-3uu177 until plan 1 is merged
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
-nub run test && nub run typecheck   # 267 tests, clean types
+nub run test && nub run typecheck   # 269 tests, clean types
 ```
 
 A Codespace and a Claude Code web session run `scripts/provision.sh`
