@@ -856,8 +856,8 @@ git commit -m "feat: the rest of MatchConfig is editable, and the host's setup i
 Last on purpose: it is the only change that touches the wire format, and the
 easiest to defer if the plan runs long.
 
-> **Controller rulings taken before execution (2026-09-27), not yet
-> implemented — apply them.** R9: Step 2's expected failure will not happen —
+> **Controller rulings taken before execution (2026-09-27), implemented in
+> `a50cd26`.** R9: Step 2's expected failure will not happen —
 > Effect 3's `Schema.Struct` ignores excess keys, so a `Join` with `colour`
 > already decodes. Keep both decode cases and add a behavioural case that
 > fails first: a `Join` with `colour` carries it onto the `Player`; one
@@ -1002,6 +1002,19 @@ git commit -m "feat: players pick a colour, carried optionally in Join"
   at both — on screen without scrolling (Task 7's baseline: 775.3 / 768.3).
 - A colour changed from the Settings overlay is saved but does not re-send
   `Join`; it applies from the next lobby. Only the lobby re-sends.
+- **Ruling R11 (taken after Task 8's implementer report, before its
+  review):** accept `playerColours`' split pass 2 — every unpicked player
+  whose seat colour is still free takes it before any displaced player takes
+  a fallback — over R10's literal single pass. It is still a pure,
+  order-deterministic function of `players`, and it stops one clash from
+  repainting three tokens. Cost if wrong: a different player gets the
+  fallback colour in a clash, presentation only.
+- **Ruling R12 (same review round):** a colour changed in the Settings
+  overlay applies from the next lobby `Join` rather than at once — the
+  overlay is reachable mid-match, where an immediate colour change is not
+  wanted, and the lobby's own picker already covers the in-room case. Cost
+  if wrong: a player expecting an immediate change in an open lobby must
+  re-pick there.
 
 ---
 
@@ -1010,20 +1023,20 @@ git commit -m "feat: players pick a colour, carried optionally in Join"
 **Files:**
 - Modify: `docs/handoff.md`, `CLAUDE.md`, both plans
 
-- [ ] **Step 1: Tick every checkbox** in this plan and add a note under any task
+- [x] **Step 1: Tick every checkbox** in this plan and add a note under any task
       where the implementation found something the plan did not anticipate.
 
-- [ ] **Step 2: Update CLAUDE.md** with the settings store's location and the
+- [x] **Step 2: Update CLAUDE.md** with the settings store's location and the
       rule that lower layers receive slices rather than importing it — that is
       the architecture decision most likely to be undone by someone who does not
       know why it is there.
 
-- [ ] **Step 3: Update the handoff** with the gate numbers, what is verified and
+- [x] **Step 3: Update the handoff** with the gate numbers, what is verified and
       what is not, and the next task. After this plan the highest-value action is
       unchanged and still hardware: play a match on two real devices, per
       `docs/android-debugging.md`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/ CLAUDE.md
@@ -1031,6 +1044,71 @@ git commit -m "docs: checkpoint the settings and input plan"
 ```
 
 ---
+
+## Final review and fix wave
+
+A final whole-branch review ran after Task 8 and before this checkpoint, per
+**Ruling R13**: run it before the docs checkpoint, following plan 1's own
+precedent, because a checkpoint written before the final fix wave would be
+stale on arrival. Cost if wrong: none — it only affects ordering.
+
+**Verdict: with fixes — 0 Critical, 2 Important, 3 Minor.** The two
+Importants: the armed "Confirm roll" label clipped 28px off the right edge of
+a 320–348px screen, and the lobby's `Start` row sat below the fold at 360×800
+with two players. Keep-awake over `--https` was **verified by the final
+reviewer** — the one item Task 6's own execution note had left unchecked.
+The determinism fuzz suite passed clean across 384 configuration
+combinations.
+
+**Ruling R14:** the fix wave also carried three items beyond the two
+Importants and the Task 7 `<h3>`-in-`<button>` minor, because each was small,
+local, and the review had already named the exact fix: the Task 6 final
+review's Minor 1 (a `quality` change rebuilding the scene mid-replay instead
+of deferring) and Minor 2 (no hint that an overlay colour pick is deferred),
+the Task 2 `setSpeed` mid-clip rescale (deferred at the time as "minor"), and
+closing the `verify:ui` gate hole that let the first Important through in the
+first place. Cost if wrong: a slightly larger fix diff than a stricter
+fix-before-merge triage would have produced.
+
+**The eight findings, fixed in five commits** (`git log --oneline
+a50cd26..be91bea`):
+
+| Commit | Findings fixed |
+|---|---|
+| `ff8d5f5` | 1, 4 — draw the armed roll label once, so "Confirm roll" fits at 320px |
+| `9878ed7` | 2, 3 — pin the lobby's `Start` row, and put the settings disclosure's button inside its `<h3>` |
+| `c82ce38` | 5, 7 — never rebuild or jump the board mid-round for a settings change |
+| `0ee42ed` | 6 — say that an overlay colour pick applies from the next game |
+| `be91bea` | 8 — `verify:ui` fails on a control clipped at either edge |
+
+A re-review of the fix diff found 1 new Important and 2 new Minor, all
+addressed in the same commits above (8/8 addressed in the fix wave).
+
+**Parked residuals, each with its ruling:**
+
+- **A focused lobby control can sit fully under the pinned `Start` row**
+  (WCAG 2.2 2.4.11, no visible focus indicator). Real and pre-merge-worthy,
+  but no second fix wave per SDD process. The fix is named and cheap —
+  `scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom))` on the
+  document scroller while the lobby is mounted, likely retiring
+  `revealAboveStartRow` — and is surfaced to the owner as the one recommended
+  pre-merge commit (see `docs/handoff.md`). Cost if wrong: a keyboard user in
+  the lobby can lose sight of focus until fixed.
+- **`lobby.tsx:564`'s `cx(headingClass, css({ margin: 0 }))` is Panda trap
+  3** (a `cx`-composed override can lose to the base recipe). Ruling:
+  cosmetic — the gap matches the other section headings visually — so it is
+  left for whoever next touches that heading rather than fixed here. Cost if
+  wrong: none visible.
+- **The gate's 320px armed-confirm pass only records `pageerror` and the
+  roll button's right edge.** Left and hidden placements were measured by
+  hand in `final-fix-report.md`, not by the gate itself. Ruling: deferred —
+  the gate closes the hole that mattered (the Important). Cost if wrong: a
+  regression in the left or hidden placement at 320px goes uncaught by
+  `verify:ui`.
+- **The update toast (`z-index: 50`, keeps pointer events) covers the pinned
+  `Start` row until dismissed.** Pre-existing, not introduced by this plan.
+  Ruling: a follow-up to lift the toast above the row on the lobby screen.
+  Cost if wrong: a player must dismiss the toast before reaching `Start`.
 
 ## What this plan does not do
 

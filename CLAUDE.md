@@ -64,7 +64,11 @@ session did exactly that and watched a change it had not built pass the gate. `-
 being served from a subdirectory, and nothing outside that prefix resolves —
 a root-absolute URL that would 404 on GitHub Pages fails here instead. The
 prefix must match the base the bundle was built with, hence the pair of
-`verify:ui:pages` commands above.
+`verify:ui:pages` commands above. It also fails on any visible control
+clipped past either viewport edge, and its final pass runs at 320px with an
+armed "Confirm roll" on screen — the settings-and-input plan's final review
+found an armed control clipped off-screen at that width with nothing in the
+gate to catch it.
 
 `--https` serves over TLS with a throwaway certificate (needs `openssl`). A
 secure origin is not cosmetic: a service worker will not register without one,
@@ -261,6 +265,33 @@ clipped the board's left and right columns off screen.
 
 `BoardCanvas` gates tap-to-flag on movement under 8px and no second pointer, or
 every drag to orbit would flag a tile.
+
+Animation speed scales and then clamps every clip through
+`effectiveDuration`, so a beat can never drop below `FLOOR_MS` (150ms) and
+become a single-frame teleport. Reduced motion removes flourish — the
+momentum arc, the mine shudder, the walk's per-step hop — and never a clip:
+every clip still runs, still for its full duration, just flatter. A `quality`
+change made while a round is animating is deferred until that replay settles,
+rather than rebuilding the scene and snapping it to the end mid-round.
+
+### Settings (`packages/app-shell/src/store/settings.ts`)
+
+Device-local settings — one player's device, never sent over the wire — live
+here, under the storage key `sl:settings`; the host's last match setup (board
+size, mine count, etc.) is a second key, `sl:last-setup`, saved separately so
+a device's control preferences and its most recent hosted match don't fight
+over one blob.
+
+**Nothing below `app-shell` imports this store.** `layer:ui` may depend only
+on `engine` and `render`, so `BoardCanvas`, `EventLog` and `HUD` each take the
+setting they need as an explicit parameter (`visible`, `quality`, `speed`, …)
+rather than reading the atom themselves. This is the architecture decision
+most likely to look like unnecessary plumbing and get "simplified" away by
+someone who imports the store directly from `ui` — don't. Two things break if
+you do: the layer-boundary lint (`@nx/enforce-module-boundaries`) starts
+failing on the new edge, and the renderer stops being a pure function of
+match state plus a replayed timeline (ADR 0007) — the whole reason a skipped
+or slowed animation can never change a result.
 
 ## Conventions
 
