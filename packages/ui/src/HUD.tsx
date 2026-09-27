@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
-import { countColour, seatColour } from "@mutation/render/palette"
+import { countColour, playerColours, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
 import * as Simul from "@mutation/engine/rules/simultaneous"
 import { css, cx } from "styled-system/css"
@@ -39,6 +39,7 @@ export const ProgressRows = ({
   // `simultaneous` nobody's turn is anyone else's, and the chosen seat is the
   // honest answer.
   const markedSeat = Simul.enabled(state.config) ? actingSeat : state.players[state.activeSeat]?.id
+  const colours = playerColours(state.players)
   return (
     <ul
       className={css({
@@ -59,6 +60,7 @@ export const ProgressRows = ({
         const isActing = player.id === markedSeat
         const isDone = player.finishedAtRound !== null
         const isAway = !player.connected
+        const colour = colours.get(player.id) ?? seatColour(player.seat)
         return (
           <li
             key={player.id}
@@ -95,7 +97,7 @@ export const ProgressRows = ({
             </span>
             <span
               className={css({ width: "14px", height: "14px", borderRadius: "50%", flex: "none" })}
-              style={{ background: seatColour(player.seat) }}
+              style={{ background: colour }}
             />
             <span
               className={css({
@@ -126,7 +128,7 @@ export const ProgressRows = ({
             >
               <span
                 className={css({ display: "block", height: "100%", borderRadius: "5px" })}
-                style={{ width: `${(player.position / top) * 100}%`, background: seatColour(player.seat) }}
+                style={{ width: `${(player.position / top) * 100}%`, background: colour }}
               />
             </span>
             {/* Module state a player has to weigh against a decision (a card's
@@ -253,13 +255,22 @@ export const CardRail = ({
 export const DiceTray = ({
   onRoll,
   disabled,
+  label,
+  showLabel = false,
 }: {
   readonly onRoll: () => void
   readonly disabled: boolean
+  /** The name when set — "Confirm roll" while a confirm is armed, which the
+   *  glyph alone cannot say. */
+  readonly label?: string
+  /** Also draw `label` beside the dice. Only for a tray standing alone: with
+   *  Roll beside it, Roll already reads "Confirm roll", and the pair's two
+   *  labels overflowed a 320px row. */
+  readonly showLabel?: boolean
 }) => (
   <button
     type="button"
-    aria-label="Roll the dice"
+    aria-label={label ?? "Roll the dice"}
     disabled={disabled}
     onClick={onRoll}
     // Grows to share the row with whatever sits beside it (`Roll`, which
@@ -271,15 +282,16 @@ export const DiceTray = ({
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
     </span>
+    {label && showLabel && <span aria-hidden>{label}</span>}
   </button>
 )
 
 /**
- * The control bar's two rows: the card rail alone, full width, then the dice
- * tray sharing a second row with whatever else can trigger a roll (`Roll`,
- * until plan 2's `rollButton: hidden` removes it) — `children`, so this stays
- * in `@mutation/ui` without reaching up for `RollButton`'s atoms, which live
- * in app-shell (the layer boundary only allows the other direction).
+ * The control bar's two rows: the card rail alone, full width, then the roll
+ * row — `children`, the whole of it. Which roll controls appear and in what
+ * order is a device setting, and settings live in app-shell, which this layer
+ * may not reach up to; so the caller composes the row (`DiceTray` plus `Roll`
+ * on the side the player chose) and this only places it.
  *
  * One row was the original shape; sharing it with the dice tray and Roll
  * crushed every card under the 44px tap minimum (~26px at phone width) and
@@ -293,24 +305,17 @@ export const ControlBar = ({
   state,
   onPlay,
   cardsDisabled,
-  onRoll,
-  rollDisabled,
   children,
 }: {
   readonly me: Player | undefined
   readonly state: MatchState
   readonly onPlay: (card: CardKind) => void
   readonly cardsDisabled: boolean
-  readonly onRoll: () => void
-  readonly rollDisabled: boolean
-  readonly children?: ReactNode
+  readonly children: ReactNode
 }) => (
   <div className={css({ display: "flex", flexDirection: "column", gap: "6px", width: "100%" })}>
     <CardRail me={me} state={state} onPlay={onPlay} disabled={cardsDisabled} />
-    <div className={css({ display: "flex", gap: "8px" })}>
-      <DiceTray onRoll={onRoll} disabled={rollDisabled} />
-      {children}
-    </div>
+    <div className={css({ display: "flex", gap: "8px" })}>{children}</div>
   </div>
 )
 

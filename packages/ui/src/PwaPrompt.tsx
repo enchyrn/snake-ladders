@@ -30,8 +30,12 @@ export interface RegisterServiceWorker {
 const toast = css({
   position: "fixed",
   // Clear of the home indicator and the rounded corners: the viewport is
-  // viewport-fit=cover, so an inset of zero here sits under both.
-  bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
+  // viewport-fit=cover, so an inset of zero here sits under both. Above a
+  // pinned bottom row too (the lobby's Start), whose height app-shell
+  // publishes as `--pinned-bottom` — a CSS variable, not an import, so the
+  // layer rule is untouched. `max`, not a sum: the row already carries the
+  // safe area in its own padding. With no row this is exactly the inset.
+  bottom: "calc(max(var(--pinned-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 0.75rem)",
   left: "max(env(safe-area-inset-left, 0px), 0.75rem)",
   right: "max(env(safe-area-inset-right, 0px), 0.75rem)",
   zIndex: 50,

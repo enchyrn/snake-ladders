@@ -95,6 +95,13 @@ export const Player = Schema.Struct({
   stunned: Schema.Int,
   finishedAtRound: Schema.NullOr(Schema.Int),
   connected: Schema.Boolean,
+  /**
+   * Presentation only: the colour this player asked to be drawn in. Nothing
+   * may ever price a rule on it — that is exactly how `venom` became core
+   * state fed by one optional module. Unvalidated here on purpose; the
+   * renderer decides what it can draw (`playerColours`), the reducer does not.
+   */
+  colour: Schema.optional(Schema.String),
 })
 export type Player = typeof Player.Type
 

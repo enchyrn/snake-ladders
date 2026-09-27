@@ -1,18 +1,23 @@
 import { useNavigate } from "@tanstack/react-router"
 import { Effect, Either } from "effect"
 import { useState } from "react"
+import { Settings } from "lucide-react"
 import { unexpected } from "@mutation/net/transport"
 import { useSession } from "../app/session"
 import { randomSeed } from "../app/hooks"
+import { SettingsPanel } from "../app/settings-panel"
 import { button } from "styled-system/recipes"
 import { css, cx } from "styled-system/css"
 import { errorClass, headingClass, paragraphClass, screenClass, textInputClass } from "@mutation/ui/layout/screen"
+
+const headerIconButton = cx(button({ variant: "ghost", size: "sm" }), css({ width: "tap", paddingInline: "0" }))
 
 export const HomeScreen = () => {
   const session = useSession()
   const navigate = useNavigate()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   /**
    * Pass-and-play and Wi-Fi hosting differ in the transport they need, not
@@ -57,85 +62,107 @@ export const HomeScreen = () => {
 
   return (
     <main className={screenClass}>
-      <header>
-        <h1
-          className={cx(
-            headingClass,
-            css({ fontSize: "1.6rem", display: "flex", flexDirection: "column", gap: "0.15em" }),
-          )}
+      {/* Inert while the settings panel is open, the same background-inert
+       * pattern match.tsx uses around its bands — the panel itself sits
+       * outside this wrapper so it stays reachable. */}
+      <div
+        className={css({ display: "flex", flexDirection: "column", gap: "4" })}
+        inert={showSettings || undefined}
+      >
+        <header
+          className={css({ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "3" })}
         >
-          Snakes &amp; Ladders
-          <span
-            className={css({
-              fontSize: "0.9rem",
-              fontWeight: 400,
-              color: "flag",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            })}
+          <div>
+            <h1
+              className={cx(
+                headingClass,
+                css({ fontSize: "1.6rem", display: "flex", flexDirection: "column", gap: "0.15em" }),
+              )}
+            >
+              Snakes &amp; Ladders
+              <span
+                className={css({
+                  fontSize: "0.9rem",
+                  fontWeight: 400,
+                  color: "flag",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                })}
+              >
+                Mutation
+              </span>
+            </h1>
+            <p className={cx(paragraphClass, css({ color: "textDim" }))}>
+              The board fights back. No internet, no accounts — just the phones in the room.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Settings"
+            className={headerIconButton}
+            onClick={() => setShowSettings(true)}
           >
-            Mutation
-          </span>
-        </h1>
-        <p className={cx(paragraphClass, css({ color: "textDim" }))}>
-          The board fights back. No internet, no accounts — just the phones in the room.
-        </p>
-      </header>
+            <Settings size={18} aria-hidden="true" />
+          </button>
+        </header>
 
-      <label className={css({ display: "flex", flexDirection: "column", gap: "0.35em" })}>
-        <span>Your name</span>
-        <input
-          className={textInputClass}
-          value={session.identity.name}
-          maxLength={14}
-          onChange={(e) => session.rename(e.target.value)}
-          placeholder="Adder"
-        />
-      </label>
+        <label className={css({ display: "flex", flexDirection: "column", gap: "0.35em" })}>
+          <span>Your name</span>
+          <input
+            className={textInputClass}
+            value={session.identity.name}
+            maxLength={14}
+            onChange={(e) => session.rename(e.target.value)}
+            placeholder="Adder"
+          />
+        </label>
 
-      <div className={css({ display: "flex", flexDirection: "column", gap: "0.6rem" })}>
-        <button
-          type="button"
-          className={button({ variant: "primary", size: "lg" })}
-          disabled={busy !== null}
-          onClick={() => void startMatch("local")}
-        >
-          {busy === "local" ? "Starting…" : "Pass and play on this device"}
-        </button>
-        <button
-          type="button"
-          className={button({ variant: "secondary", size: "md" })}
-          disabled={busy !== null || !session.canJoin}
-          onClick={() => void navigate({ to: "/join" })}
-        >
-          Join a game
-        </button>
-        <button
-          type="button"
-          // The recipe dims a disabled button as a whole, and opacity on a
-          // parent cannot be undone by a child — which took the reason below
-          // to about 1.8:1. So the button opts out and dims only its label;
-          // the reason is why it is disabled, and stays readable.
-          className={cx(
-            button({ variant: "secondary", size: "md" }),
-            css({ flexDirection: "column", gap: "1", paddingBlock: "2", _disabled: { opacity: 1 } }),
-          )}
-          disabled={hostDisabled}
-          title={!session.canHost ? "Browsers can't open the socket other devices connect to" : undefined}
-          onClick={() => void startMatch("network")}
-        >
-          <span className={hostDisabled ? css({ opacity: 0.45 }) : undefined}>
-            {busy === "network" ? "Opening…" : "Host on Wi-Fi"}
-          </span>
-          {!session.canHost && (
-            <span className={css({ fontSize: "xs", fontWeight: 400, color: "text" })}>
-              Needs the installed app — browsers can't host
+        <div className={css({ display: "flex", flexDirection: "column", gap: "0.6rem" })}>
+          <button
+            type="button"
+            className={button({ variant: "primary", size: "lg" })}
+            disabled={busy !== null}
+            onClick={() => void startMatch("local")}
+          >
+            {busy === "local" ? "Starting…" : "Pass and play on this device"}
+          </button>
+          <button
+            type="button"
+            className={button({ variant: "secondary", size: "md" })}
+            disabled={busy !== null || !session.canJoin}
+            onClick={() => void navigate({ to: "/join" })}
+          >
+            Join a game
+          </button>
+          <button
+            type="button"
+            // The recipe dims a disabled button as a whole, and opacity on a
+            // parent cannot be undone by a child — which took the reason below
+            // to about 1.8:1. So the button opts out and dims only its label;
+            // the reason is why it is disabled, and stays readable.
+            className={cx(
+              button({ variant: "secondary", size: "md" }),
+              css({ flexDirection: "column", gap: "1", paddingBlock: "2", _disabled: { opacity: 1 } }),
+            )}
+            disabled={hostDisabled}
+            title={!session.canHost ? "Browsers can't open the socket other devices connect to" : undefined}
+            onClick={() => void startMatch("network")}
+          >
+            <span className={hostDisabled ? css({ opacity: 0.45 }) : undefined}>
+              {busy === "network" ? "Opening…" : "Host on Wi-Fi"}
             </span>
-          )}
-        </button>
+            {!session.canHost && (
+              <span className={css({ fontSize: "xs", fontWeight: 400, color: "text" })}>
+                Needs the installed app — browsers can't host
+              </span>
+            )}
+          </button>
+        </div>
+
+        {error && <p className={cx(paragraphClass, errorClass)}>{error}</p>}
       </div>
 
-      {error && <p className={cx(paragraphClass, errorClass)}>{error}</p>}
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </main>
   )
 }

@@ -1,14 +1,19 @@
-import { useAtomValue } from "@effect-atom/atom-react"
+import { useAtom, useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
-import { useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronLeft, Plus, X } from "lucide-react"
+import { Fragment, useEffect, useRef, useState } from "react"
+import { ChevronDown, ChevronLeft, Minus, Plus, X } from "lucide-react"
+import { ColourPicker } from "../app/colour-picker"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
+import { reservePinnedBottom } from "../app/pinned-bottom"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
+import type { Action } from "@mutation/engine/actions"
+import type { MatchConfig } from "@mutation/engine/types"
 import { QrCode } from "@mutation/ui/QrCode"
-import { seatColour } from "@mutation/render/palette"
+import { playerColours, seatColour } from "@mutation/render/palette"
 import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "../store/atoms"
+import { loadLastSetup, saveLastSetup, saveSettings, settingsAtom } from "../store/settings"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { button } from "styled-system/recipes"
 import { css, cx } from "styled-system/css"
@@ -28,6 +33,125 @@ import {
 // `.module-toggle.is-active` rule used.
 const onColour = css({ borderColor: "seat.0", color: "seat.0" })
 
+const settingsListClass = css({ display: "flex", flexDirection: "column", gap: "2" })
+const settingRowClass = css({ display: "flex", alignItems: "center", gap: "2", minHeight: "tap" })
+const settingLabelClass = css({ flex: 1 })
+const stepperControlsClass = css({ display: "flex", alignItems: "center", gap: "1" })
+const stepperButtonClass = cx(button({ variant: "toggle", size: "md" }), css({ flex: "none", width: "tap", paddingInline: "0" }))
+const stepperValueClass = css({ minWidth: "2.5em", textAlign: "center", fontWeight: 600 })
+
+/** A -/+ pair either side of the value, rather than a segmented row of every
+ *  possible value (mineCount alone has 41) or a bare `<input type="range">`,
+ *  which reads its value to nobody unless it is also labelled. Each button is
+ *  its own 44px tap target, matching every other control on this screen. */
+const Stepper = ({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: number
+  readonly min: number
+  readonly max: number
+  readonly disabled: boolean
+  readonly onChange: (value: number) => void
+}) => (
+  <div className={settingRowClass}>
+    <span className={settingLabelClass}>{label}</span>
+    <div role="group" aria-label={label} className={stepperControlsClass}>
+      <button
+        type="button"
+        className={stepperButtonClass}
+        disabled={disabled || value <= min}
+        aria-label={`Decrease ${label}`}
+        onClick={() => onChange(Math.max(min, value - 1))}
+      >
+        <Minus size={18} aria-hidden="true" />
+      </button>
+      <span className={stepperValueClass} aria-live="polite">{value}</span>
+      <button
+        type="button"
+        className={stepperButtonClass}
+        disabled={disabled || value >= max}
+        aria-label={`Increase ${label}`}
+        onClick={() => onChange(Math.min(max, value + 1))}
+      >
+        <Plus size={18} aria-hidden="true" />
+      </button>
+    </div>
+  </div>
+)
+
+/** Same row shape as `Stepper`, for the one boolean left in `MatchConfig`. */
+const ToggleSetting = ({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: boolean
+  readonly disabled: boolean
+  readonly onChange: (value: boolean) => void
+}) => (
+  <div className={settingRowClass}>
+    <span className={settingLabelClass}>{label}</span>
+    <button
+      type="button"
+      aria-pressed={value}
+      className={cx(button({ variant: "toggle", size: "md" }), css({ flex: "none" }), value ? onColour : undefined)}
+      disabled={disabled}
+      onClick={() => onChange(!value)}
+    >
+      {value ? "On" : "Off"}
+    </button>
+  </div>
+)
+
+/**
+ * Start stays on screen at every player count. Each pass-and-play player adds
+ * a 44px row, so 2 players pushed Start to 830/800 at 360x800 and six to
+ * 1023/844 at 390x844; no compaction fits six player rows and four modules
+ * above the fold. Pinned instead, in flow rather than fixed, so the
+ * page's height still includes it and the last content scrolls clear of it.
+ * Its bottom margin cancels the screen's own bottom padding, so at the end of
+ * the page it sits flush with the viewport and carries the safe area itself.
+ * `reservePinnedBottom` reserves its height, so focus stops above it and the
+ * PWA toast (z 50) floats above it rather than over it.
+ */
+const startRowClass = css({
+  position: "sticky",
+  bottom: 0,
+  zIndex: 1,
+  marginTop: "auto",
+  marginBottom: "calc(-1 * max(16px, env(safe-area-inset-bottom)))",
+  marginLeft: "calc(-1 * {spacing.gutterL})",
+  marginRight: "calc(-1 * {spacing.gutterR})",
+  paddingTop: "3",
+  paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+  paddingLeft: "gutterL",
+  paddingRight: "gutterR",
+  background: "surface",
+  borderTop: "1px solid",
+  borderTopColor: "border",
+})
+
+/** A freshly opened colour picker can open under the pinned row, when the
+ *  pip that opened it is the last thing above it, and nothing moves focus
+ *  into it to scroll it clear. `nearest` is enough now that the document
+ *  reserves the row's height (`reservePinnedBottom`): the reserved band no
+ *  longer counts as visible. Module-level, so React calls it once as the
+ *  picker mounts rather than on every render. */
+const revealPicker = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest" })
+
+/** `""` means "By seat", which the wire says by leaving the field out: an older
+ *  build then decodes the same Join it always did. */
+const join = (playerId: string, name: string, colour: string): Action =>
+  colour === "" ? { _tag: "Join", playerId, name } : { _tag: "Join", playerId, name, colour }
+
 export const LobbyScreen = () => {
   const session = useSession()
   const navigate = useNavigate()
@@ -38,8 +162,17 @@ export const LobbyScreen = () => {
   const role = useAtomValue(roleAtom)
   const me = useAtomValue(meAtom)
   const room = useAtomValue(roomAtom)
+  const [settings, setSettings] = useAtom(settingsAtom)
+  // One picker open at a time, keyed by player id — a second open palette
+  // would be the lobby's fourth disclosure competing for the fold.
+  const [pickingFor, setPickingFor] = useState<string | null>(null)
   const [guestName, setGuestName] = useState("")
   const [expandedModules, setExpandedModules] = useState<ReadonlySet<RuleModule>>(() => new Set())
+  // Collapsed by default: with every module on (defaultConfig), four permanent
+  // rows here pushed Start below the fold at 390x844 — the same trap the
+  // module-row comment below already names. A one-line summary stays visible
+  // either way, so a peer reads the current values without expanding anything.
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
 
   // A peer only ever proposes modules and a start through the host's Configure
   // and Start; on this device's own screen a peer just watches them happen.
@@ -59,23 +192,68 @@ export const LobbyScreen = () => {
     const identities = role === "local"
       ? session.profiles
       : [{ id: session.identity.playerId, name: session.identity.name }]
+    // Only the owner's colour is remembered; a guest profile is whoever is
+    // holding the phone this time, so it starts on its seat colour.
     for (const identity of identities) {
-      client.send({ _tag: "Join", playerId: identity.id, name: identity.name })
+      const colour = identity.id === session.identity.playerId ? settings.colour : ""
+      client.send(join(identity.id, identity.name, colour))
     }
-  }, [client, navigate, role, session.identity.playerId, session.identity.name, session.profiles])
+  }, [client, navigate, role, session.identity.playerId, session.identity.name, session.profiles, settings.colour])
 
   useEffect(() => {
     if (phase !== "lobby") void navigate({ to: "/match" })
   }, [phase, navigate])
 
+  // Same one-shot shape as the Join effect above: applied once, and only
+  // once — a later Configure (a module toggle, a stepper tap) must not be
+  // clobbered by a stale lastSetup on some later re-render. `{ ...match.config,
+  // ...lastSetup }` spreads onto the *live* config, never a bare defaultConfig,
+  // so `seed` — the room code — always survives even though lastSetup omits it.
+  const appliedLastSetup = useRef(false)
+  useEffect(() => {
+    if (!client || !canHost || phase !== "lobby" || appliedLastSetup.current) return
+    appliedLastSetup.current = true
+    const lastSetup = loadLastSetup()
+    if (Object.keys(lastSetup).length === 0) return
+    client.send({ _tag: "Configure", config: { ...match.config, ...lastSetup } })
+  }, [client, canHost, phase, match.config])
+
   if (!client) return null
 
-  const toggleModule = (module: RuleModule) => {
+  // A UI gate only (Step 6 / ADR 0009): the engine's Configure case checks
+  // phase, not who sent it, so a peer that sent one would still be applied
+  // everywhere. This just keeps a peer's own screen from proposing changes
+  // nobody there expects to see take effect.
+  const setConfig = (patch: Partial<MatchConfig>) => {
     if (!canHost) return
+    client.send({ _tag: "Configure", config: { ...match.config, ...patch } })
+  }
+
+  const toggleModule = (module: RuleModule) => {
     const modules = match.config.modules.includes(module)
       ? match.config.modules.filter((m) => m !== module)
       : [...match.config.modules, module]
-    client.send({ _tag: "Configure", config: { ...match.config, modules } })
+    setConfig({ modules })
+  }
+
+  // The swatches this device may change: its own seat, or in pass-and-play
+  // every profile on it. A peer's colour is theirs to pick on their phone.
+  const owns = (playerId: string) =>
+    role === "local" ? session.profiles.some((p) => p.id === playerId) : playerId === session.identity.playerId
+
+  // A pick is a re-Join, which the reducer treats as a reconnect: same seat,
+  // same name, new colour. Sent, never applied locally — the pip changes when
+  // the log comes back, like every other action.
+  const pickColour = (playerId: string, name: string, colour: string) => {
+    client.send(join(playerId, name, colour))
+    if (playerId === session.identity.playerId) {
+      // Same shape as the settings panel's setField: next from this render's
+      // value, saved as a sibling statement rather than inside an updater.
+      const next = { ...settings, colour }
+      setSettings(next)
+      saveSettings(next)
+    }
+    setPickingFor(null)
   }
 
   const leave = () => {
@@ -107,12 +285,36 @@ export const LobbyScreen = () => {
   const joinInviteClass = css({ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" })
   const playersClass = css({ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", alignItems: "stretch", gap: "0.15rem" })
   const playerRowClass = css({ display: "flex", alignItems: "center", gap: "0.5em", padding: "0.3rem 0" })
+  // An owned row already stands a tap target tall on its pip button, so it
+  // drops the padding a text-only row needs; padding on top of 44px is what
+  // pushed Start toward the fold in pass-and-play.
+  const ownedRowClass = css({ display: "flex", alignItems: "center", gap: "0.5em", paddingBlock: "0" })
   const pipClass = css({ width: "0.7em", height: "0.7em", borderRadius: "50%", flex: "none" })
+  // The pip itself is the control, rather than a separate "Colour" button the
+  // row has no width for; the dot grows only enough to read as pressable.
+  const pipButtonClass = cx(
+    button({ variant: "ghost", size: "sm" }),
+    // Pulls the dot back to where an unowned row's pip starts.
+    css({ flex: "none", width: "tap", paddingInline: "0", marginLeft: "-13px" }),
+  )
+  const ownedPipClass = css({ width: "1.1rem", height: "1.1rem", borderRadius: "50%", flex: "none" })
+  const colours = playerColours(match.players)
   const removePlayerClass = cx(
     button({ variant: "ghost", size: "sm" }),
     css({ flex: "none", width: "tap", paddingInline: "0" }),
   )
   const addPlayerClass = css({ display: "flex", gap: "2", marginTop: "0.6rem" })
+
+  // Always visible, even collapsed — a peer (or the host, before expanding)
+  // can still read what the match is set to.
+  const settingsSummary = [
+    `${match.config.size}×${match.config.size} board`,
+    match.config.modules.includes("minesweeper") ? `${match.config.mineCount} mines` : null,
+    match.config.modules.includes("mutation") ? `breathes every ${match.config.mutationInterval}` : null,
+    match.config.exactFinish ? "exact finish" : "any finish",
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ")
 
   return (
     <main className={screenClass}>
@@ -162,31 +364,61 @@ export const LobbyScreen = () => {
       <section>
         <h3 className={headingClass}>Players</h3>
         <ul className={playersClass}>
-          {match.players.map((player) => (
-            <li key={player.id} className={playerRowClass}>
-              <span className={pipClass} style={{ background: seatColour(player.seat) }} />
-              <span className={css({ flex: 1 })}>
-                {player.name}
-                {player.id === me ? " (you)" : ""}
-              </span>
-              {!player.connected && <span className={hintClass}>away</span>}
-              {role === "local" &&
-                session.profiles.some((p) => p.id === player.id && p.kind === "guest") && (
-                  <button
-                    type="button"
-                    className={removePlayerClass}
-                    aria-label={`Remove ${player.name}`}
-                    onClick={() => {
-                      session.removeGuest(player.id)
-                      client.setSeats(client.state.seats.filter((seat) => seat !== player.id))
-                      client.send({ _tag: "Leave", playerId: player.id })
-                    }}
-                  >
-                    <X size={18} aria-hidden="true" />
-                  </button>
+          {match.players.map((player) => {
+            const colour = colours.get(player.id) ?? seatColour(player.seat)
+            const picking = pickingFor === player.id
+            return (
+              <Fragment key={player.id}>
+                <li className={owns(player.id) ? ownedRowClass : playerRowClass}>
+                  {owns(player.id) ? (
+                    <button
+                      type="button"
+                      className={pipButtonClass}
+                      aria-expanded={picking}
+                      aria-label={`Colour for ${player.name}`}
+                      onClick={() => setPickingFor(picking ? null : player.id)}
+                    >
+                      <span className={ownedPipClass} style={{ background: colour }} />
+                    </button>
+                  ) : (
+                    <span className={pipClass} style={{ background: colour }} />
+                  )}
+                  <span className={css({ flex: 1 })}>
+                    {player.name}
+                    {player.id === me ? " (you)" : ""}
+                  </span>
+                  {!player.connected && <span className={hintClass}>away</span>}
+                  {role === "local" &&
+                    session.profiles.some((p) => p.id === player.id && p.kind === "guest") && (
+                      <button
+                        type="button"
+                        className={removePlayerClass}
+                        aria-label={`Remove ${player.name}`}
+                        onClick={() => {
+                          session.removeGuest(player.id)
+                          client.setSeats(client.state.seats.filter((seat) => seat !== player.id))
+                          client.send({ _tag: "Leave", playerId: player.id })
+                        }}
+                      >
+                        <X size={18} aria-hidden="true" />
+                      </button>
+                    )}
+                </li>
+                {picking && (
+                  <li ref={revealPicker}>
+                    {/* Pressed shows what was asked for; the pip above shows
+                        what was granted, which differs only when someone
+                        earlier in the lobby already holds that colour. */}
+                    <ColourPicker
+                      label={`Colour for ${player.name}`}
+                      value={player.colour ?? ""}
+                      onChange={(hex) => pickColour(player.id, player.name, hex)}
+                    />
+                  </li>
                 )}
-            </li>
-          ))}
+              </Fragment>
+            )
+          })}
           {match.players.length === 0 && <li className={hintClass}>Waiting for players to join…</li>}
         </ul>
         {role === "local" && (
@@ -283,21 +515,103 @@ export const LobbyScreen = () => {
         </ul>
       </section>
 
-      {canHost ? (
-        <button
-          type="button"
-          className={cx(button({ variant: "primary", size: "md" }), css({ width: "100%" }))}
-          disabled={match.players.length < 1}
-          onClick={() => {
-            client.send({ _tag: "Start" })
-            client.lock()
-          }}
-        >
-          Start match
-        </button>
-      ) : (
-        <p className={cx(paragraphClass, hintClass)}>Waiting for the host to start the match…</p>
-      )}
+      <section>
+        {/* One disclosure for the whole section, not a per-row one like the
+            modules below: unlike a module's blurb, these rows are controls
+            themselves, not read-only prose — leaving them permanently open
+            is what pushed Start off screen at 390x844 in the first pass.
+            The summary paragraph carries the current values whether or not
+            this is expanded, so collapsing it costs nobody a reading. */}
+        {/* The heading holds the button, not the reverse: a heading inside
+            a button is invalid, and heading navigation skipped it. */}
+        <h3 className={headingClass}>
+          <button
+            type="button"
+            // The `ghost` variant dims its text and sets its own size for an
+            // icon-only button elsewhere; here the button is the section
+            // title, so it takes the heading's type and colour instead.
+            className={cx(
+              button({ variant: "ghost", size: "md" }),
+              css({
+                width: "100%",
+                justifyContent: "space-between",
+                paddingInline: "0",
+                color: "text",
+                fontSize: "inherit",
+                fontWeight: "inherit",
+              }),
+            )}
+            aria-expanded={settingsExpanded}
+            onClick={() => setSettingsExpanded((v) => !v)}
+          >
+            Match settings
+            <ChevronDown
+              size={18}
+              aria-hidden
+              className={css({ transition: "transform 0.15s", flex: "none" })}
+              style={{ transform: settingsExpanded ? "rotate(180deg)" : undefined }}
+            />
+          </button>
+        </h3>
+        <p className={cx(paragraphClass, hintClass)}>{settingsSummary}</p>
+        {settingsExpanded && (
+          <div className={settingsListClass}>
+            <Stepper
+              label="Board size"
+              value={match.config.size}
+              min={5}
+              max={12}
+              disabled={!canHost}
+              onChange={(size) => setConfig({ size })}
+            />
+            {match.config.modules.includes("minesweeper") && (
+              <Stepper
+                label="Mines"
+                value={match.config.mineCount}
+                min={0}
+                max={40}
+                disabled={!canHost}
+                onChange={(mineCount) => setConfig({ mineCount })}
+              />
+            )}
+            {match.config.modules.includes("mutation") && (
+              <Stepper
+                label="Board breathes every"
+                value={match.config.mutationInterval}
+                min={1}
+                max={50}
+                disabled={!canHost}
+                onChange={(mutationInterval) => setConfig({ mutationInterval })}
+              />
+            )}
+            <ToggleSetting
+              label="Exact finish"
+              value={match.config.exactFinish}
+              disabled={!canHost}
+              onChange={(exactFinish) => setConfig({ exactFinish })}
+            />
+          </div>
+        )}
+      </section>
+
+      <div ref={reservePinnedBottom} className={startRowClass}>
+        {canHost ? (
+          <button
+            type="button"
+            className={cx(button({ variant: "primary", size: "md" }), css({ width: "100%" }))}
+            disabled={match.players.length < 1}
+            onClick={() => {
+              saveLastSetup(match.config)
+              client.send({ _tag: "Start" })
+              client.lock()
+            }}
+          >
+            Start match
+          </button>
+        ) : (
+          <p className={cx(hintClass, css({ margin: 0, lineHeight: 1.4 }))}>Waiting for the host to start the match…</p>
+        )}
+      </div>
     </main>
   )
 }

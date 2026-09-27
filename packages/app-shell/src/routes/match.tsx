@@ -4,39 +4,104 @@ import { useEffect, useRef, useState } from "react"
 import { useSession } from "../app/session"
 import type { CardKind } from "@mutation/engine/types"
 import { actingSeatAtom, canRollAtom, matchAtom, ownedActableAtom, seatsAtom } from "../store/atoms"
-import type { MatchClient } from "../store/match-client"
+import { settingsAtom, type Settings as DeviceSettings } from "../store/settings"
 import { BoardCanvas } from "@mutation/ui/BoardCanvas"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
+import { hasWakeLock, vibrate } from "../app/capabilities"
 import { EventLog } from "@mutation/ui/EventLog"
-import { ControlBar, ProgressRows } from "@mutation/ui/HUD"
+import { ControlBar, DiceTray, ProgressRows } from "@mutation/ui/HUD"
 import { RoundLogSheet } from "@mutation/ui/RoundLogSheet"
-import { seatColour } from "@mutation/render/palette"
+import { SettingsPanel } from "../app/settings-panel"
+import { playerColours } from "@mutation/render/palette"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { History, Settings } from "lucide-react"
 import { gutterBandClass, headingClass, matchScreenClass } from "@mutation/ui/layout/screen"
 import { noticeBanner } from "@mutation/ui/Banners"
 
-/** Isolated so the Roll button re-renders on its own — not on every card play,
- *  every tile reveal, or the roster twitching — since `canRollAtom` is the
- *  only slice it reads. */
 const rollButtonClass = cx(
   button({ variant: "primary", size: "md" }),
   css({ flex: "none", minWidth: { base: "4.5rem", sm: "6rem" } }),
 )
 
-const RollButton = ({ client, seat }: { readonly client: MatchClient; readonly seat: string }) => {
-  const canRoll = useAtomValue(canRollAtom)
-  return (
-    <button
-      type="button"
-      className={rollButtonClass}
-      disabled={!canRoll}
-      onClick={() => client.send({ _tag: "Commit", playerId: seat })}
-    >
-      Roll
+/**
+ * The roll row. The tray is always here — it is a real button, and with Roll
+ * hidden it is the only keyboard path to Commit — and Roll joins it on the
+ * side the player chose. Both call the same `onRoll`, so a confirm armed from
+ * one is confirmed from either.
+ */
+export const RollControls = ({
+  rollButton,
+  disabled,
+  onRoll,
+  armed = false,
+}: {
+  readonly rollButton: DeviceSettings["rollButton"]
+  readonly disabled: boolean
+  readonly onRoll: () => void
+  /** A first tap under "Confirm before rolling" has been taken. */
+  readonly armed?: boolean
+}) => {
+  const tray = (
+    <DiceTray
+      onRoll={onRoll}
+      disabled={disabled}
+      label={armed ? "Confirm roll" : undefined}
+      showLabel={rollButton === "hidden"}
+    />
+  )
+  if (rollButton === "hidden") return tray
+  const roll = (
+    <button type="button" className={rollButtonClass} disabled={disabled} onClick={onRoll}>
+      {armed ? "Confirm roll" : "Roll"}
     </button>
   )
+  return rollButton === "left" ? (
+    <>
+      {roll}
+      {tray}
+    </>
+  ) : (
+    <>
+      {tray}
+      {roll}
+    </>
+  )
+}
+
+/**
+ * Holds a screen wake lock while `on`. The browser drops the lock whenever
+ * the page is hidden, so it is taken again on the way back; every failure is
+ * swallowed, since a dimming screen is a nuisance and never a failed round.
+ */
+const useKeepAwake = (on: boolean) => {
+  useEffect(() => {
+    if (!on || !hasWakeLock(navigator, globalThis.isSecureContext ?? false)) return
+    let lock: WakeLockSentinel | null = null
+    let done = false
+    const release = (sentinel: WakeLockSentinel | null) => {
+      if (sentinel && !sentinel.released) sentinel.release().catch(() => {})
+    }
+    const request = () => {
+      if (document.visibilityState !== "visible") return
+      navigator.wakeLock
+        .request("screen")
+        .then((sentinel) => {
+          // Unmounted or turned off while the request was in flight.
+          if (done) return release(sentinel)
+          release(lock)
+          lock = sentinel
+        })
+        .catch(() => {})
+    }
+    request()
+    document.addEventListener("visibilitychange", request)
+    return () => {
+      done = true
+      document.removeEventListener("visibilitychange", request)
+      release(lock)
+    }
+  }, [on])
 }
 
 const headerIconButton = cx(button({ variant: "ghost", size: "sm" }), css({ width: "tap", paddingInline: "0" }))
@@ -50,6 +115,13 @@ export const MatchScreen = () => {
   const seats = useAtomValue(seatsAtom)
   const ownedActable = useAtomValue(ownedActableAtom)
   const canRollNow = useAtomValue(canRollAtom)
+  const settings = useAtomValue(settingsAtom)
+  useKeepAwake(settings.keepAwake)
+  // The first tap under "Confirm before rolling". Local and never sent: the
+  // second tap is the only thing that reaches the log, so there is nothing to
+  // take back — confirming is the whole of it, and nothing resembles undo.
+  // Not `window.confirm`, which would stall the rAF loop mid-replay.
+  const [rollArmed, setRollArmed] = useState(false)
   // Set by pressing the defuse card; the next tile tap targets it instead of
   // toggling a flag, so a card that needs a target does not need its own
   // separate picker UI.
@@ -58,19 +130,39 @@ export const MatchScreen = () => {
   // always shows the two-line preview (ADR 0020 rule 2 never takes the live
   // region out of the tree, so the preview keeps narrating underneath).
   const [showFullLog, setShowFullLog] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const roundLogButton = useRef<HTMLButtonElement | null>(null)
-  // While the sheet is open, everything behind it is inert — except the log
-  // preview, which holds nothing focusable and is the live region.
-  const behindSheet = showFullLog || undefined
+  // While either sheet is open, everything behind it is inert — except the
+  // log preview, which holds nothing focusable and is the live region, so it
+  // is deliberately left out of `inert` rather than losing that region from
+  // the accessibility tree. Its own tap is guarded below instead: `inert`
+  // only covers the header's two buttons, not a second way to reach the same
+  // action.
+  const behindSheet = showFullLog || showSettings || undefined
+  // Guards the log preview's own tap target (Band 4), which `inert` above
+  // deliberately does not cover. Settings is drawn above it at every
+  // viewport, but the guard does not lean on that — it is explicit so the
+  // invariant survives a future z-index change.
+  const openRoundLog = () => {
+    if (showSettings) return
+    setShowFullLog(true)
+  }
 
   useEffect(() => {
     if (!client) void navigate({ to: "/" })
   }, [client, navigate])
 
+  // An arm belongs to one seat's one chance to roll: a new round or phase, a
+  // pass of the device, or turning the setting off all start over unarmed.
+  useEffect(() => {
+    setRollArmed(false)
+  }, [match.round, match.phase, actingSeat, settings.confirmRoll])
+
   if (!client) return null
 
   const actingPlayer = match.players.find((p) => p.id === actingSeat)
   const nameOf = (id: string) => match.players.find((p) => p.id === id)?.name ?? id
+  const colours = playerColours(match.players)
   const hasMines = match.config.modules.includes("minesweeper")
   const winner = match.winners[0]
 
@@ -89,6 +181,16 @@ export const MatchScreen = () => {
       return
     }
     client.send({ _tag: "Flag", playerId: actingSeat, tile })
+  }
+
+  const roll = () => {
+    if (settings.confirmRoll && !rollArmed) {
+      setRollArmed(true)
+      return
+    }
+    setRollArmed(false)
+    client.send({ _tag: "Commit", playerId: actingSeat })
+    if (settings.haptics) vibrate(navigator, 20)
   }
 
   const backHome = () => {
@@ -143,15 +245,16 @@ export const MatchScreen = () => {
             type="button"
             aria-label="Round log"
             className={headerIconButton}
-            onClick={() => setShowFullLog(true)}
+            onClick={openRoundLog}
           >
             <History size={18} aria-hidden="true" />
           </button>
-          {/* Inert rather than hidden, per ADR 0020's own precedent for a
-           * control the player cannot use yet (CardRail's unaffordable
-           * cards): `disabled` keeps it visible and legible as "not yet"
-           * instead of erasing it, and plan 2 is what wires it up. */}
-          <button type="button" aria-label="Settings" className={headerIconButton} disabled>
+          <button
+            type="button"
+            aria-label="Settings"
+            className={headerIconButton}
+            onClick={() => setShowSettings(true)}
+          >
             <Settings size={18} aria-hidden="true" />
           </button>
         </div>
@@ -170,7 +273,7 @@ export const MatchScreen = () => {
           className={cx(gutterBandClass, css({ flex: "none", display: "flex", gap: "1", paddingBottom: "2" }))}
         >
           {ownedActable.map((seat) => {
-            const player = match.players.find((p) => p.id === seat)
+            const colour = colours.get(seat)
             return (
               <button
                 key={seat}
@@ -183,7 +286,7 @@ export const MatchScreen = () => {
                 // The seat's colour as an inset underline, tying the button to
                 // its progress row: a swatch beside the name cost the width
                 // six buttons do not have.
-                style={player ? { boxShadow: `inset 0 -3px 0 ${seatColour(player.seat)}` } : undefined}
+                style={colour ? { boxShadow: `inset 0 -3px 0 ${colour}` } : undefined}
                 onClick={() => client.setActingSeat(seat)}
               >
                 <span className={css({ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" })}>
@@ -206,13 +309,22 @@ export const MatchScreen = () => {
         inert={behindSheet}
         className={css({ position: "relative", flex: "none", h: "board", w: "board", maxW: "100%", marginInline: "auto" })}
       >
-        <BoardCanvas state={match} onPickTile={hasMines ? pickTile : undefined} />
+        <BoardCanvas
+          state={match}
+          quality={settings.quality}
+          speed={settings.speed}
+          reducedMotion={settings.reducedMotion}
+          tileNumbers={settings.tileNumbers}
+          onPickTile={hasMines ? pickTile : undefined}
+        />
       </div>
 
       {/* Band 4: the log preview — the one band that flexes. It takes what
        * the fixed bands leave and is the first to give way; bands.ts is the
        * tested arithmetic that says it never has to take from the board.
-       * A tap opens the full log; the header button is the keyboard path. */}
+       * A tap opens the full log; the header button is the keyboard path.
+       * With the log turned off there is nothing to see there, so the band
+       * stops being a tap target rather than opening the log from nowhere. */}
       <div
         className={cx(
           gutterBandClass,
@@ -221,14 +333,14 @@ export const MatchScreen = () => {
             minHeight: 0,
             overflow: "hidden",
             paddingTop: "1",
-            cursor: "pointer",
             // The preview hides itself below one whole line (EventLog.tsx).
             containerType: "size",
           }),
         )}
-        onClick={() => setShowFullLog(true)}
+        style={settings.roundLog ? { cursor: "pointer" } : undefined}
+        onClick={settings.roundLog ? openRoundLog : undefined}
       >
-        <EventLog state={match} mode="preview" />
+        <EventLog state={match} mode="preview" visible={settings.roundLog} />
       </div>
 
       {match.phase === "finished" && (
@@ -294,16 +406,23 @@ export const MatchScreen = () => {
           state={match}
           onPlay={playCard}
           cardsDisabled={match.phase !== "committing"}
-          onRoll={() => client.send({ _tag: "Commit", playerId: actingSeat })}
-          rollDisabled={!canRollNow}
         >
-          <RollButton client={client} seat={actingSeat} />
+          <RollControls
+            rollButton={settings.rollButton}
+            disabled={!canRollNow}
+            armed={rollArmed}
+            onRoll={roll}
+          />
         </ControlBar>
       </div>
 
       {showFullLog && (
         <RoundLogSheet state={match} onClose={() => setShowFullLog(false)} restoreFocusTo={roundLogButton} />
       )}
+      {/* Always mounted, not `{showSettings && ...}` — it gates its own
+       * visibility on `open`, and the board it sits over must stay mounted
+       * whether or not the panel is showing. */}
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </main>
   )
 }

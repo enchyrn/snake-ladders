@@ -22,7 +22,9 @@ rather than anything here.
 
 ## Global Constraints
 
-- **Branch:** `claude/snake-ladders-cross-device-3uu177`. Never push elsewhere.
+- **Branch:** this plan ran on `claude/snake-ladders-cross-device-3uu177`, now
+  retired; new work takes its own branch per CLAUDE.md, "Branches". Push only to
+  the plan's own branch.
 - **Package manager is nub, never npm.** `nubx` replaces `npx`. Every `nub`,
   `nubx` or `cargo` call needs `export PATH="$HOME/.local/share/mise/shims:$PATH"`
   first, in the same shell invocation.

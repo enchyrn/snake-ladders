@@ -32,8 +32,9 @@ findings this plan inherits, and "Open threads" 1 and 3 for the cross-play half.
   own `cd src-tauri && cargo fmt`.
 - Commits end with the two trailers already used on this branch. **Never put a
   model identifier in a commit message, PR body, or code comment.**
-- Branch: `claude/snake-ladders-cross-device-3uu177`. Push with
-  `git push -u origin claude/snake-ladders-cross-device-3uu177`.
+- Branch: this plan ran on `claude/snake-ladders-cross-device-3uu177`, now
+  retired; new work takes its own branch per CLAUDE.md, "Branches". Push with
+  `git push -u origin HEAD`.
 - Gates before every commit: `nub run test`, `nub run typecheck`, `nub run lint`.
   Rust tasks add `cargo test -p lan-sync` and
   `cargo clippy -p lan-sync --all-targets -- -D warnings`.
@@ -854,7 +855,7 @@ Copy the actual counts into the handoff. Do not carry forward "152 tests".
 ```bash
 git add docs/handoff.md docs/playing-together.md
 git commit -m "docs: record the playable pass-and-play checkpoint"
-git push -u origin claude/snake-ladders-cross-device-3uu177
+git push -u origin HEAD
 ```
 
 - [x] **Step 5: Reconcile the pull request**
@@ -1165,7 +1166,7 @@ cargo test -p lan-sync
 ```bash
 git add -A
 git commit -m "feat: let a LAN-served browser join a native host directly"
-git push -u origin claude/snake-ladders-cross-device-3uu177
+git push -u origin HEAD
 ```
 
 - [x] **Step 5: Record honestly what is still unverified**

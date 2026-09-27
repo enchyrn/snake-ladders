@@ -151,6 +151,41 @@ export const serveDist = async ({ dist, base = "", port = 0, https = false }) =>
 }
 
 /**
+ * The controls a viewport cuts off at either side. `scrollWidth` only sees
+ * overflow that makes the page scroll, and the match screen clips its own
+ * (`overflow-x: hidden`), so an armed "Confirm roll" drawn 28px past a 320px
+ * viewport passed this gate while reading "Confirm ro". Takes plain rects so
+ * the rule is testable without a browser; half a pixel is subpixel rounding.
+ */
+export const clippedControls = (controls, viewportWidth) =>
+  controls
+    .filter((c) => c.width > 0 && (c.left < -0.5 || c.right > viewportWidth + 0.5))
+    .map((c) => `"${c.name}" spans ${Math.round(c.left)}–${Math.round(c.right)}px of a ${viewportWidth}px viewport`)
+
+/**
+ * Every problem class the gate fails on, recorded from one page. Each page the
+ * gate opens goes through this, so a second page cannot quietly listen for
+ * less than the first — the 320px pass once heard only `pageerror`. `label`
+ * says which page a problem came from once there is more than one.
+ */
+export const recordProblems = (page, problems, label = "") => {
+  const record = (problem) => problems.push(label ? `${label}: ${problem}` : problem)
+  page.on("pageerror", (e) => record(`pageerror: ${e.message}`))
+  // A console error for a failed request says nothing about which request, so
+  // report the response instead — an unactionable "404 (Not Found)" is worse
+  // than no report at all.
+  page.on("response", (r) => {
+    if (r.status() >= 400) record(`${r.status()} ${r.url()}`)
+  })
+  page.on("console", (m) => {
+    const text = m.text()
+    if (m.type() !== "error") return
+    if (/Failed to load resource/.test(text)) return // covered by the response handler
+    record(`console: ${text}`)
+  })
+}
+
+/**
  * Launch Chromium, falling back to any build already present under
  * PLAYWRIGHT_BROWSERS_PATH. Playwright insists on a browser matching its own
  * version, but a container that ships one a version or two off is still
@@ -186,6 +221,22 @@ const launchChromium = async () => {
 
 const problems = []
 
+/** Every button a player could see and reach, measured where it landed. */
+const checkControls = async (screen, page) => {
+  const { width, controls } = await page.evaluate(() => ({
+    width: innerWidth,
+    controls: [...document.querySelectorAll("button")]
+      // Behind an open sheet or hidden from the accessibility tree, a
+      // control is not one the player is being offered.
+      .filter((b) => !b.closest("[inert], [aria-hidden='true']") && getComputedStyle(b).visibility !== "hidden")
+      .map((b) => {
+        const r = b.getBoundingClientRect()
+        return { name: (b.getAttribute("aria-label") || b.textContent || "").trim(), left: r.left, right: r.right, width: r.width }
+      }),
+  }))
+  for (const clipped of clippedControls(controls, width)) problems.push(`${screen}: ${clipped}`)
+}
+
 const run = async () => {
   await mkdir(OUT, { recursive: true })
   const served = await serveDist({ dist: DIST, base: BASE, port: PORT, https: HTTPS })
@@ -211,23 +262,12 @@ const drive = async (served, browser) => {
     ignoreHTTPSErrors: HTTPS,
   })
 
-  page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`))
-  // A console error for a failed request says nothing about which request, so
-  // report the response instead — an unactionable "404 (Not Found)" is worse
-  // than no report at all.
-  page.on("response", (r) => {
-    if (r.status() >= 400) problems.push(`${r.status()} ${r.url()}`)
-  })
-  page.on("console", (m) => {
-    const text = m.text()
-    if (m.type() !== "error") return
-    if (/Failed to load resource/.test(text)) return // covered by the response handler
-    problems.push(`console: ${text}`)
-  })
+  recordProblems(page, problems)
 
-  const shot = async (name) => {
-    await page.screenshot({ path: join(OUT, `${name}.png`) })
+  const shot = async (name, on = page) => {
+    await on.screenshot({ path: join(OUT, `${name}.png`) })
     console.log(`  screenshot -> ${join(OUT, `${name}.png`)}`)
+    await checkControls(name, on)
   }
 
   // Recorded where the toast lands at the instant it is inserted: it retires
@@ -349,11 +389,55 @@ const drive = async (served, browser) => {
   }
 
   // A phone viewport must never scroll sideways.
-  const overflow = await page.evaluate(() =>
-    Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
-  )
-  if (overflow > 0) problems.push(`page overflows horizontally by ${overflow}px`)
+  const checkOverflow = async (page, label = "") => {
+    const overflow = await page.evaluate(() =>
+      Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+    )
+    if (overflow > 0) problems.push(`${label ? `${label}: ` : ""}page overflows horizontally by ${overflow}px`)
+  }
+  await checkOverflow(page)
 
+  // The widest the roll row ever gets: "Confirm before rolling" armed, at the
+  // narrowest phone the layout supports. Armed, Roll's label grows and Roll
+  // does not shrink, so this is where the row runs out first — and where it
+  // did, unseen, until this looked. Every placement, since each lays the row
+  // out differently and only "right" was ever checked here.
+  for (const rollButton of ["left", "right", "hidden"]) {
+    const where = `320px ${rollButton}`
+    const narrow = await browser.newPage({
+      viewport: { width: 320, height: 800 },
+      deviceScaleFactor: 2,
+      ignoreHTTPSErrors: HTTPS,
+    })
+    recordProblems(narrow, problems, where)
+    await narrow.addInitScript((rollButton) => {
+      // Written before the app reads it; a harness without storage just runs
+      // the default and still checks the row.
+      try {
+        localStorage.setItem("sl:settings", JSON.stringify({ confirmRoll: true, rollButton }))
+      } catch {}
+    }, rollButton)
+    await narrow.goto(entry, { waitUntil: "networkidle" })
+    await narrow.getByRole("button", { name: /pass and play/i }).click()
+    await narrow.waitForTimeout(800)
+    await narrow.getByRole("button", { name: /^start/i }).click()
+    await narrow.waitForTimeout(1500)
+    // An unknown placement repairs silently to "right", so a renamed value
+    // would have all three passes checking one layout. Prove the seed took.
+    const rollLocator = narrow.getByRole("button", { name: /^roll$/i })
+    const rollBox = (await rollLocator.count()) ? await rollLocator.boundingBox() : null
+    const trayBox = await narrow.getByRole("button", { name: /^roll the dice$/i }).boundingBox()
+    const laidOut = !rollBox ? "hidden" : trayBox && rollBox.x < trayBox.x ? "left" : "right"
+    if (laidOut !== rollButton) problems.push(`${where}: seeded rollButton "${rollButton}" but the row is laid out "${laidOut}"`)
+    // Hidden leaves the dice tray as the only roll control.
+    await narrow.getByRole("button", { name: rollButton === "hidden" ? /^roll the dice$/i : /^roll$/i }).click()
+    await narrow.waitForTimeout(300)
+    const armed = await narrow.getByRole("button", { name: /^confirm roll$/i }).count()
+    if (armed === 0) problems.push(`${where}: a first tap under Confirm before rolling armed nothing`)
+    await checkOverflow(narrow, where)
+    await shot(`6-armed-320-${rollButton}`, narrow)
+    await narrow.close()
+  }
 }
 
 // Importing this module must not drive a browser: the serving rules above are
@@ -369,5 +453,5 @@ if (!isMain) {
     for (const p of problems) console.error("  - " + p)
     process.exit(1)
   }
-  console.log("\nNo console errors, no page errors, no horizontal overflow.")
+  console.log("\nNo console errors, no page errors, no horizontal overflow, no clipped controls.")
 }

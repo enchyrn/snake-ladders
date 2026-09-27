@@ -19,8 +19,9 @@ import {
   taperedTube,
   tilePosition,
 } from "./geometry"
-import { palette, seatColour } from "./palette"
+import { palette, playerColours } from "./palette"
 import { snakeSkinTexture, woodTexture } from "./textures"
+import { effectiveDuration, rescaleElapsed, SPEEDS, type MotionLevel } from "./timing"
 
 /** One step of choreography: a duration and a function of normalised time. */
 interface Clip {
@@ -43,6 +44,8 @@ export interface SceneOptions {
   readonly quality?: "high" | "low"
   /** Fired when the camera leaves or returns to the default framing. */
   readonly onViewChange?: (isDefault: boolean) => void
+  /** The first draw's value; `setTileNumbers` changes it afterwards. */
+  readonly tileNumbers?: boolean
 }
 
 /**
@@ -61,6 +64,7 @@ export class BoardScene {
   private readonly linkGroup = new THREE.Group()
   private readonly tokenGroup = new THREE.Group()
   private readonly tokens = new Map<string, THREE.Mesh>()
+  private readonly tokenColours = new Map<string, string>()
   private readonly clips: Clip[] = []
 
   // Shared geometry and materials: one of each, however many links or tokens.
@@ -86,6 +90,12 @@ export class BoardScene {
   private readonly pickHit = new THREE.Vector3()
 
   private size: number
+  // Not structural, unlike `quality`: the settings overlay sits above a live
+  // match, so speed must be changeable without rebuilding the scene.
+  private speed: number = SPEEDS.calm
+  // Same reasoning as `speed`: a live match can have its motion setting
+  // flipped from the overlay.
+  private motion: MotionLevel = "full"
   private fitDistance = 20
   private viewIsDefault = true
   private linkSignature = ""
@@ -150,7 +160,7 @@ export class BoardScene {
 
     /* The board as an object ---------------------------------------- */
 
-    this.boardTexture = new BoardTexture(size)
+    this.boardTexture = new BoardTexture(size, { tileNumbers: options.tileNumbers })
     const face = new THREE.Mesh(
       new THREE.PlaneGeometry(size, size),
       new THREE.MeshStandardMaterial({
@@ -331,24 +341,29 @@ export class BoardScene {
 
   private syncTokens(players: ReadonlyArray<Player>, snap: boolean): void {
     const seen = new Set<string>()
+    const colours = playerColours(players)
     for (const player of players) {
       seen.add(player.id)
+      const hex = colours.get(player.id)!
       let token = this.tokens.get(player.id)
       if (!token) {
-        const colour = new THREE.Color(seatColour(player.seat))
         token = new THREE.Mesh(
           this.pawn,
-          new THREE.MeshStandardMaterial({
-            color: colour,
-            roughness: 0.32,
-            metalness: 0.08,
-            emissive: colour.clone().multiplyScalar(0.12),
-          }),
+          new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.08 }),
         )
         token.castShadow = true
         this.tokens.set(player.id, token)
         this.tokenGroup.add(token)
         token.position.copy(this.tileOf(player.position))
+      }
+      // A token outlives its colour: a re-Join may carry a new pick after the
+      // token was built (a player reconnecting mid-match with a different
+      // stored colour), and a clash can settle differently when it does.
+      if (this.tokenColours.get(player.id) !== hex) {
+        const material = token.material as THREE.MeshStandardMaterial
+        material.color.set(hex)
+        material.emissive.set(hex).multiplyScalar(0.12)
+        this.tokenColours.set(player.id, hex)
       }
       // Only snap when nothing is animating and no round is waiting to play:
       // between the two the clips own the token, and `clips` alone cannot see
@@ -362,6 +377,7 @@ export class BoardScene {
       // Geometry is shared; only the seat-coloured material belongs to it.
       ;(token.material as THREE.Material).dispose()
       this.tokens.delete(id)
+      this.tokenColours.delete(id)
     }
     this.spreadOverlaps(players, snap)
   }
@@ -393,6 +409,32 @@ export class BoardScene {
   /* ---------------------------------------------------------------- *
    * Choreography
    * ---------------------------------------------------------------- */
+
+  /** Multiplier from the speed setting; applied per-clip in `step`, not baked
+   *  into the durations `play` records, so it can change mid-animation. */
+  setSpeed(multiplier: number): void {
+    const clip = this.clips[0]
+    if (clip) this.clipElapsed = rescaleElapsed(this.clipElapsed, clip.duration, this.speed, multiplier)
+    this.speed = multiplier
+  }
+
+  /** Not structural either: the texture redraws in place, so flipping this
+   *  from the overlay mid-round leaves the scene and its clips untouched. */
+  setTileNumbers(on: boolean): void {
+    this.boardTexture.setTileNumbers(on)
+  }
+
+  /** Reduced motion changes what a clip draws, never whether it plays or how
+   *  long it takes — every clip still runs its full duration. */
+  setMotion(level: MotionLevel): void {
+    this.motion = level
+  }
+
+  /** A flourish's rise, zeroed under reduced motion. The lerp/travel it rides
+   *  on top of is untouched — only the arc drawn over it disappears. */
+  private rise(amount: number): number {
+    return this.motion === "reduced" ? 0 : amount
+  }
 
   /** Turn a resolved round into animation. Returns immediately; `onDone`
    *  fires once the whole timeline has played out. */
@@ -437,7 +479,7 @@ export class BoardScene {
               const k = easeInOutQuad(t)
               token.position.lerpVectors(from, to, k)
               // A climb rises over the rails; a bite hugs the board.
-              token.position.y = TOKEN_Y + (climbing ? Math.sin(k * Math.PI) * 0.45 : 0.05)
+              token.position.y = TOKEN_Y + (climbing ? this.rise(Math.sin(k * Math.PI) * 0.45) : 0.05)
             },
           })
           break
@@ -452,7 +494,7 @@ export class BoardScene {
             update: (t) => {
               const k = easeOutCubic(t)
               token.position.lerpVectors(from, to, k)
-              token.position.y = TOKEN_Y + Math.sin(k * Math.PI) * 0.8
+              token.position.y = TOKEN_Y + this.rise(Math.sin(k * Math.PI) * 0.8)
             },
           })
           break
@@ -466,14 +508,16 @@ export class BoardScene {
             duration: event.absorbed ? 320 : 640,
             update: (t) => {
               if (event.absorbed) {
-                // Absorbed: a shudder in place, no displacement.
+                // Absorbed: a shudder in place, no displacement. Reduced
+                // motion holds the position instead of oscillating it.
                 token.position.copy(from)
-                token.position.y = TOKEN_Y + Math.abs(Math.sin(t * Math.PI * 4)) * 0.12
+                token.position.y =
+                  TOKEN_Y + this.rise(Math.abs(Math.sin(t * Math.PI * 4)) * 0.12)
                 return
               }
               const k = easeOutCubic(t)
               token.position.lerpVectors(from, to, k)
-              token.position.y = TOKEN_Y + Math.sin(k * Math.PI) * 1.1
+              token.position.y = TOKEN_Y + this.rise(Math.sin(k * Math.PI) * 1.1)
             },
           })
           break
@@ -490,7 +534,7 @@ export class BoardScene {
               const k = easeInOutQuad(t)
               a.position.lerpVectors(aFrom, bFrom, k)
               b.position.lerpVectors(bFrom, aFrom, k)
-              const lift = Math.sin(k * Math.PI) * 0.6
+              const lift = this.rise(Math.sin(k * Math.PI) * 0.6)
               a.position.y = TOKEN_Y + lift
               b.position.y = TOKEN_Y - lift * 0.3
             },
@@ -516,7 +560,7 @@ export class BoardScene {
     const index = Math.floor(scaled)
     const local = scaled - index
     token.position.lerpVectors(path[index]!, path[index + 1]!, easeOutCubic(local))
-    token.position.y = TOKEN_Y + Math.sin(local * Math.PI) * 0.28
+    token.position.y = TOKEN_Y + this.rise(Math.sin(local * Math.PI) * 0.28)
   }
 
   get isAnimating(): boolean {
@@ -545,7 +589,7 @@ export class BoardScene {
     const clip = this.clips[0]
     if (!clip) return
     this.clipElapsed += delta
-    const t = Math.min(1, this.clipElapsed / clip.duration)
+    const t = Math.min(1, this.clipElapsed / effectiveDuration(clip.duration, this.speed))
     clip.update(t)
     if (t < 1) return
 

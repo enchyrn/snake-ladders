@@ -54,197 +54,17 @@ on is built in plan 1, Task 8.
 **Interfaces:**
 - Produces: `Settings` (the interface below), `DEFAULTS: Settings`, `loadSettings(): Settings`, `saveSettings(s: Settings): void`, `settingsAtom` (an `Atom.keepAlive` holding `Settings`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
-```ts
-// packages/app-shell/src/store/__tests__/settings.test.ts
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { DEFAULTS, loadSettings, saveSettings } from "../settings"
+- [x] **Step 2: Run it and verify it fails**
 
-const store = new Map<string, string>()
+- [x] **Step 3: Implement the store**
 
-beforeEach(() => {
-  store.clear()
-  vi.stubGlobal("localStorage", {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-  })
-})
+- [x] **Step 4: Run the test and verify it passes**
 
-describe("loadSettings", () => {
-  it("returns the defaults when nothing is stored", () => {
-    expect(loadSettings()).toEqual(DEFAULTS)
-  })
+- [x] **Step 5: Commit**
 
-  it("keeps a valid stored value", () => {
-    store.set("sl:settings", JSON.stringify({ ...DEFAULTS, speed: "quick" }))
-    expect(loadSettings().speed).toBe("quick")
-  })
-
-  // Each field falls back on its own: there is no version number, so a single
-  // corrupt field must not cost the other eight.
-  it("repairs one bad field without discarding the rest", () => {
-    store.set("sl:settings", JSON.stringify({ ...DEFAULTS, speed: "ludicrous", roundLog: false }))
-    const loaded = loadSettings()
-    expect(loaded.speed).toBe(DEFAULTS.speed)
-    expect(loaded.roundLog).toBe(false)
-  })
-
-  it("drops keys it does not know", () => {
-    store.set("sl:settings", JSON.stringify({ ...DEFAULTS, legacyThing: 1 }))
-    expect(loadSettings()).not.toHaveProperty("legacyThing")
-  })
-
-  // The loadProfiles defect, in a new place: without the write-back the same
-  // junk is re-validated on every load and a direct reader still sees it.
-  it("writes the repair back", () => {
-    store.set("sl:settings", JSON.stringify({ speed: "ludicrous" }))
-    loadSettings()
-    expect(JSON.parse(store.get("sl:settings")!)).toEqual(DEFAULTS)
-  })
-
-  it("does not churn storage when nothing needed repairing", () => {
-    const clean = JSON.stringify(DEFAULTS)
-    store.set("sl:settings", clean)
-    loadSettings()
-    expect(store.get("sl:settings")).toBe(clean)
-  })
-
-  it("degrades to defaults when storage throws", () => {
-    vi.stubGlobal("localStorage", {
-      getItem: () => { throw new Error("private browsing") },
-      setItem: () => { throw new Error("private browsing") },
-    })
-    expect(() => loadSettings()).not.toThrow()
-    expect(loadSettings()).toEqual(DEFAULTS)
-  })
-})
-
-describe("saveSettings", () => {
-  it("never throws when storage is unavailable", () => {
-    vi.stubGlobal("localStorage", {
-      getItem: () => null,
-      setItem: () => { throw new Error("quota") },
-    })
-    expect(() => saveSettings(DEFAULTS)).not.toThrow()
-  })
-})
-```
-
-- [ ] **Step 2: Run it and verify it fails**
-
-```bash
-nubx vitest run packages/app-shell/src/store/__tests__/settings.test.ts
-```
-
-Expected: FAIL — module not found.
-
-- [ ] **Step 3: Implement the store**
-
-```ts
-// packages/app-shell/src/store/settings.ts
-import { Atom } from "@effect-atom/atom"
-
-/**
- * Device-local presentation and input. Nothing here reaches the reducer, is
- * sent over the wire, or appears in MatchState, so by construction a setting
- * can never desync a match (ADR 0001). Match settings are a different thing
- * and live in the lobby: device settings are remembered, match settings are not.
- */
-const KEY = "sl:settings"
-
-export interface Settings {
-  readonly rollButton: "hidden" | "left" | "right"
-  readonly confirmRoll: boolean
-  readonly haptics: boolean
-  readonly speed: "calm" | "brisk" | "quick"
-  readonly reducedMotion: "system" | "on" | "off"
-  readonly quality: "high" | "low"
-  readonly tileNumbers: boolean
-  readonly roundLog: boolean
-  readonly keepAwake: boolean
-  /** Empty means "take the seat's colour", which is the default for everyone. */
-  readonly colour: string
-}
-
-export const DEFAULTS: Settings = {
-  rollButton: "right",
-  confirmRoll: false,
-  haptics: true,
-  speed: "calm",
-  reducedMotion: "system",
-  quality: "high",
-  tileNumbers: true,
-  roundLog: true,
-  keepAwake: true,
-  colour: "",
-}
-
-const oneOf =
-  <T extends string>(...allowed: ReadonlyArray<T>) =>
-  (v: unknown, fallback: T): T =>
-    typeof v === "string" && (allowed as ReadonlyArray<string>).includes(v) ? (v as T) : fallback
-
-const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback)
-const hex = (v: unknown, fallback: string): string =>
-  typeof v === "string" && /^(#[0-9a-f]{6})?$/i.test(v) ? v : fallback
-
-/** Every field falls back on its own. There is no version number, so a rename
- *  silently resets that one key — and owes the old key a read-once migration. */
-const validate = (raw: unknown): Settings => {
-  const o = (raw ?? {}) as Record<string, unknown>
-  return {
-    rollButton: oneOf("hidden", "left", "right")(o.rollButton, DEFAULTS.rollButton),
-    confirmRoll: bool(o.confirmRoll, DEFAULTS.confirmRoll),
-    haptics: bool(o.haptics, DEFAULTS.haptics),
-    speed: oneOf("calm", "brisk", "quick")(o.speed, DEFAULTS.speed),
-    reducedMotion: oneOf("system", "on", "off")(o.reducedMotion, DEFAULTS.reducedMotion),
-    quality: oneOf("high", "low")(o.quality, DEFAULTS.quality),
-    tileNumbers: bool(o.tileNumbers, DEFAULTS.tileNumbers),
-    roundLog: bool(o.roundLog, DEFAULTS.roundLog),
-    keepAwake: bool(o.keepAwake, DEFAULTS.keepAwake),
-    colour: hex(o.colour, DEFAULTS.colour),
-  }
-}
-
-export const saveSettings = (settings: Settings): void => {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(settings))
-  } catch {
-    // Private browsing or a full quota: the choice just will not survive a reload.
-  }
-}
-
-export const loadSettings = (): Settings => {
-  try {
-    const raw = localStorage.getItem(KEY)
-    const repaired = validate(raw === null ? {} : (JSON.parse(raw) as unknown))
-    // Write the repair back, or the same junk is re-validated on every load and
-    // anything reading the key directly still sees it — the loadProfiles fix.
-    if (raw === null || JSON.stringify(repaired) !== raw) saveSettings(repaired)
-    return repaired
-  } catch {
-    return DEFAULTS
-  }
-}
-
-export const settingsAtom = Atom.keepAlive(Atom.make(loadSettings()))
-```
-
-- [ ] **Step 4: Run the test and verify it passes**
-
-```bash
-nubx vitest run packages/app-shell/src/store/__tests__/settings.test.ts
-```
-
-Expected: PASS, all eight cases.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add packages/app-shell/src/store/settings.ts packages/app-shell/src/store/__tests__/settings.test.ts
-git commit -m "feat: the device settings store, with per-field repair written back"
-```
+**Execution note:** Controller ruling R2 applied — colour validation changed from hex regex to palette-based validation. The `hex` validator was replaced with `paletteColour`, which checks against `seatColours` from `@mutation/render/palette` case-insensitively and stores the palette's own spelling. Added two test cases: a stored colour not in the palette falls back to "", and a palette colour (e.g., `#4CC2FF`) is kept with the palette's spelling (`#4cc2ff`).
 
 ---
 
@@ -263,7 +83,7 @@ rather than watched.
 **Interfaces:**
 - Produces: `SPEEDS: Record<"calm" | "brisk" | "quick", number>`, `FLOOR_MS = 150`, `effectiveDuration(duration: number, speed: number): number`; and `Scene.setSpeed(multiplier: number): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/render/src/__tests__/timing.test.ts
@@ -317,7 +137,7 @@ describe("effectiveDuration", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/timing.test.ts
@@ -325,7 +145,7 @@ nubx vitest run packages/render/src/__tests__/timing.test.ts
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 ```ts
 // packages/render/src/timing.ts
@@ -347,7 +167,7 @@ export const effectiveDuration = (duration: number, speed: number): number =>
   Math.max(FLOOR_MS, duration / speed)
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/timing.test.ts
@@ -355,7 +175,7 @@ nubx vitest run packages/render/src/__tests__/timing.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Thread the speed through the scene**
+- [x] **Step 5: Thread the speed through the scene**
 
 In `packages/render/src/scene.ts`:
 
@@ -368,7 +188,7 @@ In `packages/render/src/scene.ts`:
   the `duration` values pushed in `play` stay as authored, so the clip table
   above remains the source of truth and a future reader sees the real numbers.
 
-- [ ] **Step 6: Typecheck, test, and build**
+- [x] **Step 6: Typecheck, test, and build**
 
 ```bash
 nub run typecheck && nub run test && nub run build
@@ -376,7 +196,7 @@ nub run typecheck && nub run test && nub run build
 
 Expected: all PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/render/src/timing.ts packages/render/src/__tests__/timing.test.ts packages/render/src/scene.ts
@@ -395,7 +215,7 @@ git commit -m "feat: animation speed with a per-clip floor derived from the fram
 **Interfaces:**
 - Produces: `motionLevel(setting: "system" | "on" | "off", systemPrefersReduced: boolean): "full" | "reduced"`, exported from `packages/render/src/timing.ts`; `Scene.setMotion(level: "full" | "reduced"): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/render/src/__tests__/motion.test.ts
@@ -417,7 +237,7 @@ describe("motionLevel", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/motion.test.ts
@@ -425,7 +245,7 @@ nubx vitest run packages/render/src/__tests__/motion.test.ts
 
 Expected: FAIL — `motionLevel` is not exported.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 Append to `packages/render/src/timing.ts`:
 
@@ -446,7 +266,7 @@ export const motionLevel = (
   setting === "system" ? (systemPrefersReduced ? "reduced" : "full") : setting === "on" ? "reduced" : "full"
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/motion.test.ts
@@ -454,7 +274,7 @@ nubx vitest run packages/render/src/__tests__/motion.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Gate the flourishes, not the clips**
+- [x] **Step 5: Gate the flourishes, not the clips**
 
 In `scene.ts`, add `private motion: MotionLevel = "full"` and
 `setMotion(level: MotionLevel): void`. Then, in `play`, when `this.motion` is
@@ -469,7 +289,19 @@ In `scene.ts`, add `private motion: MotionLevel = "full"` and
   removed from the queue. Reduced motion changes what a clip draws, never
   whether the player sees that it happened.
 
-- [ ] **Step 6: Typecheck and build**
+**Execution note:** Controller ruling R4 also applied here, since the brief's
+list of flourishes wasn't exhaustive: under reduced motion, also flatten (a)
+the non-absorbed `MineTripped` lift (`Math.sin(k * Math.PI) * 1.1` → the token
+hugs the board, the lerp stays) and (b) `walk`'s per-step hop
+(`Math.sin(local * Math.PI) * 0.28`, in the private helper `walk` just below
+`play` — the tile-to-tile travel stays, only the rise per hop drops). Both are
+the same flourish class the spec names ("momentum overshoot arc", "mine
+shudder"); durations are unchanged and no clip left the queue. Implemented as
+one `rise(amount)` helper (returns 0 when `this.motion === "reduced"`, else
+`amount`) applied at every flourish site instead of a ternary at each one, to
+keep each clip's `update` legible.
+
+- [x] **Step 6: Typecheck and build**
 
 ```bash
 nub run typecheck && nub run build
@@ -477,7 +309,7 @@ nub run typecheck && nub run build
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/render/src/timing.ts packages/render/src/__tests__/motion.test.ts packages/render/src/scene.ts
@@ -500,104 +332,15 @@ the host-served join is plain HTTP.
 **Interfaces:**
 - Produces: `hasHaptics(nav: Partial<Navigator>): boolean`, `hasWakeLock(nav: Partial<Navigator>, isSecureContext: boolean): boolean`, `vibrate(nav: Partial<Navigator>, pattern: number | ReadonlyArray<number>): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
-```ts
-// packages/app-shell/src/app/__tests__/capabilities.test.ts
-import { describe, expect, it, vi } from "vitest"
-import { hasHaptics, hasWakeLock, vibrate } from "../capabilities"
+- [x] **Step 2: Run it and verify it fails**
 
-describe("hasHaptics", () => {
-  it("is true where a backend answers", () => {
-    expect(hasHaptics({ vibrate: () => true })).toBe(true)
-  })
+- [x] **Step 3: Implement it**
 
-  // WebKit has never shipped the Vibration API, in Safari or in an installed
-  // PWA. The probe asks whether a backend exists, not which OS this is, so a
-  // Tauri plugin can become backend two without touching the settings layer.
-  it("is false where none does", () => {
-    expect(hasHaptics({})).toBe(false)
-  })
-})
+- [x] **Step 4: Run the test and verify it passes**
 
-describe("hasWakeLock", () => {
-  it("needs both the API and a secure context", () => {
-    expect(hasWakeLock({ wakeLock: {} as WakeLock }, true)).toBe(true)
-    expect(hasWakeLock({ wakeLock: {} as WakeLock }, false)).toBe(false)
-    expect(hasWakeLock({}, true)).toBe(false)
-  })
-})
-
-describe("vibrate", () => {
-  it("does nothing, and does not throw, where there is no backend", () => {
-    expect(() => vibrate({}, 20)).not.toThrow()
-  })
-
-  it("calls through where there is one", () => {
-    const spy = vi.fn(() => true)
-    vibrate({ vibrate: spy }, 20)
-    expect(spy).toHaveBeenCalledWith(20)
-  })
-
-  // Android's vibrate throws on some embedded webviews rather than returning
-  // false; a cosmetic buzz must never take the round with it.
-  it("swallows a throwing backend", () => {
-    expect(() => vibrate({ vibrate: () => { throw new Error("denied") } }, 20)).not.toThrow()
-  })
-})
-```
-
-- [ ] **Step 2: Run it and verify it fails**
-
-```bash
-nubx vitest run packages/app-shell/src/app/__tests__/capabilities.test.ts
-```
-
-Expected: FAIL — module not found.
-
-- [ ] **Step 3: Implement it**
-
-```ts
-// packages/app-shell/src/app/capabilities.ts
-/**
- * Every environment-dependent setting asks what this device can do, never what
- * platform it is. Haptics has one backend today (navigator.vibrate, absent in
- * all of WebKit) and could gain a second (a Tauri plugin, which would reach
- * only the installed iOS app ADR 0011 keeps manual) without this layer moving.
- *
- * Wake lock is [SecureContext], and the host-served join serves plain HTTP, so
- * it is absent on precisely the guest phones that scanned in. The probe is what
- * keeps the control from claiming otherwise.
- */
-export const hasHaptics = (nav: Partial<Navigator>): boolean => typeof nav.vibrate === "function"
-
-export const hasWakeLock = (nav: Partial<Navigator>, isSecureContext: boolean): boolean =>
-  isSecureContext && nav.wakeLock !== undefined
-
-export const vibrate = (nav: Partial<Navigator>, pattern: number | ReadonlyArray<number>): void => {
-  if (!hasHaptics(nav)) return
-  try {
-    nav.vibrate?.(pattern as number | number[])
-  } catch {
-    // A denied or throwing backend is a cosmetic loss, never a failed round.
-  }
-}
-```
-
-- [ ] **Step 4: Run the test and verify it passes**
-
-```bash
-nubx vitest run packages/app-shell/src/app/__tests__/capabilities.test.ts
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add packages/app-shell/src/app/capabilities.ts packages/app-shell/src/app/__tests__/capabilities.test.ts
-git commit -m "feat: capability probes for haptics and wake lock"
-```
+- [x] **Step 5: Commit**
 
 ---
 
@@ -617,7 +360,7 @@ on cleanup — discarding the clip queue of a round mid-replay.
 - Consumes: `settingsAtom`, `saveSettings` (Task 1); `hasHaptics`, `hasWakeLock` (Task 4).
 - Produces: `SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void })`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/app-shell/src/app/__tests__/settings-panel.test.tsx
@@ -645,7 +388,7 @@ describe("SettingsPanel", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
@@ -653,7 +396,7 @@ nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Build the panel**
+- [x] **Step 3: Build the panel**
 
 Four `<section>`s with `<h2>` headings — **not tabs**; four groups do not earn a
 tab bar:
@@ -672,7 +415,7 @@ still claims the capability exists.
 Every change calls `saveSettings` and updates `settingsAtom` in the same
 handler, so a reload and the live UI cannot disagree.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
@@ -680,12 +423,12 @@ nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Wire the two entry points**
+- [x] **Step 5: Wire the two entry points**
 
 The match screen's header button (built inert in plan 1, Task 9) and a settings
 button on the home screen both set the same `open` state.
 
-- [ ] **Step 6: Build, drive, and check the thing the overlay exists for**
+- [x] **Step 6: Build, drive, and check the thing the overlay exists for**
 
 ```bash
 nub run build && nub run verify:ui
@@ -696,12 +439,54 @@ Expected: PASS. Then confirm by hand or in a throwaway driver script that
 still animating behind it. That is the entire reason this is not a route, and a
 screenshot of a static panel does not show it.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/app-shell/src/app/settings-panel.tsx packages/app-shell/src/app/__tests__/settings-panel.test.tsx packages/app-shell/src/routes/match.tsx packages/app-shell/src/routes/home.tsx
 git commit -m "feat: the settings overlay, which keeps the board mounted"
 ```
+
+**Execution note:** `SettingsPanel` reads `useSession()` for the name field
+(it writes through `session.rename`, per the You group's spec), so the given
+test needed a `SessionProvider` ancestor the brief's snippet did not include.
+Per controller ruling R5, the test wraps the render call in `<SessionProvider>`
+and keeps the three assertions verbatim (`packages/app-shell/src/app/__tests__/settings-panel.test.tsx`).
+`@effect-atom/atom-react`'s `RegistryContext` already has a module-level
+default, so no extra registry wrapper was needed for `useAtom(settingsAtom)`.
+
+Boolean settings render as the lobby's existing toggle-variant button
+(label + On/Off text); the three-way settings (`rollButton`, `speed`,
+`reducedMotion`, `quality`) render as a row of toggle-variant buttons with
+`aria-pressed`, matching the seat switcher's existing convention rather than
+introducing a radio role. Colour swatches use inline `style={{ background }}`
+for the hex value (matching the seat switcher's own precedent) rather than a
+dynamic Panda token string, which Panda's static extractor cannot resolve
+(Panda trap #2). `haptics`/`keepAwake` are gated by `hasHaptics`/`hasWakeLock`
+and simply omitted, never rendered disabled, when the probe is false.
+
+Both match.tsx and home.tsx mount `<SettingsPanel open={..} onClose={..} />`
+unconditionally (never `{open && ...}`) since the component gates its own
+visibility on `open` — this is what keeps `BoardCanvas` mounted regardless of
+the panel's state. home.tsx gained the same background-`inert` pattern
+match.tsx already used for the round-log sheet, since it had no such overlay
+before.
+
+Step 6 verification: `nub run build && nub run verify:ui` passed clean (no
+console/page errors, no horizontal overflow). For the overlay's own reason to
+exist — the board must keep animating behind it — a throwaway Playwright
+script (not committed) started a pass-and-play match, rolled, and opened
+Settings immediately mid-replay. It wrapped `requestAnimationFrame` to count
+frames rather than diffing composited screenshots (the panel sits above the
+canvas in z-index, so a full-page screenshot shows only the opaque panel
+either way, not what the canvas is doing underneath). The frame counter
+advanced while the dialog was open (e.g. 27 → 29 across ~200ms), and after
+closing, `.log li` carried the round's narration (e.g. "Taipan rolled 6") —
+proving the replay was never reset or discarded. It also screenshotted the
+open panel at 390×844 and 320×800 with no horizontal overflow at either
+width; both were inspected by eye. Extending `scripts/drive-app.mjs` itself
+was considered and skipped: the gate's existing flow doesn't yet leave a
+round mid-replay at the point it would need to open Settings, and stitching
+that in read as scope this task's brief didn't ask for.
 
 ---
 
@@ -718,7 +503,7 @@ needs as an explicit parameter — which is what `BoardCanvas`'s dangling
 - Modify: `packages/app-shell/src/routes/match.tsx`
 - Create: `packages/ui/src/__tests__/event-log-hidden.test.tsx`
 
-- [ ] **Step 1: Write the failing test for the one that can silently break accessibility**
+- [x] **Step 1: Write the failing test for the one that can silently break accessibility**
 
 ```tsx
 // packages/ui/src/__tests__/event-log-hidden.test.tsx
@@ -742,7 +527,7 @@ describe("EventLog when the player has turned the log off", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
@@ -750,7 +535,7 @@ nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
 
 Expected: FAIL — `visible` is not a prop.
 
-- [ ] **Step 3: Wire each setting to its consumer**
+- [x] **Step 3: Wire each setting to its consumer**
 
 | Setting | How it arrives | What it does |
 |---|---|---|
@@ -764,7 +549,7 @@ Expected: FAIL — `visible` is not a prop.
 | `haptics` | `match.tsx` → `vibrate(navigator, 20)` on a committed roll | Via Task 4's probe. |
 | `keepAwake` | `match.tsx`, in an effect | `navigator.wakeLock.request("screen")`, released on unmount, guarded by `hasWakeLock`. |
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
@@ -772,7 +557,7 @@ nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Prove `rollButton: "hidden"` does not strand a keyboard player**
+- [x] **Step 5: Prove `rollButton: "hidden"` does not strand a keyboard player**
 
 Spec A calls this the one that catches the accessibility regression, so it is a
 test rather than a promise.
@@ -812,7 +597,7 @@ control bar's roll area from `match.tsx` into an exported
 `RollControls({ rollButton, disabled, onRoll })` that renders `DiceTray`
 always and `RollButton` per the setting. Run it again and watch it pass.
 
-- [ ] **Step 6: Prove the tile-numbers toggle actually redraws**
+- [x] **Step 6: Prove the tile-numbers toggle actually redraws**
 
 ```bash
 nub run build && nub run verify:ui
@@ -823,7 +608,7 @@ stale-texture trap is invisible in the source and obvious in a screenshot:
 **if the numbers are still there after turning them off, the invalidation is
 missing.** A passing gate proves nothing here.
 
-- [ ] **Step 7: Lint, typecheck, test**
+- [x] **Step 7: Lint, typecheck, test**
 
 ```bash
 nub run lint && nub run typecheck && nub run test
@@ -833,12 +618,58 @@ Expected: all PASS. `lint` especially — if any of `packages/ui` or
 `packages/render` acquired an import from `app-shell`, the layer rule fails and
 the architecture has quietly been abandoned.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/ui packages/render packages/app-shell/src/routes/match.tsx packages/app-shell/src/app/__tests__/roll-controls.test.tsx
 git commit -m "feat: deliver each setting to its consumer as an explicit parameter"
 ```
+
+**Execution note:** Step 2's RED only showed under `tsc`: vitest does not
+typecheck, and the preview was already always live, so the brief's assertion
+passed at runtime before `visible` existed. A second case was added (keeping
+the first verbatim) asserting the list carries the `srOnly` class when off and
+not when on; that one failed at runtime first. Off renders the `log` hook class
+plus `srOnly` alone — not `cx`'d over the panel's classes (Panda trap 3) — and
+match.tsx stops treating the empty band as a tap target, leaving the header
+button as the way to the full log.
+
+Ruling R6: importing `routes/match` in the node test environment works, so
+`RollControls` is exported from match.tsx as the brief says. `ControlBar` no
+longer renders `DiceTray` or takes `onRoll`/`rollDisabled`; the roll row is its
+`children` whole, and card-rail.test.tsx passes `DiceTray` plus a Roll child so
+its separate-rows regex and seven-button count are unchanged. No Panda class
+name contains "disabled", so `not.toContain("disabled")` stayed verbatim.
+`RollButton`'s atom-reading isolation was dropped: `RollControls` takes
+`disabled`, and `MatchScreen` already reads `canRollAtom` to render the header,
+so the isolation saved nothing.
+
+Ruling R7: `confirmRoll` is a local arm, never sent and never `window.confirm`.
+The first tap arms; the tray's name and a visible label and Roll's text become
+"Confirm roll"; the second tap sends `Commit`. The arm clears on round, phase,
+acting seat or the setting changing, and after the commit. A fifth
+roll-controls case pins the armed labels on both controls. `DiceTray` gained an
+optional `label` for this.
+
+`tileNumbers` needed `BoardTexture` to remember the last board so
+`setTileNumbers` can redraw on its own authority; `BoardScene.setTileNumbers`
+forwards it, and `SceneOptions.tileNumbers` sets the first draw. Minesweeper
+counts and flags are unaffected. `BoardCanvas` applies speed, motion and tile
+numbers in a non-structural effect, and also applies them from a ref right
+after constructing the scene, because a `quality` rebuild would otherwise
+start at the scene's defaults: the presentation effect's deps do not change
+on a rebuild. "Follow system" tracks `prefers-reduced-motion` live through a
+`change` listener and is guarded where `matchMedia` is absent.
+
+Step 6 was driven, not assumed: after `nub run build && nub run verify:ui`
+passed, a throwaway Playwright script (not committed) started a pass-and-play
+match and screenshotted the board canvas with tile numbers on, off, and on
+again. The numbers were present, then gone, then back. With `rollButton`
+hidden, zero "Roll" buttons remained; Tab reached "Roll the dice" and Enter
+committed ("Boa rolled 3"). With confirm on, the first Enter relabelled the
+tray "Confirm roll" and left the log unchanged, and the second Enter rolled.
+With the round log off, `[aria-live="polite"]` was still in the DOM (1×1px,
+still holding its line). No horizontal overflow.
 
 ---
 
@@ -856,7 +687,7 @@ the lobby edits **only** `modules` (`lobby.tsx:54`). The rest sit at whatever
 **Interfaces:**
 - Produces: `loadLastSetup(): Partial<MatchConfig>`, `saveLastSetup(config: MatchConfig): void` in `settings.ts`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/app-shell/src/store/__tests__/last-setup.test.ts
@@ -895,7 +726,7 @@ describe("the host's last match setup", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
@@ -903,13 +734,13 @@ nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
 
 Expected: FAIL — not exported.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 Add to `settings.ts` a `sl:last-setup` key holding `size`, `modules`,
 `mutationInterval`, `mineCount` and `exactFinish` — **and never `seed`**, with
 a comment saying why, because the next person to read it will be tempted.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
@@ -917,7 +748,7 @@ nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Expose the rest of MatchConfig in the lobby**
+- [x] **Step 5: Expose the rest of MatchConfig in the lobby**
 
 Beneath the module rows, add controls for board `size` (5–12), `mineCount`
 (0–40, only when minesweeper is on), `mutationInterval` (1–50, only when
@@ -928,7 +759,7 @@ mutation is on) and `exactFinish`. Each sends
 Apply `loadLastSetup()` when the host opens a room, and call `saveLastSetup` on
 `Start`.
 
-- [ ] **Step 6: Write this section as the host's screen, not an enforced permission**
+- [x] **Step 6: Write this section as the host's screen, not an enforced permission**
 
 `canHost` (`lobby.tsx:27`) is `role !== "peer"` and is a **UI gate only** —
 `Configure` has no authorship check in the engine, so a peer that sent one would
@@ -936,7 +767,7 @@ have it sequenced and applied everywhere. Under ADR 0009 that is consistent:
 trust is social. Do not add an engine check, and do not write copy claiming only
 the host can change these.
 
-- [ ] **Step 7: Build, drive, look**
+- [x] **Step 7: Build, drive, look**
 
 ```bash
 nub run build && nub run verify:ui
@@ -945,12 +776,78 @@ nub run build && nub run verify:ui
 Expected: PASS, and `screenshots/2-lobby.png` shows the new controls without
 pushing `Start` off the screen.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/app-shell/src/routes/lobby.tsx packages/app-shell/src/store/settings.ts packages/app-shell/src/store/__tests__/last-setup.test.ts
 git commit -m "feat: the rest of MatchConfig is editable, and the host's setup is remembered"
 ```
+
+**Execution note:**
+
+- **Generator safety, investigated per Step 5's instruction:** `placeMines`
+  (`packages/engine/src/board.ts`) already caps the mines it places at
+  `Math.min(count, pool.length)` — a `mineCount` too large for the chosen
+  `size` is silently truncated to however many unblocked tiles exist, never a
+  loop or a throw. `pickLinks` is bounded the same way (`claim()` returns
+  `null` and the loop breaks). So no combination of `size` × `mineCount` ×
+  `mutationInterval` breaks generation, and the lobby does not clamp
+  `mineCount` by `size` beyond the schema's own 0–40 — only the plan's stated
+  ranges (`size` 5–12, `mineCount` 0–40, `mutationInterval` 1–50) are enforced,
+  each via a `Stepper` control that clamps at its own min/max.
+- **Controller ruling R8 applied for `loadLastSetup`:** each field of
+  `sl:last-setup` is validated and clamped independently (`size` 5–12,
+  `mineCount` 0–40, `mutationInterval` 1–50, all integers; `exactFinish` a
+  boolean; `modules` filtered to known `RuleModule` values with duplicates
+  removed) — a bad or missing field is simply left out of the returned
+  `Partial<MatchConfig>` rather than repaired to a default, since the lobby
+  spreads it onto the match's *live* `config`, not onto `defaultConfig`. The
+  repair is written back to storage, mirroring `loadSettings`. `seed` is never
+  read from or written to `sl:last-setup` (see the comment beside
+  `saveLastSetup` in `settings.ts`); `saveLastSetup` builds its object field by
+  field rather than spreading `MatchConfig` and stripping `seed` after the
+  fact, so a future field added to `MatchConfig` is not remembered by accident.
+- **Controller ruling R8 applied for the lobby effect:** a `useRef`-guarded
+  effect (same one-shot shape as the existing Join effect) applies
+  `loadLastSetup()` exactly once, only when `canHost` and `phase === "lobby"`,
+  by sending `Configure` with `{ ...match.config, ...lastSetup }` — skipped
+  entirely when `loadLastSetup()` is empty. `saveLastSetup(match.config)` runs
+  on the `Start` button's click, before the `Start` action is sent.
+- **Controls, and the fold (revised after review — the first pass got this
+  wrong):** `Stepper` (size/mines/mutation interval) and `ToggleSetting` (exact
+  finish) are new, file-local components in `lobby.tsx`, styled with the
+  existing `button` recipe (`variant: "toggle"`) and the `tap` (44px) size
+  token — two labelled -/+ buttons rather than a segmented row (`mineCount`
+  alone has 41 possible values) or a bare `<input type="range">`. The first
+  pass left all four rows permanently open and reported the resulting
+  below-the-fold `Start` as "pre-existing, the lobby already scrolls" —
+  without a pre-task measurement to back that. A real one (a throwaway
+  Playwright script against a worktree of the parent commit, 8fc5e4a, not
+  committed) showed `Start` fully inside the viewport pre-task at both
+  390×844 (top 620, bottom 664) and 320×800 (top 613, bottom 657) — the
+  overflow was new, exactly as the module-row comment a few lines above this
+  section already warned ("a permanent second row per module … is what pushed
+  Start below the fold before"). Fixed by putting the whole section behind
+  one disclosure (collapsed by default, chevron + `aria-expanded`, matching
+  the module rows' own disclosure pattern) with a one-line summary
+  (`"10×10 board · 12 mines · breathes every 5 · exact finish"`) that stays
+  visible either way, so a peer or the host can read the current values
+  without expanding anything — only expanding reveals the interactive
+  `Stepper`/`ToggleSetting` rows. Re-measured after the fix: `Start` is fully
+  inside the viewport, before any scroll, at both 390×844 (top 731, bottom
+  775) and 320×800 (top 724, bottom 768) — matching the pre-task shape
+  (`document.documentElement.scrollHeight` equals the viewport height at both
+  sizes, both before and after). `nub run verify:ui` (390×844) confirms the
+  same in the committed pipeline, and I read `screenshots/2-lobby.png`
+  myself. One caught in review of my own fix: the collapsed heading initially
+  inherited the wrapping `ghost`-variant button's dimmed `color: textDim`,
+  making "Match settings" the one section title that didn't read like the
+  others — fixed with an explicit `color: "text"` on the heading.
+- **`toggleModule` refactor:** extracted a `setConfig(patch)` helper (also used
+  by the new `Stepper`/`ToggleSetting` handlers) that holds the `canHost` gate
+  in one place instead of repeating `if (!canHost) return` at each call site;
+  `toggleModule` now calls it instead of sending `Configure` directly. Behaviour
+  is unchanged.
 
 ---
 
@@ -959,6 +856,25 @@ git commit -m "feat: the rest of MatchConfig is editable, and the host's setup i
 Last on purpose: it is the only change that touches the wire format, and the
 easiest to defer if the plan runs long.
 
+> **Controller rulings taken before execution (2026-09-27), implemented in
+> `a50cd26`.** R9: Step 2's expected failure will not happen —
+> Effect 3's `Schema.Struct` ignores excess keys, so a `Join` with `colour`
+> already decodes. Keep both decode cases and add a behavioural case that
+> fails first: a `Join` with `colour` carries it onto the `Player`; one
+> without leaves it unset. R10: a stored colour nothing draws is not the
+> feature, so also (a) add a pure `playerColours(players)` to
+> `packages/render/src/palette.ts` — pass 1 in `players` order claims each
+> explicit colour that is in `seatColours` and unclaimed; pass 2 gives each
+> remaining player `seatColour(seat)` if unclaimed, else the first unclaimed
+> palette colour — and use it wherever a player's colour is drawn via
+> `seatColour(player.seat)` (scene tokens, HUD progress rows, seat switcher,
+> lobby pips); (b) the `Join` reconnect path sets `colour: action.colour`,
+> which is how a lobby pick changes; (c) the picker is offered only on
+> swatches this device owns (its own seat; every local profile in
+> pass-and-play), re-sends `Join` with the pick, and the owner's pick also
+> saves `settings.colour`. Full costs: `docs/handoff.md`, "Plan 2 paused
+> after Task 7".
+
 **Files:**
 - Modify: `packages/engine/src/types.ts`
 - Modify: `packages/engine/src/actions.ts`
@@ -966,7 +882,7 @@ easiest to defer if the plan runs long.
 - Create: `packages/engine/src/__tests__/colour.test.ts`
 - Modify: `packages/app-shell/src/routes/lobby.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/engine/src/__tests__/colour.test.ts
@@ -989,7 +905,7 @@ describe("Join with a colour", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/engine/src/__tests__/colour.test.ts
@@ -997,7 +913,7 @@ nubx vitest run packages/engine/src/__tests__/colour.test.ts
 
 Expected: FAIL — the second case is rejected as an unknown key.
 
-- [ ] **Step 3: Add the optional field**
+- [x] **Step 3: Add the optional field**
 
 In `actions.ts`, add `colour: Schema.optional(Schema.String)` to the `Join`
 struct. In `types.ts`, add `colour: Schema.optional(Schema.String)` to `Player`.
@@ -1007,7 +923,7 @@ Add a comment at `Player.colour` saying plainly that it is presentation only and
 **nothing may ever price a rule on it** — that is exactly how `venom` became
 core state fed by one optional module.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/engine/src/__tests__/colour.test.ts
@@ -1015,7 +931,7 @@ nubx vitest run packages/engine/src/__tests__/colour.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the determinism suite — this is the one that matters**
+- [x] **Step 5: Run the determinism suite — this is the one that matters**
 
 ```bash
 nubx vitest run packages/engine/src/__tests__/determinism.test.ts
@@ -1024,7 +940,7 @@ nubx vitest run packages/engine/src/__tests__/determinism.test.ts
 Expected: PASS. An inert field must not change a fold. If this goes red, the
 field is not inert and the change is wrong.
 
-- [ ] **Step 6: Add the picker**
+- [x] **Step 6: Add the picker**
 
 In the lobby, each player's swatch opens a palette. The palette is
 `seatColours`, which Task 3 of plan 1 already cleared of the reserved link-tint
@@ -1034,7 +950,7 @@ tiebreaker and the dice draw order.
 
 Wire `settings.colour` into the `Join` the lobby sends.
 
-- [ ] **Step 7: Run every gate**
+- [x] **Step 7: Run every gate**
 
 ```bash
 nub run test && nub run typecheck && nub run lint && nub run build && nub run verify:ui
@@ -1043,12 +959,62 @@ cargo test -p lan-sync
 
 Expected: all PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/engine/src packages/app-shell/src/routes/lobby.tsx
 git commit -m "feat: players pick a colour, carried optionally in Join"
 ```
+
+**Execution note:**
+
+- **R9 applied.** The plan's two decode cases went green before any change,
+  as predicted. The RED came from three added cases: a decode that must keep
+  `colour` (without the field declared, the Struct *drops* the excess key —
+  so the colour would have been lost on every frame that crossed the wire,
+  not merely unvalidated), a `Join` carrying it onto the `Player`, and a
+  re-`Join` changing it. An absent colour stays an absent key (`withColour`
+  in `match.ts`), never `colour: undefined`.
+- **Determinism suite extended**, not just run: every other fuzzed `Join`
+  now carries a colour (picked by index so the driver's RNG sequence is
+  unchanged), which puts the field through the wire round-trip case; and a
+  new case folds each random log with and without its colours and asserts
+  everything but the colours is identical — the executable form of "nothing
+  may price a rule on it".
+- **R10 applied.** `playerColours` has one refinement over the ruling's
+  wording: pass 2 is split, so every unpicked player whose seat colour is
+  still free takes it *before* any displaced player takes a fallback. The
+  single-pass reading let a displaced player earlier in the list take a
+  later player's seat colour and bump them too (one pick repainting three
+  tokens); each player's result is still exactly "seat colour if unclaimed,
+  else the first unclaimed". Picks compare case-insensitively.
+- Scene tokens build their material once, so `syncTokens` now recolours an
+  existing material when a player's resolved colour changes. The board is not
+  mounted in the lobby, so in practice that is a re-`Join` arriving
+  mid-match (a reconnect carrying a different stored colour).
+- The settings overlay's swatch row moved to `app/colour-picker.tsx` and is
+  shared with the lobby, rather than a second copy of `COLOUR_NAMES`.
+- **Lobby layout.** The owned pip is the picker's 44px toggle; an owned row
+  drops its vertical padding (the button already stands tap-tall), which
+  also shortens a guest row by the same amount. Measured on the built app,
+  default config, pass-and-play, one player: `Start` bottom 790.7 of 844 at
+  390×844 and 783.7 of 800 at 320×800, `scrollHeight` equal to the viewport
+  at both — on screen without scrolling (Task 7's baseline: 775.3 / 768.3).
+- A colour changed from the Settings overlay is saved but does not re-send
+  `Join`; it applies from the next lobby. Only the lobby re-sends.
+- **Ruling R11 (taken after Task 8's implementer report, before its
+  review):** accept `playerColours`' split pass 2 — every unpicked player
+  whose seat colour is still free takes it before any displaced player takes
+  a fallback — over R10's literal single pass. It is still a pure,
+  order-deterministic function of `players`, and it stops one clash from
+  repainting three tokens. Cost if wrong: a different player gets the
+  fallback colour in a clash, presentation only.
+- **Ruling R12 (same review round):** a colour changed in the Settings
+  overlay applies from the next lobby `Join` rather than at once — the
+  overlay is reachable mid-match, where an immediate colour change is not
+  wanted, and the lobby's own picker already covers the in-room case. Cost
+  if wrong: a player expecting an immediate change in an open lobby must
+  re-pick there.
 
 ---
 
@@ -1057,20 +1023,20 @@ git commit -m "feat: players pick a colour, carried optionally in Join"
 **Files:**
 - Modify: `docs/handoff.md`, `CLAUDE.md`, both plans
 
-- [ ] **Step 1: Tick every checkbox** in this plan and add a note under any task
+- [x] **Step 1: Tick every checkbox** in this plan and add a note under any task
       where the implementation found something the plan did not anticipate.
 
-- [ ] **Step 2: Update CLAUDE.md** with the settings store's location and the
+- [x] **Step 2: Update CLAUDE.md** with the settings store's location and the
       rule that lower layers receive slices rather than importing it — that is
       the architecture decision most likely to be undone by someone who does not
       know why it is there.
 
-- [ ] **Step 3: Update the handoff** with the gate numbers, what is verified and
+- [x] **Step 3: Update the handoff** with the gate numbers, what is verified and
       what is not, and the next task. After this plan the highest-value action is
       unchanged and still hardware: play a match on two real devices, per
       `docs/android-debugging.md`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/ CLAUDE.md
@@ -1078,6 +1044,84 @@ git commit -m "docs: checkpoint the settings and input plan"
 ```
 
 ---
+
+## Final review and fix wave
+
+A final whole-branch review ran after Task 8 and before this checkpoint, per
+**Ruling R13**: run it before the docs checkpoint, following plan 1's own
+precedent, because a checkpoint written before the final fix wave would be
+stale on arrival. Cost if wrong: none — it only affects ordering.
+
+**Verdict: with fixes — 0 Critical, 2 Important, 3 Minor.** The two
+Importants: the armed "Confirm roll" label clipped 28px off the right edge of
+a 320–348px screen, and the lobby's `Start` row sat below the fold at 360×800
+with two players. Keep-awake over `--https` was **verified by the final
+reviewer** — the one item Task 6's own execution note had left unchecked.
+The determinism fuzz suite passed clean across 384 configuration
+combinations.
+
+**Ruling R14:** the fix wave also carried three items beyond the two
+Importants and the Task 7 `<h3>`-in-`<button>` minor, because each was small,
+local, and the review had already named the exact fix: the Task 6 final
+review's Minor 1 (a `quality` change rebuilding the scene mid-replay instead
+of deferring) and Minor 2 (no hint that an overlay colour pick is deferred),
+the Task 2 `setSpeed` mid-clip rescale (deferred at the time as "minor"), and
+closing the `verify:ui` gate hole that let the first Important through in the
+first place. Cost if wrong: a slightly larger fix diff than a stricter
+fix-before-merge triage would have produced.
+
+**The eight findings, fixed in five commits** (`git log --oneline
+a50cd26..be91bea`):
+
+| Commit | Findings fixed |
+|---|---|
+| `ff8d5f5` | 1, 4 — draw the armed roll label once, so "Confirm roll" fits at 320px |
+| `9878ed7` | 2, 3 — pin the lobby's `Start` row, and put the settings disclosure's button inside its `<h3>` |
+| `c82ce38` | 5, 7 — never rebuild or jump the board mid-round for a settings change |
+| `0ee42ed` | 6 — say that an overlay colour pick applies from the next game |
+| `be91bea` | 8 — `verify:ui` fails on a control clipped at either edge |
+
+A re-review of the fix diff found 1 new Important and 2 new Minor, all
+addressed in the same commits above (8/8 addressed in the fix wave).
+
+**Parked residuals, each with its ruling — all four fixed afterwards, when
+the owner asked for them before the PR** (the rulings are kept as history;
+each ends with the commit that fixed it; details in `docs/handoff.md`, "R15
+and the parked minors, fixed"):
+
+- **A focused lobby control can sit fully under the pinned `Start` row**
+  (WCAG 2.2 2.4.11, no visible focus indicator). Real and pre-merge-worthy,
+  but no second fix wave per SDD process. The fix is named and cheap —
+  `scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom))` on the
+  document scroller while the lobby is mounted, likely retiring
+  `revealAboveStartRow` — and is surfaced to the owner as the one recommended
+  pre-merge commit (see `docs/handoff.md`). Cost if wrong: a keyboard user in
+  the lobby can lose sight of focus until fixed. **Fixed in `1824266`:** a
+  measured `--pinned-bottom` (ResizeObserver on the row) drives
+  `scroll-padding-bottom` on `<html>` while the lobby is mounted, instead of
+  the magic 72px; the 72px `scroll-margin` classes are gone and
+  `revealAboveStartRow` shrank to a plain `scrollIntoView({ block:
+  "nearest" })` (removing it outright left two pickers under the row).
+  Tab stops overlapping the row at 360×640 and 320×800: 9 before, 0 after.
+- **`lobby.tsx:564`'s `cx(headingClass, css({ margin: 0 }))` is Panda trap
+  3** (a `cx`-composed override can lose to the base recipe). Ruling:
+  cosmetic — the gap matches the other section headings visually — so it is
+  left for whoever next touches that heading rather than fixed here. Cost if
+  wrong: none visible. **Fixed in `b6dcf6d`:** the override is dropped,
+  keeping the rendered margin (identical before and after).
+- **The gate's 320px armed-confirm pass only records `pageerror` and the
+  roll button's right edge.** Left and hidden placements were measured by
+  hand in `final-fix-report.md`, not by the gate itself. Ruling: deferred —
+  the gate closes the hole that mattered (the Important). Cost if wrong: a
+  regression in the left or hidden placement at 320px goes uncaught by
+  `verify:ui`. **Fixed in `b19d9cd`:** one `recordProblems` helper for every
+  page, and the armed pass runs for left, right and hidden.
+- **The update toast (`z-index: 50`, keeps pointer events) covers the pinned
+  `Start` row until dismissed.** Pre-existing, not introduced by this plan.
+  Ruling: a follow-up to lift the toast above the row on the lobby screen.
+  Cost if wrong: a player must dismiss the toast before reaching `Start`.
+  **Fixed in `a0117d4`:** the toast's `bottom` reads `--pinned-bottom`, so on
+  the lobby it floats above the row; screens without one are unchanged.
 
 ## What this plan does not do
 

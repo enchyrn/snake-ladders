@@ -47,8 +47,9 @@ this plan is their remediation.
   `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` and
   `Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy`.
   Never name a model in any pushed artifact.
-- Branch is `claude/snake-ladders-cross-device-3uu177`. Push there and nowhere
-  else. Do not open a pull request.
+- Branch: this plan ran on `claude/snake-ladders-cross-device-3uu177`, now
+  retired; new work takes its own branch per CLAUDE.md, "Branches". Push only to
+  the plan's branch. Do not open a pull request.
 - Every `nub`/`nubx`/`cargo` invocation in this container needs
   `export PATH="$HOME/.local/share/mise/shims:$PATH"` first.
 
@@ -1036,7 +1037,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Ab5eq33UdVVMWEjmMEgVUy
 EOF
 )"
-git push -u origin claude/snake-ladders-cross-device-3uu177
+git push -u origin HEAD
 ```
 
 ---

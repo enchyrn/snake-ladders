@@ -82,12 +82,20 @@ const previewClass = css({
  *  the newest thing the player has to read. */
 const fadeClass = css({ maskImage: "linear-gradient(to bottom, rgba(0, 0, 0, 0.35), black 50%)" })
 
+/** The player's "round log off". Used alone rather than `cx`'d over the
+ *  panel's classes, whose padding and display would otherwise race it on
+ *  stylesheet order. */
+const hiddenClass = css({ srOnly: true })
+
 export const EventLog = ({
   state,
   mode = "full",
+  visible = true,
 }: {
   readonly state: MatchState
   readonly mode?: "preview" | "full"
+  /** Off means visually hidden, never unmounted: this is the live region. */
+  readonly visible?: boolean
 }) => {
   const nameOf = (id: string) => state.players.find((p) => p.id === id)?.name ?? id
   const lines = state.timeline
@@ -107,13 +115,21 @@ export const EventLog = ({
   // padding, radius, font-size) is the Panda classes right beside it.
   return (
     <ul
-      className={cx("log", listClass, preview && previewClass, preview && lines.length > 1 && fadeClass)}
-      style={{
-        paddingBlock: `${LIST_PAD_PX / 2}px`,
-        // Two lines, or less if the band has given its room away (the log is
-        // the first band to shrink on a short screen).
-        maxHeight: preview ? `min(${2 * LOG_LINE_PX + LIST_PAD_PX}px, 100%)` : undefined,
-      }}
+      className={
+        visible
+          ? cx("log", listClass, preview && previewClass, preview && lines.length > 1 && fadeClass)
+          : cx("log", hiddenClass)
+      }
+      style={
+        visible
+          ? {
+              paddingBlock: `${LIST_PAD_PX / 2}px`,
+              // Two lines, or less if the band has given its room away (the log is
+              // the first band to shrink on a short screen).
+              maxHeight: preview ? `min(${2 * LOG_LINE_PX + LIST_PAD_PX}px, 100%)` : undefined,
+            }
+          : undefined
+      }
       aria-live={preview ? "polite" : undefined}
     >
       {lines.map((line, i) => (

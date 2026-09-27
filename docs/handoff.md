@@ -5,16 +5,21 @@ pick it up without re-deriving anything. Start at **"Resuming From This
 Checkpoint"** near the end; everything before it is the history that led
 there.
 
-**Correction, 2026-09-25: `claude/snake-ladders-cross-device-3uu177` is
-active again, and the paragraph below is out of date.** It described the name
-as abandoned as of 2026-09-16, when everything it carried had been folded into
-`main`. Since then the harness has mandated doing new work on a branch of
-that same name rather than directly on `main` (see "Resuming From This
-Checkpoint" → "Where the work stands"), so the name was reused for the
-chrome-and-layout plan. That branch is **not** the one described as abandoned
-below and is **not yet merged into `main`** — do not assume `main` is
-current, and do not read the sentence below as still true of the branch that
-now exists under this name.
+**Branches, as of 2026-09-27: `claude/snake-ladders-cross-device-3uu177` is
+retired.** Each plan now gets its own branch named for the work
+(`claude/<plan-slug>`), cut from `main`, per CLAUDE.md's "Branches"; plan 2
+shipped from `claude/settings-and-input`. The two paragraphs below record how
+the old name was used before that.
+
+**Correction, 2026-09-26 (superseded by the note above):
+`claude/snake-ladders-cross-device-3uu177` is the harness's working branch,
+and the paragraph below is out of date.** It
+described the name as abandoned as of 2026-09-16. The harness has since
+mandated doing new work on a branch of that name rather than directly on
+`main`, so it carried the chrome-and-layout plan, which merged as PR #4
+(`58a8739`, 2026-09-26). The branch was then fast-forwarded to that merge,
+so it starts each new piece of work level with `main`; each piece reaches
+`main` through its own PR.
 
 `claude/snake-ladders-cross-device-3uu177`, which earlier revisions of this
 file described, is abandoned and fully absorbed into `main`. *(Historical —
@@ -887,11 +892,216 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
+### Plan 2 complete, shipped as its own PR (2026-09-27)
+
+**Plan 2 (`docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`) is
+done: all 9 tasks, a final whole-branch review, one fix wave, and — after the
+owner asked for them before the PR — R15 and the three parked minors, fixed
+in `1824266`..`b19d9cd`.** It was built on
+`claude/snake-ladders-cross-device-3uu177` and ships from
+`claude/settings-and-input`, the same commits under a name that says what they
+are — the old branch is retired (CLAUDE.md, "Branches"). The owner asked for
+the PR and for it to be merged once its review and CI are green. Its ledger lived in the gitignored
+`.superpowers/sdd/2026-09-17-settings-and-input-plan/`, which does **not**
+survive a fresh container; everything durable in it is here and in the plan's
+per-task execution notes. Everything below this subsection describes the
+state *before* plan 2 started and is still accurate about plan 1 and the
+older threads.
+
+| Task | Commits | Review |
+|---|---|---|
+| 1 settings store | `7bf9a35` | clean |
+| 4 capability probes (batched with 1) | `511d184` | clean |
+| 2 speed + floor | `fdfffe6` | clean |
+| 3 reduced motion (batched with 2) | `dcd32b2` | clean |
+| 5 settings overlay | `4a00b70`, fix `de6225e` | 1 Important fixed: a log-preview tap opened the round-log sheet under open Settings |
+| 6 settings to consumers | `8fc5e4a` | clean |
+| 7 lobby MatchConfig + last setup | `cfc9b90`, fix `f9301fe` | 1 Important fixed: the new rows pushed Start below the fold at 390×844; now behind a disclosure, measured before/after |
+| 8 seat colour | `07aa6b1`..`a50cd26` | clean |
+| 9 this checkpoint | (this commit) | docs only, no code review |
+| **Final whole-branch review** (at `a50cd26`) | fix wave `ff8d5f5`, `9878ed7`, `c82ce38`, `0ee42ed`, `be91bea` | With fixes — 0 Critical, 2 Important, 3 Minor; re-review of the fix diff found 1 new Important + 2 new Minor, 8/8 addressed in the same wave |
+| **Owner-requested follow-ups** (R15 + the three parked minors) | `1824266` R15, `b6dcf6d` heading margin, `a0117d4` update toast, `b19d9cd` 320px gate | fixed after the owner asked; see "R15 and the parked minors, fixed" below |
+
+**The full rulings list, R1–R15 in order, each with its cost if wrong:**
+
+- R1 — Tasks 1+4 and 2+3 were each dispatched and reviewed as one unit, one
+  commit per task. Cost: a finding may need attributing across two tasks.
+- R2 — `Settings.colour` validates to `""` or a member of `seatColours`, not
+  any hex (spec: "one of a fixed palette" excluding the link band). Cost: a
+  stored non-palette colour resets to seat colour.
+- R3 — the store exposes only `settingsAtom`, no per-slice atoms. Cost: extra
+  re-renders on a settings change.
+- R4 — reduced motion also flattens the non-absorbed mine lift and the walk's
+  per-step hop. Cost: slightly flatter reduced motion.
+- R5 — the panel test wraps `SettingsPanel` in `SessionProvider`. Cost: none.
+- R6 — `ControlBar` takes the whole roll row as children; `RollControls` is
+  exported from `routes/match`. Cost: small API churn in `@mutation/ui`.
+- R7 — `confirmRoll` is an in-app two-step ("Confirm roll"), never
+  `window.confirm`, never undo. Cost: UX detail.
+- R8 — `loadLastSetup` clamps each field and never touches `seed`; the lobby
+  applies it once on mount via `Configure { ...match.config, ...lastSetup }`.
+  Cost: a host's saved setup is ignored.
+- R9 — the plan's red step could not go red: Effect 3's `Schema.Struct`
+  ignores excess keys by default, so a `Join` carrying `colour` already
+  decodes. Kept the plan's two decode cases and added a behavioural one that
+  fails first: applying a `Join` with `colour` carries it onto the `Player`,
+  and one without leaves it unset. Cost: none.
+- R10 — the plan stored `colour` but nothing rendered it, and "conflicts
+  resolve by log order" was undefined. So Task 8 also: (a) added a pure
+  `playerColours(players)` in `render/palette` — pass 1, in `players`
+  (join/log) order, each explicit colour that is in `seatColours` and
+  unclaimed is claimed; pass 2 gives each remaining player `seatColour(seat)`
+  if unclaimed, else the first unclaimed palette colour — and used it
+  everywhere a player's colour is drawn via `seatColour(player.seat)` (scene
+  tokens, HUD progress rows, the seat switcher, lobby pips); (b) made the
+  `Join` reconnect path set `colour: action.colour`, which is how a pick is
+  changed in the lobby; (c) offered the picker only on swatches a device
+  owns (its own seat; every local profile in pass-and-play), re-sending
+  `Join` with the pick, and the owner's pick also saves `settings.colour`.
+  Cost: extra scope in Task 8 (render + ui), presentation only;
+  `determinism.test.ts` is the guard.
+- R11 — accepted `playerColours`' split pass 2 (every unpicked player whose
+  seat colour is still free takes it before any displaced player takes a
+  fallback) over R10's literal single pass — still a pure,
+  order-deterministic function of `players`, and it stops one clash from
+  repainting three tokens. Cost: a different player gets the fallback
+  colour in a clash, presentation only.
+- R12 — a colour changed in the Settings overlay applies from the next
+  lobby `Join`, not at once — the overlay is reachable mid-match, where an
+  immediate change is not wanted, and the lobby's own picker covers the
+  in-room case. Cost: a player expecting an immediate change in an open
+  lobby must re-pick there.
+- R13 — ran the final whole-branch review before Task 9 (the docs
+  checkpoint), per plan 1's own precedent — a checkpoint written before the
+  final fix wave would be stale on arrival. Cost: none, order only.
+- R14 — the final fix wave also carried two Task 6 final-review minors (a
+  `quality` change deferred rather than rebuilding the scene mid-replay; a
+  hint that an overlay colour pick is deferred), the Task 2 `setSpeed`
+  mid-clip rescale, and a `verify:ui` clip check that closes the gate hole
+  Important 1 slipped through. Cost: a slightly larger fix diff than a
+  stricter fix-before-merge triage would have produced.
+- R15 — a focused lobby control can sit fully under the pinned `Start` row
+  (WCAG 2.2 2.4.11); real and pre-merge-worthy, but no second fix wave per
+  SDD process — the fix is named and cheap and was surfaced to the owner
+  instead. Cost: a keyboard user in the lobby can lose sight of focus until
+  fixed. **Fixed after the owner asked, in `1824266`** (see "R15 and the
+  parked minors, fixed" below).
+
+**Gate numbers at head (`b19d9cd`, from the follow-up fixes' own
+verification; `be91bea` had 335 tests in 39 files):**
+
+| Gate | Result |
+|---|---|
+| `nub run lint` | clean |
+| `nub run typecheck` | clean |
+| `nub run test` | **342 passed**, 40 files |
+| `nub run build` | clean |
+| `nub run build && nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow, no clipped controls; the armed 320px pass now runs for `rollButton` left, right and hidden, asserts each placement really took, and checks overflow there too |
+| `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session), 0 failed — run at Task 8, untouched by Rust code since |
+
+**What is verified, and what is not.** Keep-awake over `--https` **was
+verified**, by the final reviewer — the one item Task 6 had left unchecked.
+The determinism fuzz suite passed clean across 384 module-combination
+configs, including a colour-stripping fold. **Not verified:** haptics on a
+real device; wake lock on a real guest phone (only the host side's own
+`--https` origin has been exercised); whether the three speeds *feel* right;
+and the non-host "Waiting for the host…" variant of the pinned lobby `Start`
+row, which shares the host's wrapper and class but has never been driven in
+a browser — that needs a relay and a second client.
+
+**R15 and the parked minors, fixed.** The final review had left R15 as the
+one recommended pre-merge fix, surfaced to the owner rather than shipped
+because it fell outside SDD's one-fix-wave-per-review process, and parked
+three minors (below, under the deferred list, now struck). The owner asked
+for all four before the PR; they landed as:
+
+- **R15 (`1824266`, WCAG 2.2 2.4.11).** A focused lobby control could sit
+  fully under the pinned `Start` row: Chromium's focus scroll skips anything
+  already inside the viewport, and the old per-control 72px `scroll-margin`
+  only applied once a scroll happened. Now `app/pinned-bottom.ts`'s
+  `reservePinnedBottom` ref callback measures the row (a border-box
+  ResizeObserver) and sets `--pinned-bottom` and
+  `scroll-padding-bottom: calc(var(--pinned-bottom) + 4px)` on `<html>`,
+  both removed on unmount. The 72px `scroll-margin` classes are gone, and
+  `revealAboveStartRow` became a one-line `scrollIntoView({ block:
+  "nearest" })` — it could not go entirely: with no scroll at all, the last
+  two pips' pickers opened under the row at 360×640. Measured by Tab sweep
+  (30 stops) and `focus()`/`scrollIntoView` on all 29 controls at 360×640 and
+  320×800 with six players and settings expanded: Tab left 9 stops
+  overlapping the row before (5 + 4, six of them fully under it — all four
+  steppers at 360×640, "MomentumOn" and its explainer at 320×800) and 0
+  after; `focus()`/`scrollIntoView` 10 overlaps before, 0 of 58 after; the
+  lowest focused control now ends 3.8–4px above the row. The final review
+  re-measured this independently, focus ring included, in both Tab
+  directions: 0 overlaps, 2.6px closest. One side effect worth knowing: a bare
+  `focus()` on `Start` itself from the top of a long lobby now scrolls the
+  page (0→323 at 360×640), because the row sits inside the reserved band;
+  in real Tab order the previous control has already scrolled there.
+- **Panda trap 3 on the Match settings `<h3>` (`b6dcf6d`).** The dead
+  `css({ margin: 0 })` override was dropped rather than made to apply; the
+  rendered margin (`0 0 9.36px`) is identical before and after.
+- **The update toast over `Start` (`a0117d4`).** Its `bottom` is now
+  `calc(max(var(--pinned-bottom, 0px), env(safe-area-inset-bottom, 0px)) +
+  0.75rem)` — `max`, because the row already carries the safe area. On the
+  lobby it moved from 558–628 (57px over the row, `Start` not tappable) to
+  489–559 at 360×640, clear of the row at 571, `Start` tappable. Home is
+  unchanged (558–628) and the match screen still suppresses it. The offline
+  toast shares the class, so on the lobby it too now floats above the row;
+  its pointer-events and 4s retirement are untouched.
+- **The gate's 320px pass (`b19d9cd`).** `scripts/drive-app.mjs` now has one
+  exported `recordProblems` (console errors, failed responses, page errors,
+  unit-tested) used by every page, and the armed 320px pass runs for
+  `rollButton` left, right and hidden (`6-armed-320-<placement>.png`).
+
+**Follow-ups, deferred minors the final review triaged "stays deferred":**
+- T1: `paletteColour` lowercases each palette entry per load (immaterial).
+- T3: no integration test of `Scene.step`/`rise` (WebGL; by design).
+- T5: `headerIconButton` style duplicated in `home.tsx` and `match.tsx`; the
+  panel's focus/Escape effect near-duplicates `RoundLogSheet`'s; the
+  mid-replay proof is a rAF counter plus narration after close;
+  `setField` derives `next` from the render's value (two changes in one tick
+  would drop the first).
+- T6: the confirm-arm reset lags one painted frame; confirm/haptics logic is
+  inline in `MatchScreen` and untested; `useSystemPrefersReduced` has no
+  `addListener` fallback for Safari < 14; the log band's cursor is an inline
+  style rather than Panda.
+- T7: neither lobby disclosure sets `aria-controls`; `lobby.tsx` has no
+  component test, so the summary line's per-module gating is covered only by
+  driving the app. (The disclosure `<button>` wrapping an `<h3>` — the rest
+  of this task's original deferral — is fixed; see the commits table above.)
+- T8: a contested colour pick fails silently — swatches held by an earlier
+  player should read "Pink, taken" rather than simply not respond; a lobby
+  `marginLeft: -13px` magic number; an inconsistent `playerColours` fallback
+  (`?? seatColour` vs `!`, the fallback branch is dead code); the colour
+  picker row is an `<li>` inside the Players `<ul>`; no lobby component test
+  pinning picker ownership (R10c); the colour-stripping determinism case
+  runs on `defaultConfig` only.
+- ~~`lobby.tsx:564`'s `cx(headingClass, css({ margin: 0 }))` is Panda trap 3
+  — cosmetic, left for whoever next touches that heading.~~ Fixed in
+  `b6dcf6d` after the owner asked.
+- ~~The gate's 320px armed-confirm pass records only `pageerror` and the
+  roll button's right edge.~~ Fixed in `b19d9cd` after the owner asked.
+- ~~**The update toast** (`z-index: 50`, keeps pointer events) covers the
+  pinned lobby `Start` row until dismissed; pre-existing.~~ Fixed in
+  `a0117d4` after the owner asked.
+
+**One presentation-only fact worth stating plainly:** a colour pick is
+carried in the wire log (`Player.colour`, Task 8), but the palette a build
+resolves it against lives in that build's own `render/palette.ts`. Two
+devices on mixed builds can therefore show the same player in different
+colours. That is presentation-only divergence, not a desync — the fold
+itself is byte-identical, and `determinism.test.ts` is the guard that
+matters.
+
+**Next task: open plan 2's PR.** Then the highest-value action is
+unchanged and still hardware: play a match on two real devices, per
+`docs/android-debugging.md`.
+
 **Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished;
 amended 2026-09-26 after a code and security review of PR #4 and a fix pass
 for its five confirmed regressions** — see "The PR #4 review" below.
-Everything below is committed. Unlike the last few checkpoints, it is **not**
-on `main` — read the branch note before assuming otherwise.
+Everything below is committed and **on `main`**: PR #4 merged on 2026-09-26
+as `58a8739`, carrying plan 1, the review fixes and the engine fix below.
 
 ### The PR #4 review (2026-09-26)
 
@@ -979,14 +1189,11 @@ plan's per-task execution notes, the final summary is PR #4's description, and
 `git log f8ab630..HEAD` has the per-fix commit messages. Do not go looking for
 `progress.md`.
 
-**PR #4 is open against `main`**
-(<https://github.com/enchyrn/snake-ladders/pull/4>, opened 2026-09-25 at the
-owner's request). Its description is the best one-page account of the plan:
-what changed, the four Panda defects, the gate numbers, and what is known
-and not fixed. Nothing watches it — no PR subscription and no scheduled
-check-in — so check its CI and review state by hand before doing anything
-else on this branch. A red check or a review comment there comes before
-plan 2.
+**PR #4 is merged** (<https://github.com/enchyrn/snake-ladders/pull/4>,
+merge commit `58a8739`, 2026-09-26, green on all five checks). Its
+description is the best one-page account of the plan: what changed, the four
+Panda defects, the review fixes, the engine fix, the gate numbers, and what is
+known and not fixed.
 
 The whole game rebuilt its chrome on Panda CSS tokens/recipes and Lucide
 icons: the match screen is five budgeted bands (header, progress rows, a fixed
@@ -1000,16 +1207,17 @@ this plan does not do" section is still accurate — the renderer itself,
 `Scene.play`'s eight undepicted `TimelineEvent` variants, and light mode are
 all untouched.
 
-**Branch: `claude/snake-ladders-cross-device-3uu177`, and it is NOT yet on
-`main`.** This reverses what the previous checkpoint said about working
-directly on `main` — the SDD ledger's own ruling records why: "work on
-`claude/snake-ladders-cross-device-3uu177` (main merged in, no force-push),
-not directly on `main` — harness mandates this branch; handoff's 'work on
-main' predates it." The branch carries `main` merged in at `f8ab630` (tree ==
-`main` at that point) plus the entire chrome-and-layout plan on top — nothing
-from `main`'s history is missing, and nothing here is a fork that needs
-reconciling. **Merging it into `main` is the owner's decision — through PR
-#4 — not something to do automatically on the next session.**
+**Branch (historical — superseded by per-plan branches, see CLAUDE.md
+"Branches"): `claude/snake-ladders-cross-device-3uu177`, fast-forwarded to
+`main` after PR #4 merged.** New work went on this branch, not directly on
+`main` — the SDD ledger's ruling recorded why: "harness mandates this branch;
+handoff's 'work on main' predates it." Each plan reaches `main` through its
+own PR, and **merging is the owner's decision**, never something a session
+does on its own. Once a PR merges, bring the branch level with `main` by
+fast-forward (`git merge --ff-only origin/main`) before the next piece of
+work. A `git checkout -B` reset to the same end state was refused by the
+session's permission classifier as destructive; the fast-forward is the
+non-rewriting way to get there.
 
 Key commits, in order: `f8ab630`..`2fbff6b` is the plan's 14 tasks (Task 1
 `2d7f2da`, the mid-plan `@layer base` fix `1b6ad83`, Task 8 `c6c71d0`, Task 9
@@ -1252,28 +1460,30 @@ above polish.
 ### The task to start on
 
 **Plan 1 (spec B, chrome and layout) is done** — see "Where the work stands"
-above. **Plan 2 is next: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
-9 tasks, implementing spec A
-(`docs/superpowers/specs/2026-09-16-settings-and-input-design.md`).** Start
-there directly; there is no gate before it the way plan 1's Task 1 was one.
+above. **Plan 2 (spec A, settings and input) is also done** —
+`docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`, all 9 tasks,
+a final whole-branch review and one fix wave, implementing
+`docs/superpowers/specs/2026-09-16-settings-and-input-design.md` — see "Plan
+2 complete, shipped as its own PR" at the top of this section for the
+commits, rulings and gate numbers. It ships as its own PR from
+`claude/settings-and-input`; no more implementation is queued for it.
 
-**Its stated dependency on plan 1 is now met.** Spec A's `rollButton: hidden`
+**Its stated dependency on plan 1 was met.** Spec A's `rollButton: hidden`
 setting needs a dice tray that is a real DOM control, not a canvas raycast
 target — plan 1's Task 8 built exactly that: `DiceTray` is exported from
 `packages/ui/src/HUD.tsx`, alongside `ControlBar` (extracted to its own
 component during Task 8's fix round) and `CardRail`. `RollButton` stays the
-other keyboard-reachable path to `Commit`, so hiding it via the new setting
-will not remove the only accessible route the way it would have before the
-tray existed.
+other keyboard-reachable path to `Commit`, so hiding it via the setting does
+not remove the only accessible route the way it would have before the tray
+existed.
 
-**The header's settings button is built and inert, exactly as plan 1 left
-it.** It renders in the 52px header band (`match.tsx`) but has no click
-handler and opens nothing — plan 1's Task 9 put it there on purpose, ahead of
-plan 2, rather than leave a gap to add later. Wiring it up is plan 2's job.
+**The header's settings button, built and inert at the end of plan 1, is now
+wired up** — plan 2's Task 5 gave it the overlay it opens.
 
 Read plan 1's own record of what the settings brainstorm established before
-starting plan 2 — most of it is still exactly as written, unchanged by plan
-1's implementation:
+plan 2 started — most of it is still exactly as written, and plan 2's own
+implementation notes (in the plan file and in "Plan 2 complete, awaiting its
+PR" above) are the record of what changed on contact with code:
 
    - **The layer rule decides the architecture, not taste.** `layer:ui` may
      depend only on `engine` and `render`, so `BoardCanvas`, `EventLog` and
@@ -1343,8 +1553,9 @@ that looked trivial.
 `venom`'s two defects (stranded without `mutation`, nothing worth buying)
 still gate any second currency, unchanged by plan 1.
 
-**Then: play a match on two real devices.** That remains the highest-value
-action nothing in a container can do, and the quick wins are worth landing
+**Open plan 2's PR first, then: play a match on two real devices.** The
+latter remains the highest-value action nothing in a container can do, and
+plan 2's settings (speed, reduced motion, confirm-roll) are worth landing
 first precisely because they change what that test will show. `docs/android-debugging.md` is the written
 procedure and has never been executed against hardware — whoever runs it first
 should correct whatever turns out to be wrong. Install the APK on an Android
@@ -1535,16 +1746,19 @@ Three traps, and the first is the one that matters:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. **Check out `claude/snake-ladders-cross-device-3uu177`, not `main`.** Plan
-   1 (chrome and layout) is complete on this branch and not yet merged;
-   `main` does not have it. Confirm with `git log --oneline -1` — it should
-   show a docs commit on top of `8c8ecf8`, not the `03e1cd1`-era history
-   alone. Then check PR #4's CI and review state; if it has been merged,
-   start from `main` instead.
-3. **Start plan 2**: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
-   using `superpowers:subagent-driven-development` or `superpowers:executing-plans`
-   as the plan's own first line requires. Its dependency on plan 1 (a real
-   dice-tray DOM control) is met — see "The task to start on" above.
+2. **Start new work on a new branch named for it** — `claude/<plan-slug>`,
+   cut from an up-to-date `main` (CLAUDE.md, "Branches"). Never reuse
+   `claude/snake-ladders-cross-device-3uu177` (retired) or a branch whose PR
+   has merged. Plan 1 merged as PR #4 (`58a8739`); plan 2 — its 9 tasks,
+   final review and fix wave ending at `be91bea`, the owner-requested
+   follow-ups `1824266`..`b19d9cd`, their docs commit and a review polish
+   commit — ships as its own PR from `claude/settings-and-input`. Confirm
+   it landed with `git log --oneline origin/main | head`.
+3. **Plan 2 is done** (see "Plan 2 complete, shipped as its own PR" at the top of
+   this section): `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
+   all 9 tasks, reviewed, with one final fix wave and the owner-requested
+   follow-ups (R15 and three minors). Its PR is the last step; there is
+   no further implementation queued for it here.
 4. Plan 1 is fully ticked, with an execution note under every task recording
    what the plan text did not anticipate — read those before assuming the
    plan text is what shipped, same rule as applies to the older
@@ -1563,7 +1777,7 @@ Three traps, and the first is the one that matters:
 
 ```bash
 git clone <repo> && cd snake-ladders
-git checkout main   # or claude/snake-ladders-cross-device-3uu177 until plan 1 is merged
+git checkout main   # plan 1 is merged; new work goes on the harness's branch
 bash scripts/provision.sh           # mise, the toolchain, nub, OpenCode, deps
 nubx playwright install chromium    # only needed for nub run verify:ui
 nub run test && nub run typecheck   # 269 tests, clean types
