@@ -360,7 +360,7 @@ on cleanup — discarding the clip queue of a round mid-replay.
 - Consumes: `settingsAtom`, `saveSettings` (Task 1); `hasHaptics`, `hasWakeLock` (Task 4).
 - Produces: `SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void })`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 // packages/app-shell/src/app/__tests__/settings-panel.test.tsx
@@ -388,7 +388,7 @@ describe("SettingsPanel", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
@@ -396,7 +396,7 @@ nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Build the panel**
+- [x] **Step 3: Build the panel**
 
 Four `<section>`s with `<h2>` headings — **not tabs**; four groups do not earn a
 tab bar:
@@ -415,7 +415,7 @@ still claims the capability exists.
 Every change calls `saveSettings` and updates `settingsAtom` in the same
 handler, so a reload and the live UI cannot disagree.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
@@ -423,12 +423,12 @@ nubx vitest run packages/app-shell/src/app/__tests__/settings-panel.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Wire the two entry points**
+- [x] **Step 5: Wire the two entry points**
 
 The match screen's header button (built inert in plan 1, Task 9) and a settings
 button on the home screen both set the same `open` state.
 
-- [ ] **Step 6: Build, drive, and check the thing the overlay exists for**
+- [x] **Step 6: Build, drive, and check the thing the overlay exists for**
 
 ```bash
 nub run build && nub run verify:ui
@@ -439,12 +439,54 @@ Expected: PASS. Then confirm by hand or in a throwaway driver script that
 still animating behind it. That is the entire reason this is not a route, and a
 screenshot of a static panel does not show it.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/app-shell/src/app/settings-panel.tsx packages/app-shell/src/app/__tests__/settings-panel.test.tsx packages/app-shell/src/routes/match.tsx packages/app-shell/src/routes/home.tsx
 git commit -m "feat: the settings overlay, which keeps the board mounted"
 ```
+
+**Execution note:** `SettingsPanel` reads `useSession()` for the name field
+(it writes through `session.rename`, per the You group's spec), so the given
+test needed a `SessionProvider` ancestor the brief's snippet did not include.
+Per controller ruling R5, the test wraps the render call in `<SessionProvider>`
+and keeps the three assertions verbatim (`packages/app-shell/src/app/__tests__/settings-panel.test.tsx`).
+`@effect-atom/atom-react`'s `RegistryContext` already has a module-level
+default, so no extra registry wrapper was needed for `useAtom(settingsAtom)`.
+
+Boolean settings render as the lobby's existing toggle-variant button
+(label + On/Off text); the three-way settings (`rollButton`, `speed`,
+`reducedMotion`, `quality`) render as a row of toggle-variant buttons with
+`aria-pressed`, matching the seat switcher's existing convention rather than
+introducing a radio role. Colour swatches use inline `style={{ background }}`
+for the hex value (matching the seat switcher's own precedent) rather than a
+dynamic Panda token string, which Panda's static extractor cannot resolve
+(Panda trap #2). `haptics`/`keepAwake` are gated by `hasHaptics`/`hasWakeLock`
+and simply omitted, never rendered disabled, when the probe is false.
+
+Both match.tsx and home.tsx mount `<SettingsPanel open={..} onClose={..} />`
+unconditionally (never `{open && ...}`) since the component gates its own
+visibility on `open` — this is what keeps `BoardCanvas` mounted regardless of
+the panel's state. home.tsx gained the same background-`inert` pattern
+match.tsx already used for the round-log sheet, since it had no such overlay
+before.
+
+Step 6 verification: `nub run build && nub run verify:ui` passed clean (no
+console/page errors, no horizontal overflow). For the overlay's own reason to
+exist — the board must keep animating behind it — a throwaway Playwright
+script (not committed) started a pass-and-play match, rolled, and opened
+Settings immediately mid-replay. It wrapped `requestAnimationFrame` to count
+frames rather than diffing composited screenshots (the panel sits above the
+canvas in z-index, so a full-page screenshot shows only the opaque panel
+either way, not what the canvas is doing underneath). The frame counter
+advanced while the dialog was open (e.g. 27 → 29 across ~200ms), and after
+closing, `.log li` carried the round's narration (e.g. "Taipan rolled 6") —
+proving the replay was never reset or discarded. It also screenshotted the
+open panel at 390×844 and 320×800 with no horizontal overflow at either
+width; both were inspected by eye. Extending `scripts/drive-app.mjs` itself
+was considered and skipped: the gate's existing flow doesn't yet leave a
+round mid-replay at the point it would need to open Settings, and stitching
+that in read as scope this task's brief didn't ask for.
 
 ---
 

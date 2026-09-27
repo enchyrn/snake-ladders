@@ -10,6 +10,7 @@ import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { EventLog } from "@mutation/ui/EventLog"
 import { ControlBar, ProgressRows } from "@mutation/ui/HUD"
 import { RoundLogSheet } from "@mutation/ui/RoundLogSheet"
+import { SettingsPanel } from "../app/settings-panel"
 import { seatColour } from "@mutation/render/palette"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
@@ -58,10 +59,13 @@ export const MatchScreen = () => {
   // always shows the two-line preview (ADR 0020 rule 2 never takes the live
   // region out of the tree, so the preview keeps narrating underneath).
   const [showFullLog, setShowFullLog] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const roundLogButton = useRef<HTMLButtonElement | null>(null)
-  // While the sheet is open, everything behind it is inert — except the log
-  // preview, which holds nothing focusable and is the live region.
-  const behindSheet = showFullLog || undefined
+  // While either sheet is open, everything behind it is inert — except the
+  // log preview, which holds nothing focusable and is the live region. The
+  // header itself is inert too, so the round-log and settings buttons can
+  // never open both sheets at once.
+  const behindSheet = showFullLog || showSettings || undefined
 
   useEffect(() => {
     if (!client) void navigate({ to: "/" })
@@ -147,11 +151,12 @@ export const MatchScreen = () => {
           >
             <History size={18} aria-hidden="true" />
           </button>
-          {/* Inert rather than hidden, per ADR 0020's own precedent for a
-           * control the player cannot use yet (CardRail's unaffordable
-           * cards): `disabled` keeps it visible and legible as "not yet"
-           * instead of erasing it, and plan 2 is what wires it up. */}
-          <button type="button" aria-label="Settings" className={headerIconButton} disabled>
+          <button
+            type="button"
+            aria-label="Settings"
+            className={headerIconButton}
+            onClick={() => setShowSettings(true)}
+          >
             <Settings size={18} aria-hidden="true" />
           </button>
         </div>
@@ -304,6 +309,10 @@ export const MatchScreen = () => {
       {showFullLog && (
         <RoundLogSheet state={match} onClose={() => setShowFullLog(false)} restoreFocusTo={roundLogButton} />
       )}
+      {/* Always mounted, not `{showSettings && ...}` — it gates its own
+       * visibility on `open`, and the board it sits over must stay mounted
+       * whether or not the panel is showing. */}
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </main>
   )
 }
