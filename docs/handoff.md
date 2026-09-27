@@ -888,9 +888,10 @@ run `34762050952` built the APK with them in place.
 ### Plan 2 complete, awaiting its PR (2026-09-27)
 
 **Plan 2 (`docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`) is
-done: all 9 tasks, a final whole-branch review, and one fix wave.** Everything
-is committed and pushed to `claude/snake-ladders-cross-device-3uu177`, at
-`be91bea` — **not yet a PR, not on `main`. Merging is the owner's decision**,
+done: all 9 tasks, a final whole-branch review, one fix wave, and — after the
+owner asked for them before the PR — R15 and the three parked minors, fixed
+in `1824266`..`b19d9cd`.** Everything is committed on
+`claude/snake-ladders-cross-device-3uu177` — **not yet a PR, not on `main`. Merging is the owner's decision**,
 never something a session does on its own. Its ledger lived in the gitignored
 `.superpowers/sdd/2026-09-17-settings-and-input-plan/`, which does **not**
 survive a fresh container; everything durable in it is here and in the plan's
@@ -910,6 +911,7 @@ older threads.
 | 8 seat colour | `07aa6b1`..`a50cd26` | clean |
 | 9 this checkpoint | (this commit) | docs only, no code review |
 | **Final whole-branch review** (at `a50cd26`) | fix wave `ff8d5f5`, `9878ed7`, `c82ce38`, `0ee42ed`, `be91bea` | With fixes — 0 Critical, 2 Important, 3 Minor; re-review of the fix diff found 1 new Important + 2 new Minor, 8/8 addressed in the same wave |
+| **Owner-requested follow-ups** (R15 + the three parked minors) | `1824266` R15, `b6dcf6d` heading margin, `a0117d4` update toast, `b19d9cd` 320px gate | fixed after the owner asked; see "R15 and the parked minors, fixed" below |
 
 **The full rulings list, R1–R15 in order, each with its cost if wrong:**
 
@@ -971,20 +973,21 @@ older threads.
   stricter fix-before-merge triage would have produced.
 - R15 — a focused lobby control can sit fully under the pinned `Start` row
   (WCAG 2.2 2.4.11); real and pre-merge-worthy, but no second fix wave per
-  SDD process — the fix is named and cheap (see "The one recommended
-  pre-merge fix" below) and surfaced to the owner instead. Cost: a keyboard
-  user in the lobby can lose sight of focus until fixed.
+  SDD process — the fix is named and cheap and was surfaced to the owner
+  instead. Cost: a keyboard user in the lobby can lose sight of focus until
+  fixed. **Fixed after the owner asked, in `1824266`** (see "R15 and the
+  parked minors, fixed" below).
 
-**Gate numbers at head (`be91bea`, from the final fix wave's own
-verification):**
+**Gate numbers at head (`b19d9cd`, from the follow-up fixes' own
+verification; `be91bea` had 335 tests in 39 files):**
 
 | Gate | Result |
 |---|---|
 | `nub run lint` | clean |
 | `nub run typecheck` | clean |
-| `nub run test` | **335 passed**, 39 files |
+| `nub run test` | **342 passed**, 40 files |
 | `nub run build` | clean |
-| `nub run build && nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow, no clipped controls |
+| `nub run build && nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow, no clipped controls; the armed 320px pass now runs for `rollButton` left, right and hidden |
 | `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session), 0 failed — run at Task 8, untouched by Rust code since |
 
 **What is verified, and what is not.** Keep-awake over `--https` **was
@@ -997,15 +1000,46 @@ and the non-host "Waiting for the host…" variant of the pinned lobby `Start`
 row, which shares the host's wrapper and class but has never been driven in
 a browser — that needs a relay and a second client.
 
-**The one recommended pre-merge fix (R15, WCAG 2.2 2.4.11):** a focused
-lobby control — most reachable by keyboard Tab order from below the fold —
-can end up sitting fully underneath the pinned `Start` row with no visible
-focus indicator. The named fix is
-`scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom))` on the
-document scroller while the lobby is mounted, which likely lets
-`revealAboveStartRow` (the colour picker's manual scroll-into-view) be
-retired. Small and cheap, but outside SDD's one-fix-wave-per-review process,
-so it was surfaced here rather than shipped.
+**R15 and the parked minors, fixed.** The final review had left R15 as the
+one recommended pre-merge fix, surfaced to the owner rather than shipped
+because it fell outside SDD's one-fix-wave-per-review process, and parked
+three minors (below, under the deferred list, now struck). The owner asked
+for all four before the PR; they landed as:
+
+- **R15 (`1824266`, WCAG 2.2 2.4.11).** A focused lobby control could sit
+  fully under the pinned `Start` row: Chromium's focus scroll skips anything
+  already inside the viewport, and the old per-control 72px `scroll-margin`
+  only applied once a scroll happened. Now `app/pinned-bottom.ts`'s
+  `reservePinnedBottom` ref callback measures the row (a border-box
+  ResizeObserver) and sets `--pinned-bottom` and
+  `scroll-padding-bottom: calc(var(--pinned-bottom) + 4px)` on `<html>`,
+  both removed on unmount. The 72px `scroll-margin` classes are gone, and
+  `revealAboveStartRow` became a one-line `scrollIntoView({ block:
+  "nearest" })` — it could not go entirely: with no scroll at all, the last
+  two pips' pickers opened under the row at 360×640. Measured by Tab sweep
+  (30 stops) and `focus()`/`scrollIntoView` on all 29 controls at 360×640 and
+  320×800 with six players and settings expanded: Tab left 9 stops
+  overlapping the row before (5 + 4, one fully under it) and 0 after;
+  `focus()`/`scrollIntoView` 10 overlaps before, 0 of 58 after; the lowest
+  focused control now ends 3.8–4px above the row. One side effect worth knowing: a bare
+  `focus()` on `Start` itself from the top of a long lobby now scrolls the
+  page (0→323 at 360×640), because the row sits inside the reserved band;
+  in real Tab order the previous control has already scrolled there.
+- **Panda trap 3 on the Match settings `<h3>` (`b6dcf6d`).** The dead
+  `css({ margin: 0 })` override was dropped rather than made to apply; the
+  rendered margin (`0 0 9.36px`) is identical before and after.
+- **The update toast over `Start` (`a0117d4`).** Its `bottom` is now
+  `calc(max(var(--pinned-bottom, 0px), env(safe-area-inset-bottom, 0px)) +
+  0.75rem)` — `max`, because the row already carries the safe area. On the
+  lobby it moved from 558–628 (57px over the row, `Start` not tappable) to
+  489–559 at 360×640, clear of the row at 571, `Start` tappable. Home is
+  unchanged (558–628) and the match screen still suppresses it. The offline
+  toast shares the class, so on the lobby it too now floats above the row;
+  its pointer-events and 4s retirement are untouched.
+- **The gate's 320px pass (`b19d9cd`).** `scripts/drive-app.mjs` now has one
+  exported `recordProblems` (console errors, failed responses, page errors,
+  unit-tested) used by every page, and the armed 320px pass runs for
+  `rollButton` left, right and hidden (`6-armed-320-<placement>.png`).
 
 **Follow-ups, deferred minors the final review triaged "stays deferred":**
 - T1: `paletteColour` lowercases each palette entry per load (immaterial).
@@ -1030,17 +1064,14 @@ so it was surfaced here rather than shipped.
   picker row is an `<li>` inside the Players `<ul>`; no lobby component test
   pinning picker ownership (R10c); the colour-stripping determinism case
   runs on `defaultConfig` only.
-- `lobby.tsx:564`'s `cx(headingClass, css({ margin: 0 }))` is Panda trap 3
-  (a `cx`-composed override can lose to the base recipe) — cosmetic, the gap
-  matches the other section headings, so it is left for whoever next
-  touches that heading.
-- The gate's 320px armed-confirm pass records only `pageerror` and the roll
-  button's right edge; left and hidden placements were measured by hand in
-  the fix wave's own report, not by the gate itself.
-- **The update toast** (`z-index: 50`, keeps pointer events) covers the
-  pinned lobby `Start` row until dismissed. Pre-existing, not introduced by
-  this plan — a follow-up to lift the toast above the row on the lobby
-  screen.
+- ~~`lobby.tsx:564`'s `cx(headingClass, css({ margin: 0 }))` is Panda trap 3
+  — cosmetic, left for whoever next touches that heading.~~ Fixed in
+  `b6dcf6d` after the owner asked.
+- ~~The gate's 320px armed-confirm pass records only `pageerror` and the
+  roll button's right edge.~~ Fixed in `b19d9cd` after the owner asked.
+- ~~**The update toast** (`z-index: 50`, keeps pointer events) covers the
+  pinned lobby `Start` row until dismissed; pre-existing.~~ Fixed in
+  `a0117d4` after the owner asked.
 
 **One presentation-only fact worth stating plainly:** a colour pick is
 carried in the wire log (`Player.colour`, Task 8), but the palette a build
@@ -1705,12 +1736,14 @@ Three traps, and the first is the one that matters:
 2. **Work on `claude/snake-ladders-cross-device-3uu177`.** Plan 1 is merged
    (PR #4, `58a8739`) and the branch was fast-forwarded to it before plan 2
    started; plan 2's 9 tasks, final review and fix wave are now on top of
-   that, ending at `be91bea`. Confirm with `git log --oneline origin/main..HEAD`
+   that, ending at `be91bea`, plus the owner-requested follow-ups
+`1824266`..`b19d9cd` and their docs commit. Confirm with `git log --oneline origin/main..HEAD`
    — it should list plan 2's commits (or nothing, if `main` has moved on and
    you have fast-forwarded again). Plan 2 becomes its own PR.
 3. **Plan 2 is done** (see "Plan 2 complete, awaiting its PR" at the top of
    this section): `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
-   all 9 tasks, reviewed, with one final fix wave. Open its PR next — there is
+   all 9 tasks, reviewed, with one final fix wave and the owner-requested
+   follow-ups (R15 and three minors). Open its PR next — there is
    no further implementation queued for it here.
 4. Plan 1 is fully ticked, with an execution note under every task recording
    what the plan text did not anticipate — read those before assuming the

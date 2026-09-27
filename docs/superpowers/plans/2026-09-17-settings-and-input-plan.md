@@ -1084,7 +1084,10 @@ a50cd26..be91bea`):
 A re-review of the fix diff found 1 new Important and 2 new Minor, all
 addressed in the same commits above (8/8 addressed in the fix wave).
 
-**Parked residuals, each with its ruling:**
+**Parked residuals, each with its ruling — all four fixed afterwards, when
+the owner asked for them before the PR** (the rulings are kept as history;
+each ends with the commit that fixed it; details in `docs/handoff.md`, "R15
+and the parked minors, fixed"):
 
 - **A focused lobby control can sit fully under the pinned `Start` row**
   (WCAG 2.2 2.4.11, no visible focus indicator). Real and pre-merge-worthy,
@@ -1093,22 +1096,32 @@ addressed in the same commits above (8/8 addressed in the fix wave).
   document scroller while the lobby is mounted, likely retiring
   `revealAboveStartRow` — and is surfaced to the owner as the one recommended
   pre-merge commit (see `docs/handoff.md`). Cost if wrong: a keyboard user in
-  the lobby can lose sight of focus until fixed.
+  the lobby can lose sight of focus until fixed. **Fixed in `1824266`:** a
+  measured `--pinned-bottom` (ResizeObserver on the row) drives
+  `scroll-padding-bottom` on `<html>` while the lobby is mounted, instead of
+  the magic 72px; the 72px `scroll-margin` classes are gone and
+  `revealAboveStartRow` shrank to a plain `scrollIntoView({ block:
+  "nearest" })` (removing it outright left two pickers under the row).
+  Tab stops overlapping the row at 360×640 and 320×800: 9 before, 0 after.
 - **`lobby.tsx:564`'s `cx(headingClass, css({ margin: 0 }))` is Panda trap
   3** (a `cx`-composed override can lose to the base recipe). Ruling:
   cosmetic — the gap matches the other section headings visually — so it is
   left for whoever next touches that heading rather than fixed here. Cost if
-  wrong: none visible.
+  wrong: none visible. **Fixed in `b6dcf6d`:** the override is dropped,
+  keeping the rendered margin (identical before and after).
 - **The gate's 320px armed-confirm pass only records `pageerror` and the
   roll button's right edge.** Left and hidden placements were measured by
   hand in `final-fix-report.md`, not by the gate itself. Ruling: deferred —
   the gate closes the hole that mattered (the Important). Cost if wrong: a
   regression in the left or hidden placement at 320px goes uncaught by
-  `verify:ui`.
+  `verify:ui`. **Fixed in `b19d9cd`:** one `recordProblems` helper for every
+  page, and the armed pass runs for left, right and hidden.
 - **The update toast (`z-index: 50`, keeps pointer events) covers the pinned
   `Start` row until dismissed.** Pre-existing, not introduced by this plan.
   Ruling: a follow-up to lift the toast above the row on the lobby screen.
   Cost if wrong: a player must dismiss the toast before reaching `Start`.
+  **Fixed in `a0117d4`:** the toast's `bottom` reads `--pinned-bottom`, so on
+  the lobby it floats above the row; screens without one are unchanged.
 
 ## What this plan does not do
 
