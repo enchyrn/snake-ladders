@@ -891,7 +891,8 @@ run `34762050952` built the APK with them in place.
 done: all 9 tasks, a final whole-branch review, one fix wave, and — after the
 owner asked for them before the PR — R15 and the three parked minors, fixed
 in `1824266`..`b19d9cd`.** Everything is committed on
-`claude/snake-ladders-cross-device-3uu177` — **not yet a PR, not on `main`. Merging is the owner's decision**,
+`claude/snake-ladders-cross-device-3uu177` — **not yet a PR, not on `main`.
+Merging is the owner's decision**,
 never something a session does on its own. Its ledger lived in the gitignored
 `.superpowers/sdd/2026-09-17-settings-and-input-plan/`, which does **not**
 survive a fresh container; everything durable in it is here and in the plan's
@@ -987,7 +988,7 @@ verification; `be91bea` had 335 tests in 39 files):**
 | `nub run typecheck` | clean |
 | `nub run test` | **342 passed**, 40 files |
 | `nub run build` | clean |
-| `nub run build && nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow, no clipped controls; the armed 320px pass now runs for `rollButton` left, right and hidden |
+| `nub run build && nub run verify:ui` | clean — no console errors, no page errors, no horizontal overflow, no clipped controls; the armed 320px pass now runs for `rollButton` left, right and hidden, asserts each placement really took, and checks overflow there too |
 | `cargo test -p lan-sync` | **58 passed** (26 unit + 21 relay + 11 session), 0 failed — run at Task 8, untouched by Rust code since |
 
 **What is verified, and what is not.** Keep-awake over `--https` **was
@@ -1019,9 +1020,12 @@ for all four before the PR; they landed as:
   two pips' pickers opened under the row at 360×640. Measured by Tab sweep
   (30 stops) and `focus()`/`scrollIntoView` on all 29 controls at 360×640 and
   320×800 with six players and settings expanded: Tab left 9 stops
-  overlapping the row before (5 + 4, one fully under it) and 0 after;
-  `focus()`/`scrollIntoView` 10 overlaps before, 0 of 58 after; the lowest
-  focused control now ends 3.8–4px above the row. One side effect worth knowing: a bare
+  overlapping the row before (5 + 4, six of them fully under it — all four
+  steppers at 360×640, "MomentumOn" and its explainer at 320×800) and 0
+  after; `focus()`/`scrollIntoView` 10 overlaps before, 0 of 58 after; the
+  lowest focused control now ends 3.8–4px above the row. The final review
+  re-measured this independently, focus ring included, in both Tab
+  directions: 0 overlaps, 2.6px closest. One side effect worth knowing: a bare
   `focus()` on `Start` itself from the top of a long lobby now scrolls the
   page (0→323 at 360×640), because the row sits inside the reserved band;
   in real Tab order the previous control has already scrolled there.
@@ -1737,7 +1741,8 @@ Three traps, and the first is the one that matters:
    (PR #4, `58a8739`) and the branch was fast-forwarded to it before plan 2
    started; plan 2's 9 tasks, final review and fix wave are now on top of
    that, ending at `be91bea`, plus the owner-requested follow-ups
-`1824266`..`b19d9cd` and their docs commit. Confirm with `git log --oneline origin/main..HEAD`
+   `1824266`..`b19d9cd`, their docs commit and a review polish commit.
+   Confirm with `git log --oneline origin/main..HEAD`
    — it should list plan 2's commits (or nothing, if `main` has moved on and
    you have fast-forwarded again). Plan 2 becomes its own PR.
 3. **Plan 2 is done** (see "Plan 2 complete, awaiting its PR" at the top of

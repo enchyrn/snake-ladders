@@ -65,10 +65,12 @@ being served from a subdirectory, and nothing outside that prefix resolves —
 a root-absolute URL that would 404 on GitHub Pages fails here instead. The
 prefix must match the base the bundle was built with, hence the pair of
 `verify:ui:pages` commands above. It also fails on any visible control
-clipped past either viewport edge, and its final pass runs at 320px with an
-armed "Confirm roll" on screen — the settings-and-input plan's final review
-found an armed control clipped off-screen at that width with nothing in the
-gate to catch it.
+clipped past either viewport edge, and its final passes run at 320px with
+"Confirm roll" armed under each roll-button placement (left, right, hidden),
+each checking the same problems as the main pass and that the seeded
+placement really took — the settings-and-input plan's final review found an
+armed control clipped off-screen at that width with nothing in the gate to
+catch it.
 
 `--https` serves over TLS with a throwaway certificate (needs `openssl`). A
 secure origin is not cosmetic: a service worker will not register without one,

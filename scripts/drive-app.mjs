@@ -389,10 +389,13 @@ const drive = async (served, browser) => {
   }
 
   // A phone viewport must never scroll sideways.
-  const overflow = await page.evaluate(() =>
-    Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
-  )
-  if (overflow > 0) problems.push(`page overflows horizontally by ${overflow}px`)
+  const checkOverflow = async (page, label = "") => {
+    const overflow = await page.evaluate(() =>
+      Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+    )
+    if (overflow > 0) problems.push(`${label ? `${label}: ` : ""}page overflows horizontally by ${overflow}px`)
+  }
+  await checkOverflow(page)
 
   // The widest the roll row ever gets: "Confirm before rolling" armed, at the
   // narrowest phone the layout supports. Armed, Roll's label grows and Roll
@@ -419,11 +422,19 @@ const drive = async (served, browser) => {
     await narrow.waitForTimeout(800)
     await narrow.getByRole("button", { name: /^start/i }).click()
     await narrow.waitForTimeout(1500)
+    // An unknown placement repairs silently to "right", so a renamed value
+    // would have all three passes checking one layout. Prove the seed took.
+    const rollLocator = narrow.getByRole("button", { name: /^roll$/i })
+    const rollBox = (await rollLocator.count()) ? await rollLocator.boundingBox() : null
+    const trayBox = await narrow.getByRole("button", { name: /^roll the dice$/i }).boundingBox()
+    const laidOut = !rollBox ? "hidden" : trayBox && rollBox.x < trayBox.x ? "left" : "right"
+    if (laidOut !== rollButton) problems.push(`${where}: seeded rollButton "${rollButton}" but the row is laid out "${laidOut}"`)
     // Hidden leaves the dice tray as the only roll control.
     await narrow.getByRole("button", { name: rollButton === "hidden" ? /^roll the dice$/i : /^roll$/i }).click()
     await narrow.waitForTimeout(300)
     const armed = await narrow.getByRole("button", { name: /^confirm roll$/i }).count()
     if (armed === 0) problems.push(`${where}: a first tap under Confirm before rolling armed nothing`)
+    await checkOverflow(narrow, where)
     await shot(`6-armed-320-${rollButton}`, narrow)
     await narrow.close()
   }
