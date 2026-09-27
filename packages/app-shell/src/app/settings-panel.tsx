@@ -3,7 +3,7 @@ import { useAtom } from "@effect-atom/atom-react"
 import { X } from "lucide-react"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
-import { headingClass, textInputClass } from "@mutation/ui/layout/screen"
+import { headingClass, hintClass, textInputClass } from "@mutation/ui/layout/screen"
 import { ColourPicker } from "./colour-picker"
 import { useSession } from "./session"
 import { hasHaptics, hasWakeLock } from "./capabilities"
@@ -208,6 +208,10 @@ export const SettingsPanel = ({ open, onClose }: { readonly open: boolean; reado
           <div className={stackClass}>
             <span className={fieldLabelClass}>Colour</span>
             <ColourPicker label="Colour" value={settings.colour} onChange={(hex) => setField("colour", hex)} />
+            {/* Ruling R12: nothing is sent from here — the colour rides in
+                the next lobby's Join — so without this line the swatch
+                changes and nothing on the board does. */}
+            <p className={cx(hintClass, css({ margin: 0 }))}>Applies from your next game</p>
           </div>
         </Section>
 

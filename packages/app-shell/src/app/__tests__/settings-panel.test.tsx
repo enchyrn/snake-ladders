@@ -28,6 +28,12 @@ describe("SettingsPanel", () => {
     expect(html).toContain("aria-modal")
   })
 
+  // Ruling R12: the colour rides in Join, so a pick here reaches the board
+  // only from the next lobby — the panel has to say so.
+  it("says the colour applies from the next game", () => {
+    expect(renderPanel({ open: true, onClose: () => {} })).toContain("Applies from your next game")
+  })
+
   it("renders nothing when closed", () => {
     expect(renderPanel({ open: false, onClose: () => {} })).toBe("")
   })
