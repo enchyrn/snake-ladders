@@ -856,6 +856,25 @@ git commit -m "feat: the rest of MatchConfig is editable, and the host's setup i
 Last on purpose: it is the only change that touches the wire format, and the
 easiest to defer if the plan runs long.
 
+> **Controller rulings taken before execution (2026-09-27), not yet
+> implemented — apply them.** R9: Step 2's expected failure will not happen —
+> Effect 3's `Schema.Struct` ignores excess keys, so a `Join` with `colour`
+> already decodes. Keep both decode cases and add a behavioural case that
+> fails first: a `Join` with `colour` carries it onto the `Player`; one
+> without leaves it unset. R10: a stored colour nothing draws is not the
+> feature, so also (a) add a pure `playerColours(players)` to
+> `packages/render/src/palette.ts` — pass 1 in `players` order claims each
+> explicit colour that is in `seatColours` and unclaimed; pass 2 gives each
+> remaining player `seatColour(seat)` if unclaimed, else the first unclaimed
+> palette colour — and use it wherever a player's colour is drawn via
+> `seatColour(player.seat)` (scene tokens, HUD progress rows, seat switcher,
+> lobby pips); (b) the `Join` reconnect path sets `colour: action.colour`,
+> which is how a lobby pick changes; (c) the picker is offered only on
+> swatches this device owns (its own seat; every local profile in
+> pass-and-play), re-sends `Join` with the pick, and the owner's pick also
+> saves `settings.colour`. Full costs: `docs/handoff.md`, "Plan 2 paused
+> after Task 7".
+
 **Files:**
 - Modify: `packages/engine/src/types.ts`
 - Modify: `packages/engine/src/actions.ts`

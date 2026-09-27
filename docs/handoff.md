@@ -885,6 +885,94 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
+### Plan 2 paused after Task 7 — read this first (2026-09-27)
+
+**Plan 2 (`docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`) is
+7 of 9 tasks in, paused at a task boundary at the owner's request.** Tasks
+1–7 are done, reviewed and pushed to `claude/snake-ladders-cross-device-3uu177`
+(not yet a PR, not on `main`). **Resume at Task 8 (seat colour)**, then Task 9
+(the checkpoint), then the final whole-branch review. Everything below this
+subsection describes the state *before* plan 2 started and is still accurate
+about plan 1 and the older threads.
+
+It ran under `superpowers:subagent-driven-development`. Its ledger lived in
+the gitignored `.superpowers/sdd/2026-09-17-settings-and-input-plan/` and does
+**not** survive a fresh container, so everything durable in it is here and in
+the plan's per-task execution notes. A new session starts a fresh ledger
+naming Tasks 1–7 complete.
+
+| Task | Commits | Review |
+|---|---|---|
+| 1 settings store | `7bf9a35` | clean |
+| 4 capability probes (batched with 1) | `511d184` | clean |
+| 2 speed + floor | `fdfffe6` | clean |
+| 3 reduced motion (batched with 2) | `dcd32b2` | clean |
+| 5 settings overlay | `4a00b70`, fix `de6225e` | 1 Important fixed: a log-preview tap opened the round-log sheet under open Settings |
+| 6 settings to consumers | `8fc5e4a` | clean |
+| 7 lobby MatchConfig + last setup | `cfc9b90`, fix `f9301fe` | 1 Important fixed: the new rows pushed Start below the fold at 390×844; now behind a disclosure, measured before/after |
+
+**Rulings taken before execution, each with its cost if wrong.** R1–R8 are
+applied and recorded under their tasks; **R9 and R10 are Task 8's and are not
+yet implemented** — they are copied into the plan under Task 8 as well.
+
+- R1 — Tasks 1+4 and 2+3 were each dispatched and reviewed as one unit, one
+  commit per task. Cost: a finding may need attributing across two tasks.
+- R2 — `Settings.colour` validates to `""` or a member of `seatColours`, not
+  any hex (spec: "one of a fixed palette" excluding the link band). Cost: a
+  stored non-palette colour resets to seat colour.
+- R3 — the store exposes only `settingsAtom`, no per-slice atoms. Cost: extra
+  re-renders on a settings change.
+- R4 — reduced motion also flattens the non-absorbed mine lift and the walk's
+  per-step hop. Cost: slightly flatter reduced motion.
+- R5 — the panel test wraps `SettingsPanel` in `SessionProvider`. Cost: none.
+- R6 — `ControlBar` takes the whole roll row as children; `RollControls` is
+  exported from `routes/match`. Cost: small API churn in `@mutation/ui`.
+- R7 — `confirmRoll` is an in-app two-step ("Confirm roll"), never
+  `window.confirm`, never undo. Cost: UX detail.
+- R8 — `loadLastSetup` clamps each field and never touches `seed`; the lobby
+  applies it once on mount via `Configure { ...match.config, ...lastSetup }`.
+  Cost: a host's saved setup is ignored.
+- **R9 (Task 8, pending)** — the plan's red step cannot go red: Effect 3's
+  `Schema.Struct` ignores excess keys by default, so a `Join` carrying
+  `colour` already decodes. Keep the plan's two decode cases and add a
+  behavioural one that fails first: applying a `Join` with `colour` carries it
+  onto the `Player`, and one without leaves it unset. Cost: none.
+- **R10 (Task 8, pending)** — the plan stores `colour` but nothing renders
+  it, and "conflicts resolve by log order" is undefined. So Task 8 also:
+  (a) adds a pure `playerColours(players)` in `render/palette` — pass 1, in
+  `players` (join/log) order, each explicit colour that is in `seatColours`
+  and unclaimed is claimed; pass 2 gives each remaining player
+  `seatColour(seat)` if unclaimed, else the first unclaimed palette colour —
+  and uses it everywhere a player's colour is drawn today via
+  `seatColour(player.seat)` (scene tokens, HUD progress rows, the seat
+  switcher, lobby pips); (b) makes the `Join` reconnect path set
+  `colour: action.colour`, which is how a pick is changed in the lobby;
+  (c) offers the picker only on swatches this device owns (its own seat;
+  every local profile in pass-and-play), re-sending `Join` with the pick, and
+  the owner's pick also saves `settings.colour`. Cost: extra scope in Task 8
+  (render + ui), presentation only; `determinism.test.ts` is the guard.
+
+**Still to verify, carried to the final review** (none blocks Task 8):
+keep-awake has never run — the headless gate is plain http, where
+`hasWakeLock` is false, so drive it with `node scripts/drive-app.mjs --https`;
+the armed "Confirm roll" label's width at 320px with Roll visible is
+unchecked.
+
+**Deferred minors for the final review to triage:**
+- T1: `paletteColour` lowercases each palette entry per load (immaterial).
+- T2: lowering speed mid-clip can step a clip's `t` backwards for one frame.
+- T3: no integration test of `Scene.step`/`rise` (WebGL; by design).
+- T5: `headerIconButton` style duplicated in `home.tsx` and `match.tsx`; the
+  panel's focus/Escape effect near-duplicates `RoundLogSheet`'s; the
+  mid-replay proof is a rAF counter plus narration after close;
+  `setField` derives `next` from the render's value (two changes in one tick
+  would drop the first).
+- T6: the confirm-arm reset lags one painted frame; `roll-controls.test`
+  does not assert that `hidden` removes Roll nor pin `right`; confirm/haptics
+  logic is inline in `MatchScreen` and untested; `useSystemPrefersReduced`
+  has no `addListener` fallback for Safari < 14; the log band's cursor is an
+  inline style rather than Panda.
+
 **Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished;
 amended 2026-09-26 after a code and security review of PR #4 and a fix pass
 for its five confirmed regressions** — see "The PR #4 review" below.
@@ -1536,7 +1624,8 @@ Three traps, and the first is the one that matters:
    which should list only this checkpoint's docs commit (or nothing, if
    `main` has moved on and you have fast-forwarded again). Plan 2 becomes its
    own PR.
-3. **Start plan 2**: `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
+3. **Resume plan 2 at Task 8** (see "Plan 2 paused after Task 7" at the top of
+   this section): `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
    using `superpowers:subagent-driven-development` or `superpowers:executing-plans`
    as the plan's own first line requires. Its dependency on plan 1 (a real
    dice-tray DOM control) is met — see "The task to start on" above.
