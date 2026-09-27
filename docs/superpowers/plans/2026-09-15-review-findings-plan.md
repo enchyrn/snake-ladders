@@ -40,7 +40,7 @@ agent will see.
 - **Anything that enters the action log must be sequenced, never applied locally.** A fix that makes one device act on information another device lacks is a worse bug than the one it replaces.
 - **Do not `cargo build` or `cargo check` `src-tauri/`.** This container has no webkit2gtk. `src-tauri/src/lib.rs` is verified by review and by `.github/workflows/android.yml` only. `crates/lan-sync` has no Tauri dependency and *is* buildable here.
 - **nub, not npm.** `nubx` replaces `npx`. Every `nub`/`nubx`/`cargo` invocation needs `export PATH="$HOME/.local/share/mise/shims:$PATH"` in the same shell.
-- **Branch:** `claude/snake-ladders-cross-device-3uu177`, with PR #2 open against `main`. Commit per task. Do not open a second PR.
+- **Branch:** this plan ran on `claude/snake-ladders-cross-device-3uu177` with PR #2 open against `main`; that branch is now retired and new work takes its own branch per CLAUDE.md, "Branches". Commit per task. Do not open a second PR.
 - **Commit trailers**, on every commit:
   ```
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
@@ -1409,7 +1409,7 @@ Move each finding from open to resolved, and record two things the review establ
 - [x] **Push**
 
 ```bash
-git push -u origin claude/snake-ladders-cross-device-3uu177
+git push -u origin HEAD
 ```
 
 PR #2 is already open against `main`. Do not open a second one.

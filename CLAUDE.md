@@ -335,6 +335,19 @@ Work in progress is driven by the Superpowers skills vendored in
 
 Designed but unbuilt work lives in `docs/superpowers/specs/`.
 
+### Branches
+
+Each plan gets its own branch, named for the work — `claude/<plan-slug>`,
+e.g. `claude/chrome-and-layout` or `claude/settings-and-input` — cut from an
+up-to-date `main`, and reaches `main` through its own PR. Never reuse a branch
+whose PR has merged; the next piece of work starts a new one.
+`claude/snake-ladders-cross-device-3uu177` carried plans 1 and 2 as a
+general-purpose working branch and is retired: its name said nothing about
+the work on it, so every PR from it looked the same. Older plans still name
+it in their headers as a record of where they ran, not as an instruction.
+If a session's own setup assigns that name, raise it with the owner rather
+than reviving it.
+
 ## Checkpointing
 
 The owner works in long sessions and clears context deliberately. Treat

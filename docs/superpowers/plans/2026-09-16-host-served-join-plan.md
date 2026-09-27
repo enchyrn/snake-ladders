@@ -32,9 +32,10 @@ the socket.
 - **`cargo fmt --all` from the root covers `crates/` only.** `src-tauri` needs
   `(cd src-tauri && cargo fmt)`.
 - **`packages/engine/src/**` must stay pure.** Nothing in this plan touches it.
-- Branch: `claude/snake-ladders-cross-device-3uu177`, currently at `main`
-  (`4a1eefc`) plus the spec commit. Push with
-  `git push -u origin claude/snake-ladders-cross-device-3uu177`.
+- Branch: this plan ran on `claude/snake-ladders-cross-device-3uu177`, now
+  retired; new work takes its own branch per CLAUDE.md, "Branches". It started
+  at `main` (`4a1eefc`) plus the spec commit. Push with
+  `git push -u origin HEAD`.
 - Commits end with the two trailers already used on this branch. **Never put a
   model identifier in a commit message, PR body, or code comment.**
 - Gates: `nub run test`, `nub run typecheck`, `nub run lint`; Rust tasks add
@@ -774,7 +775,7 @@ workspace, and the root command is silent because it does not look.
 ```bash
 git add src-tauri/src/lib.rs
 git commit -m "feat: serve the app's embedded bundle to browsers on the LAN"
-git push -u origin claude/snake-ladders-cross-device-3uu177
+git push -u origin HEAD
 ```
 
 Watch `.github/workflows/android.yml`. A compile error here surfaces only
@@ -1095,7 +1096,7 @@ this plan.
 ```bash
 git add docs/
 git commit -m "docs: record the host-served join and what it leaves unproven"
-git push -u origin claude/snake-ladders-cross-device-3uu177
+git push -u origin HEAD
 ```
 
 ---

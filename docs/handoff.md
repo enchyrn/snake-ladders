@@ -5,8 +5,15 @@ pick it up without re-deriving anything. Start at **"Resuming From This
 Checkpoint"** near the end; everything before it is the history that led
 there.
 
-**Correction, 2026-09-26: `claude/snake-ladders-cross-device-3uu177` is the
-harness's working branch, and the paragraph below is out of date.** It
+**Branches, as of 2026-09-27: `claude/snake-ladders-cross-device-3uu177` is
+retired.** Each plan now gets its own branch named for the work
+(`claude/<plan-slug>`), cut from `main`, per CLAUDE.md's "Branches"; plan 2
+shipped from `claude/settings-and-input`. The two paragraphs below record how
+the old name was used before that.
+
+**Correction, 2026-09-26 (superseded by the note above):
+`claude/snake-ladders-cross-device-3uu177` is the harness's working branch,
+and the paragraph below is out of date.** It
 described the name as abandoned as of 2026-09-16. The harness has since
 mandated doing new work on a branch of that name rather than directly on
 `main`, so it carried the chrome-and-layout plan, which merged as PR #4
@@ -885,15 +892,16 @@ run `34762050952` built the APK with them in place.
 
 ## Resuming From This Checkpoint
 
-### Plan 2 complete, awaiting its PR (2026-09-27)
+### Plan 2 complete, shipped as its own PR (2026-09-27)
 
 **Plan 2 (`docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`) is
 done: all 9 tasks, a final whole-branch review, one fix wave, and — after the
 owner asked for them before the PR — R15 and the three parked minors, fixed
-in `1824266`..`b19d9cd`.** Everything is committed on
-`claude/snake-ladders-cross-device-3uu177` — **not yet a PR, not on `main`.
-Merging is the owner's decision**,
-never something a session does on its own. Its ledger lived in the gitignored
+in `1824266`..`b19d9cd`.** It was built on
+`claude/snake-ladders-cross-device-3uu177` and ships from
+`claude/settings-and-input`, the same commits under a name that says what they
+are — the old branch is retired (CLAUDE.md, "Branches"). The owner asked for
+the PR and for it to be merged once its review and CI are green. Its ledger lived in the gitignored
 `.superpowers/sdd/2026-09-17-settings-and-input-plan/`, which does **not**
 survive a fresh container; everything durable in it is here and in the plan's
 per-task execution notes. Everything below this subsection describes the
@@ -1199,8 +1207,9 @@ this plan does not do" section is still accurate — the renderer itself,
 `Scene.play`'s eight undepicted `TimelineEvent` variants, and light mode are
 all untouched.
 
-**Branch: `claude/snake-ladders-cross-device-3uu177`, fast-forwarded to
-`main` after PR #4 merged.** New work goes on this branch, not directly on
+**Branch (historical — superseded by per-plan branches, see CLAUDE.md
+"Branches"): `claude/snake-ladders-cross-device-3uu177`, fast-forwarded to
+`main` after PR #4 merged.** New work went on this branch, not directly on
 `main` — the SDD ledger's ruling recorded why: "harness mandates this branch;
 handoff's 'work on main' predates it." Each plan reaches `main` through its
 own PR, and **merging is the owner's decision**, never something a session
@@ -1455,9 +1464,9 @@ above. **Plan 2 (spec A, settings and input) is also done** —
 `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`, all 9 tasks,
 a final whole-branch review and one fix wave, implementing
 `docs/superpowers/specs/2026-09-16-settings-and-input-design.md` — see "Plan
-2 complete, awaiting its PR" at the top of this section for the commits,
-rulings and gate numbers. Its own PR is the next thing to do, not more
-implementation.
+2 complete, shipped as its own PR" at the top of this section for the
+commits, rulings and gate numbers. It ships as its own PR from
+`claude/settings-and-input`; no more implementation is queued for it.
 
 **Its stated dependency on plan 1 was met.** Spec A's `rollButton: hidden`
 setting needs a dice tray that is a real DOM control, not a canvas raycast
@@ -1737,18 +1746,18 @@ Three traps, and the first is the one that matters:
 
 1. Invoke `superpowers:using-superpowers` first — it is the bootstrap and sets
    the rule that skills come before any other action.
-2. **Work on `claude/snake-ladders-cross-device-3uu177`.** Plan 1 is merged
-   (PR #4, `58a8739`) and the branch was fast-forwarded to it before plan 2
-   started; plan 2's 9 tasks, final review and fix wave are now on top of
-   that, ending at `be91bea`, plus the owner-requested follow-ups
-   `1824266`..`b19d9cd`, their docs commit and a review polish commit.
-   Confirm with `git log --oneline origin/main..HEAD`
-   — it should list plan 2's commits (or nothing, if `main` has moved on and
-   you have fast-forwarded again). Plan 2 becomes its own PR.
-3. **Plan 2 is done** (see "Plan 2 complete, awaiting its PR" at the top of
+2. **Start new work on a new branch named for it** — `claude/<plan-slug>`,
+   cut from an up-to-date `main` (CLAUDE.md, "Branches"). Never reuse
+   `claude/snake-ladders-cross-device-3uu177` (retired) or a branch whose PR
+   has merged. Plan 1 merged as PR #4 (`58a8739`); plan 2 — its 9 tasks,
+   final review and fix wave ending at `be91bea`, the owner-requested
+   follow-ups `1824266`..`b19d9cd`, their docs commit and a review polish
+   commit — ships as its own PR from `claude/settings-and-input`. Confirm
+   it landed with `git log --oneline origin/main | head`.
+3. **Plan 2 is done** (see "Plan 2 complete, shipped as its own PR" at the top of
    this section): `docs/superpowers/plans/2026-09-17-settings-and-input-plan.md`,
    all 9 tasks, reviewed, with one final fix wave and the owner-requested
-   follow-ups (R15 and three minors). Open its PR next — there is
+   follow-ups (R15 and three minors). Its PR is the last step; there is
    no further implementation queued for it here.
 4. Plan 1 is fully ticked, with an execution note under every task recording
    what the plan text did not anticipate — read those before assuming the
