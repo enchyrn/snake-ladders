@@ -151,6 +151,18 @@ export const serveDist = async ({ dist, base = "", port = 0, https = false }) =>
 }
 
 /**
+ * The controls a viewport cuts off at either side. `scrollWidth` only sees
+ * overflow that makes the page scroll, and the match screen clips its own
+ * (`overflow-x: hidden`), so an armed "Confirm roll" drawn 28px past a 320px
+ * viewport passed this gate while reading "Confirm ro". Takes plain rects so
+ * the rule is testable without a browser; half a pixel is subpixel rounding.
+ */
+export const clippedControls = (controls, viewportWidth) =>
+  controls
+    .filter((c) => c.width > 0 && (c.left < -0.5 || c.right > viewportWidth + 0.5))
+    .map((c) => `"${c.name}" spans ${Math.round(c.left)}–${Math.round(c.right)}px of a ${viewportWidth}px viewport`)
+
+/**
  * Launch Chromium, falling back to any build already present under
  * PLAYWRIGHT_BROWSERS_PATH. Playwright insists on a browser matching its own
  * version, but a container that ships one a version or two off is still
@@ -185,6 +197,22 @@ const launchChromium = async () => {
 }
 
 const problems = []
+
+/** Every button a player could see and reach, measured where it landed. */
+const checkControls = async (screen, page) => {
+  const { width, controls } = await page.evaluate(() => ({
+    width: innerWidth,
+    controls: [...document.querySelectorAll("button")]
+      // Behind an open sheet or hidden from the accessibility tree, a
+      // control is not one the player is being offered.
+      .filter((b) => !b.closest("[inert], [aria-hidden='true']") && getComputedStyle(b).visibility !== "hidden")
+      .map((b) => {
+        const r = b.getBoundingClientRect()
+        return { name: (b.getAttribute("aria-label") || b.textContent || "").trim(), left: r.left, right: r.right, width: r.width }
+      }),
+  }))
+  for (const clipped of clippedControls(controls, width)) problems.push(`${screen}: ${clipped}`)
+}
 
 const run = async () => {
   await mkdir(OUT, { recursive: true })
@@ -225,9 +253,10 @@ const drive = async (served, browser) => {
     problems.push(`console: ${text}`)
   })
 
-  const shot = async (name) => {
-    await page.screenshot({ path: join(OUT, `${name}.png`) })
+  const shot = async (name, on = page) => {
+    await on.screenshot({ path: join(OUT, `${name}.png`) })
     console.log(`  screenshot -> ${join(OUT, `${name}.png`)}`)
+    await checkControls(name, on)
   }
 
   // Recorded where the toast lands at the instant it is inserted: it retires
@@ -354,6 +383,34 @@ const drive = async (served, browser) => {
   )
   if (overflow > 0) problems.push(`page overflows horizontally by ${overflow}px`)
 
+  // The widest the roll row ever gets: "Confirm before rolling" armed, at the
+  // narrowest phone the layout supports. Armed, Roll's label grows and Roll
+  // does not shrink, so this is where the row runs out first — and where it
+  // did, unseen, until this looked.
+  const narrow = await browser.newPage({
+    viewport: { width: 320, height: 800 },
+    deviceScaleFactor: 2,
+    ignoreHTTPSErrors: HTTPS,
+  })
+  narrow.on("pageerror", (e) => problems.push(`pageerror (320px): ${e.message}`))
+  await narrow.addInitScript(() => {
+    // Written before the app reads it; a harness without storage just runs
+    // the default and still checks the row.
+    try {
+      localStorage.setItem("sl:settings", JSON.stringify({ confirmRoll: true }))
+    } catch {}
+  })
+  await narrow.goto(entry, { waitUntil: "networkidle" })
+  await narrow.getByRole("button", { name: /pass and play/i }).click()
+  await narrow.waitForTimeout(800)
+  await narrow.getByRole("button", { name: /^start/i }).click()
+  await narrow.waitForTimeout(1500)
+  await narrow.getByRole("button", { name: /^roll$/i }).click()
+  await narrow.waitForTimeout(300)
+  const armed = await narrow.getByRole("button", { name: /^confirm roll$/i }).count()
+  if (armed === 0) problems.push("320px: a first tap under Confirm before rolling armed nothing")
+  await shot("6-armed-320", narrow)
+  await narrow.close()
 }
 
 // Importing this module must not drive a browser: the serving rules above are
@@ -369,5 +426,5 @@ if (!isMain) {
     for (const p of problems) console.error("  - " + p)
     process.exit(1)
   }
-  console.log("\nNo console errors, no page errors, no horizontal overflow.")
+  console.log("\nNo console errors, no page errors, no horizontal overflow, no clipped controls.")
 }

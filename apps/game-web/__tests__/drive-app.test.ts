@@ -4,7 +4,7 @@ import { request as httpsRequest } from "node:https"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { serveDist } from "@mutation/tooling/drive-app"
+import { clippedControls, serveDist } from "@mutation/tooling/drive-app"
 
 const open: Array<{ close: (cb?: () => void) => void }> = []
 
@@ -87,5 +87,27 @@ describe("serveDist", () => {
     const escaped = await get(served.origin, "/snake-ladders../secret.txt")
     expect(escaped.status).toBe(404)
     expect(escaped.body).not.toContain("not servable")
+  })
+})
+
+describe("clippedControls", () => {
+  const at = (name: string, left: number, right: number) => ({ name, left, right, width: right - left })
+
+  // The armed Roll at 320px, as measured: the match screen clips overflow, so
+  // the page never scrolled and scrollWidth alone passed it.
+  it("reports a control past the right edge", () => {
+    expect(clippedControls([at("Confirm roll", 214, 348)], 320)).toEqual([
+      '"Confirm roll" spans 214–348px of a 320px viewport',
+    ])
+  })
+
+  it("reports a control past the left edge", () => {
+    expect(clippedControls([at("Leave", -12, 90)], 320)).toHaveLength(1)
+  })
+
+  it("passes controls inside the viewport, subpixel rounding, and unrendered ones", () => {
+    expect(
+      clippedControls([at("Roll", 171, 304), at("Tray", 16, 320.4), { name: "gone", left: 400, right: 400, width: 0 }], 320),
+    ).toEqual([])
   })
 })

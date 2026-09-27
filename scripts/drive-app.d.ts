@@ -1,7 +1,7 @@
 /**
- * Types for the `serveDist` half of `drive-app.mjs`. The script is plain
- * JavaScript because it runs under bare `node` in CI and locally; only the
- * part the suite imports is declared here.
+ * Types for the parts of `drive-app.mjs` the suite imports. The script is
+ * plain JavaScript because it runs under bare `node` in CI and locally, so
+ * nothing else of it is declared here.
  */
 
 export interface ServedDist {
@@ -19,3 +19,8 @@ export declare const serveDist: (options: {
   port?: number
   https?: boolean
 }) => Promise<ServedDist>
+
+export declare const clippedControls: (
+  controls: ReadonlyArray<{ name: string; left: number; right: number; width: number }>,
+  viewportWidth: number,
+) => ReadonlyArray<string>
