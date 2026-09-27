@@ -182,12 +182,14 @@ export const SettingsPanel = ({ open, onClose }: { readonly open: boolean; reado
 
   if (!open) return null
 
+  // Computed from `settings` (this render's value, not a functional updater)
+  // and `saveSettings` called as a sibling statement, not from inside
+  // `setSettings` — an updater must stay pure, and StrictMode double-invokes
+  // it to prove that, which would have written to storage twice per click.
   const setField = <K extends keyof Settings>(key: K, value: Settings[K]) => {
-    setSettings((prev) => {
-      const next = { ...prev, [key]: value }
-      saveSettings(next)
-      return next
-    })
+    const next = { ...settings, [key]: value }
+    setSettings(next)
+    saveSettings(next)
   }
 
   // Capability probes, never platform checks: a disabled control still

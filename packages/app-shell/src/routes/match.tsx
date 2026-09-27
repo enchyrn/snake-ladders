@@ -62,10 +62,20 @@ export const MatchScreen = () => {
   const [showSettings, setShowSettings] = useState(false)
   const roundLogButton = useRef<HTMLButtonElement | null>(null)
   // While either sheet is open, everything behind it is inert — except the
-  // log preview, which holds nothing focusable and is the live region. The
-  // header itself is inert too, so the round-log and settings buttons can
-  // never open both sheets at once.
+  // log preview, which holds nothing focusable and is the live region, so it
+  // is deliberately left out of `inert` rather than losing that region from
+  // the accessibility tree. Its own tap is guarded below instead: `inert`
+  // only covers the header's two buttons, not a second way to reach the same
+  // action.
   const behindSheet = showFullLog || showSettings || undefined
+  // Guards the log preview's own tap target (Band 4), which `inert` above
+  // deliberately does not cover. Settings is drawn above it at every
+  // viewport, but the guard does not lean on that — it is explicit so the
+  // invariant survives a future z-index change.
+  const openRoundLog = () => {
+    if (showSettings) return
+    setShowFullLog(true)
+  }
 
   useEffect(() => {
     if (!client) void navigate({ to: "/" })
@@ -147,7 +157,7 @@ export const MatchScreen = () => {
             type="button"
             aria-label="Round log"
             className={headerIconButton}
-            onClick={() => setShowFullLog(true)}
+            onClick={openRoundLog}
           >
             <History size={18} aria-hidden="true" />
           </button>
@@ -231,7 +241,7 @@ export const MatchScreen = () => {
             containerType: "size",
           }),
         )}
-        onClick={() => setShowFullLog(true)}
+        onClick={openRoundLog}
       >
         <EventLog state={match} mode="preview" />
       </div>
