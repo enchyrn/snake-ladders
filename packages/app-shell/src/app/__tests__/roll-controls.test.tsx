@@ -17,11 +17,35 @@ describe("RollControls", () => {
     },
   )
 
+  const render = (rollButton: "hidden" | "left" | "right", armed = false) =>
+    renderToStaticMarkup(<RollControls rollButton={rollButton} disabled={false} onRoll={() => {}} armed={armed} />)
+
   it("puts the button on the side asked for", () => {
-    const left = renderToStaticMarkup(
-      <RollControls rollButton="left" disabled={false} onRoll={() => {}} />,
-    )
-    expect(left.indexOf("Roll")).toBeLessThan(left.indexOf("Roll the dice"))
+    const left = render("left")
+    expect(left.indexOf(">Roll</button>")).toBeLessThan(left.indexOf("Roll the dice"))
+    const right = render("right")
+    expect(right.indexOf("Roll the dice")).toBeLessThan(right.indexOf(">Roll</button>"))
+  })
+
+  it("leaves only the tray when Roll is hidden", () => {
+    const html = render("hidden")
+    expect(html.match(/<button/g)).toHaveLength(1)
+    expect(html).toContain('aria-label="Roll the dice"')
+    expect(html).not.toContain(">Roll</button>")
+  })
+
+  // Roll is `flex: none`, so a second visible "Confirm roll" in the tray beside
+  // it pushed Roll 28px past a 320px viewport. With Roll shown, Roll carries
+  // the armed text and the tray only its accessible name.
+  it.each(["left", "right"] as const)("draws the armed text once, on Roll, with rollButton=%s", (rollButton) => {
+    const html = render(rollButton, true)
+    expect(html.match(/>Confirm roll</g)).toHaveLength(1)
+    expect(html).toContain(">Confirm roll</button>")
+    expect(html).toContain('aria-label="Confirm roll"')
+  })
+
+  it("draws the armed text on the tray when it stands alone", () => {
+    expect(render("hidden", true)).toContain(">Confirm roll</span>")
   })
 
   // Both controls share one confirm path, so an arm taken on either has to

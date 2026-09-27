@@ -256,12 +256,17 @@ export const DiceTray = ({
   onRoll,
   disabled,
   label,
+  showLabel = false,
 }: {
   readonly onRoll: () => void
   readonly disabled: boolean
-  /** Shown beside the dice and used as the name when set — "Confirm roll"
-   *  while a confirm is armed, which the glyph alone cannot say. */
+  /** The name when set — "Confirm roll" while a confirm is armed, which the
+   *  glyph alone cannot say. */
   readonly label?: string
+  /** Also draw `label` beside the dice. Only for a tray standing alone: with
+   *  Roll beside it, Roll already reads "Confirm roll", and the pair's two
+   *  labels overflowed a 320px row. */
+  readonly showLabel?: boolean
 }) => (
   <button
     type="button"
@@ -277,7 +282,7 @@ export const DiceTray = ({
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
     </span>
-    {label && <span aria-hidden>{label}</span>}
+    {label && showLabel && <span aria-hidden>{label}</span>}
   </button>
 )
 

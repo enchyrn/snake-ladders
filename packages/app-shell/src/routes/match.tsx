@@ -42,7 +42,14 @@ export const RollControls = ({
   /** A first tap under "Confirm before rolling" has been taken. */
   readonly armed?: boolean
 }) => {
-  const tray = <DiceTray onRoll={onRoll} disabled={disabled} label={armed ? "Confirm roll" : undefined} />
+  const tray = (
+    <DiceTray
+      onRoll={onRoll}
+      disabled={disabled}
+      label={armed ? "Confirm roll" : undefined}
+      showLabel={rollButton === "hidden"}
+    />
+  )
   if (rollButton === "hidden") return tray
   const roll = (
     <button type="button" className={rollButtonClass} disabled={disabled} onClick={onRoll}>
