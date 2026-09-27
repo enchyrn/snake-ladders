@@ -15,6 +15,15 @@ export const SPEEDS = { calm: 1, brisk: 1.5, quick: 2.5 } as const
 export const effectiveDuration = (duration: number, speed: number): number =>
   Math.max(FLOOR_MS, duration / speed)
 
+/**
+ * The elapsed time that puts a clip the same fraction of the way through at
+ * speed `to` as `elapsed` did at `from`. `Scene.step` derives progress live
+ * from elapsed over the effective duration, so a speed change that left
+ * elapsed alone moved the token along its path — backwards, when slowing.
+ */
+export const rescaleElapsed = (elapsed: number, duration: number, from: number, to: number): number =>
+  (elapsed * effectiveDuration(duration, to)) / effectiveDuration(duration, from)
+
 export type MotionLevel = "full" | "reduced"
 
 /**

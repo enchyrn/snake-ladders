@@ -138,12 +138,23 @@ export const BoardCanvas = ({
   // effect below only re-runs when one of these changes, not on a rebuild.
   const presentation = useRef({ speed, motion, tileNumbers })
   presentation.current = { speed, motion, tileNumbers }
+  // Quality is structural — it rebuilds the scene — and a rebuild mid-round
+  // snaps every token to the outcome and skips the rest of the replay. So a
+  // change made from the overlay while a round plays is held here and taken
+  // up once that round settles, rather than applied the moment it is picked.
+  const wantedQuality = quality ?? "high"
+  const [appliedQuality, setAppliedQuality] = useState(wantedQuality)
+  const wantedQualityRef = useRef(wantedQuality)
+  wantedQualityRef.current = wantedQuality
+  useEffect(() => {
+    if (!sceneRef.current?.isAnimating) setAppliedQuality(wantedQuality)
+  }, [wantedQuality])
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const scene = new BoardScene(canvas, state.board.size, {
-      quality: quality ?? "high",
+      quality: appliedQuality,
       tileNumbers: presentation.current.tileNumbers,
       onViewChange: (isDefault) => setViewMoved(!isDefault),
     })
@@ -161,7 +172,7 @@ export const BoardCanvas = ({
       sceneRef.current = null
     }
     // Board size and quality are structural; everything else streams in below.
-  }, [state.board.size, quality])
+  }, [state.board.size, appliedQuality])
 
   // Presentation, not structure: the overlay changes these over a live match,
   // and rebuilding the scene would discard a round mid-replay.
@@ -178,7 +189,10 @@ export const BoardCanvas = ({
     if (!scene) return
     // Replays a round exactly once however many times React re-renders it,
     // and holds the tokens still while one is pending — see round-playback.ts.
-    playedRef.current = showRound(scene, state, playedRef.current, () => settledRef.current?.())
+    playedRef.current = showRound(scene, state, playedRef.current, () => {
+      settledRef.current?.()
+      setAppliedQuality(wantedQualityRef.current)
+    })
   }, [state])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {

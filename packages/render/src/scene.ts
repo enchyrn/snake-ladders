@@ -21,7 +21,7 @@ import {
 } from "./geometry"
 import { palette, playerColours } from "./palette"
 import { snakeSkinTexture, woodTexture } from "./textures"
-import { effectiveDuration, SPEEDS, type MotionLevel } from "./timing"
+import { effectiveDuration, rescaleElapsed, SPEEDS, type MotionLevel } from "./timing"
 
 /** One step of choreography: a duration and a function of normalised time. */
 interface Clip {
@@ -413,6 +413,8 @@ export class BoardScene {
   /** Multiplier from the speed setting; applied per-clip in `step`, not baked
    *  into the durations `play` records, so it can change mid-animation. */
   setSpeed(multiplier: number): void {
+    const clip = this.clips[0]
+    if (clip) this.clipElapsed = rescaleElapsed(this.clipElapsed, clip.duration, this.speed, multiplier)
     this.speed = multiplier
   }
 
