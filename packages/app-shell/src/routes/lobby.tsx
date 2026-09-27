@@ -524,7 +524,7 @@ export const LobbyScreen = () => {
             this is expanded, so collapsing it costs nobody a reading. */}
         {/* The heading holds the button, not the reverse: a heading inside
             a button is invalid, and heading navigation skipped it. */}
-        <h3 className={cx(headingClass, css({ margin: 0 }))}>
+        <h3 className={headingClass}>
           <button
             type="button"
             // The `ghost` variant dims its text and sets its own size for an
