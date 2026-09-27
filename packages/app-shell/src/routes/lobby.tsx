@@ -110,6 +110,55 @@ const ToggleSetting = ({
   </div>
 )
 
+/**
+ * Start stays on screen at every player count. Each pass-and-play player adds
+ * a 44px row, so 2 players pushed Start to 830/800 at 360x800 and six to
+ * 1023/844 at 390x844; no compaction fits six player rows and four modules
+ * above the fold. Pinned instead, in flow rather than fixed, so the
+ * page's height still includes it and the last content scrolls clear of it.
+ * Its bottom margin cancels the screen's own bottom padding, so at the end of
+ * the page it sits flush with the viewport and carries the safe area itself.
+ * Below the PWA toast (z 50), which floats over it rather than under.
+ */
+const startRowClass = css({
+  position: "sticky",
+  bottom: 0,
+  zIndex: 1,
+  marginTop: "auto",
+  marginBottom: "calc(-1 * max(16px, env(safe-area-inset-bottom)))",
+  marginLeft: "calc(-1 * {spacing.gutterL})",
+  marginRight: "calc(-1 * {spacing.gutterR})",
+  paddingTop: "3",
+  paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+  paddingLeft: "gutterL",
+  paddingRight: "gutterR",
+  background: "surface",
+  borderTop: "1px solid",
+  borderTopColor: "border",
+})
+
+/** Clearance for the pinned row: its border, 12px above and at least 12px
+ *  below a 44px control, and a hair. Scrolling something into view (focus,
+ *  the picker opening) stops this far above the viewport's bottom, or it
+ *  lands behind the row. Spelled out in each rule rather than shared through
+ *  a constant, so Panda's static extraction sees the literal. */
+const clearOfStartRowClass = css({
+  "& :is(button, input)": { scrollMarginBottom: "calc(72px + env(safe-area-inset-bottom))" },
+})
+const pickerRowClass = css({ scrollMarginBottom: "calc(72px + env(safe-area-inset-bottom))" })
+
+/** A freshly opened colour picker can open under the pinned row, when the
+ *  pip that opened it is the last thing above the fold. Not `block:
+ *  "nearest"`: Chromium skips that scroll whenever the border box is already
+ *  inside the viewport, ignoring scroll-margin — which is exactly the case of
+ *  a picker drawn behind the row. Module-level, so React calls it once as the
+ *  row mounts rather than on every render. */
+const revealAboveStartRow = (el: HTMLElement | null) => {
+  if (!el) return
+  const clearance = Number.parseFloat(getComputedStyle(el).scrollMarginBottom) || 0
+  if (el.getBoundingClientRect().bottom + clearance > innerHeight) el.scrollIntoView({ block: "end" })
+}
+
 /** `""` means "By seat", which the wire says by leaving the field out: an older
  *  build then decodes the same Join it always did. */
 const join = (playerId: string, name: string, colour: string): Action =>
@@ -280,7 +329,7 @@ export const LobbyScreen = () => {
     .join(" · ")
 
   return (
-    <main className={screenClass}>
+    <main className={cx(screenClass, clearOfStartRowClass)}>
       <header className={barClass}>
         <button type="button" className={button({ size: "md" })} onClick={leave}>
           <ChevronLeft size={16} aria-hidden="true" /> Leave
@@ -368,7 +417,7 @@ export const LobbyScreen = () => {
                     )}
                 </li>
                 {picking && (
-                  <li>
+                  <li ref={revealAboveStartRow} className={pickerRowClass}>
                     {/* Pressed shows what was asked for; the pip above shows
                         what was granted, which differs only when someone
                         earlier in the lobby already holds that colour. */}
@@ -485,24 +534,37 @@ export const LobbyScreen = () => {
             is what pushed Start off screen at 390x844 in the first pass.
             The summary paragraph carries the current values whether or not
             this is expanded, so collapsing it costs nobody a reading. */}
-        <button
-          type="button"
-          className={cx(button({ variant: "ghost", size: "md" }), css({ width: "100%", justifyContent: "space-between", paddingInline: "0" }))}
-          aria-expanded={settingsExpanded}
-          onClick={() => setSettingsExpanded((v) => !v)}
-        >
-          {/* The `ghost` variant dims its own text (`color: textDim`) for an
-              icon-only button elsewhere; here the button wraps a heading, and
-              inheriting that dimming is what would make this the one section
-              title on the screen that doesn't read as one. */}
-          <h3 className={cx(headingClass, css({ margin: 0, color: "text" }))}>Match settings</h3>
-          <ChevronDown
-            size={18}
-            aria-hidden
-            className={css({ transition: "transform 0.15s", flex: "none" })}
-            style={{ transform: settingsExpanded ? "rotate(180deg)" : undefined }}
-          />
-        </button>
+        {/* The heading holds the button, not the reverse: a heading inside
+            a button is invalid, and heading navigation skipped it. */}
+        <h3 className={cx(headingClass, css({ margin: 0 }))}>
+          <button
+            type="button"
+            // The `ghost` variant dims its text and sets its own size for an
+            // icon-only button elsewhere; here the button is the section
+            // title, so it takes the heading's type and colour instead.
+            className={cx(
+              button({ variant: "ghost", size: "md" }),
+              css({
+                width: "100%",
+                justifyContent: "space-between",
+                paddingInline: "0",
+                color: "text",
+                fontSize: "inherit",
+                fontWeight: "inherit",
+              }),
+            )}
+            aria-expanded={settingsExpanded}
+            onClick={() => setSettingsExpanded((v) => !v)}
+          >
+            Match settings
+            <ChevronDown
+              size={18}
+              aria-hidden
+              className={css({ transition: "transform 0.15s", flex: "none" })}
+              style={{ transform: settingsExpanded ? "rotate(180deg)" : undefined }}
+            />
+          </button>
+        </h3>
         <p className={cx(paragraphClass, hintClass)}>{settingsSummary}</p>
         {settingsExpanded && (
           <div className={settingsListClass}>
@@ -544,22 +606,24 @@ export const LobbyScreen = () => {
         )}
       </section>
 
-      {canHost ? (
-        <button
-          type="button"
-          className={cx(button({ variant: "primary", size: "md" }), css({ width: "100%" }))}
-          disabled={match.players.length < 1}
-          onClick={() => {
-            saveLastSetup(match.config)
-            client.send({ _tag: "Start" })
-            client.lock()
-          }}
-        >
-          Start match
-        </button>
-      ) : (
-        <p className={cx(paragraphClass, hintClass)}>Waiting for the host to start the match…</p>
-      )}
+      <div className={startRowClass}>
+        {canHost ? (
+          <button
+            type="button"
+            className={cx(button({ variant: "primary", size: "md" }), css({ width: "100%" }))}
+            disabled={match.players.length < 1}
+            onClick={() => {
+              saveLastSetup(match.config)
+              client.send({ _tag: "Start" })
+              client.lock()
+            }}
+          >
+            Start match
+          </button>
+        ) : (
+          <p className={cx(hintClass, css({ margin: 0, lineHeight: 1.4 }))}>Waiting for the host to start the match…</p>
+        )}
+      </div>
     </main>
   )
 }
