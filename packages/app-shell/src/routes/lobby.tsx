@@ -1,14 +1,16 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronLeft, Plus, X } from "lucide-react"
+import { ChevronDown, ChevronLeft, Minus, Plus, X } from "lucide-react"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
+import type { MatchConfig } from "@mutation/engine/types"
 import { QrCode } from "@mutation/ui/QrCode"
 import { seatColour } from "@mutation/render/palette"
 import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "../store/atoms"
+import { loadLastSetup, saveLastSetup } from "../store/settings"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { button } from "styled-system/recipes"
 import { css, cx } from "styled-system/css"
@@ -27,6 +29,84 @@ import {
 // reserves for snakes and ladders, unlike the `--snake-head` green the old
 // `.module-toggle.is-active` rule used.
 const onColour = css({ borderColor: "seat.0", color: "seat.0" })
+
+const settingsListClass = css({ display: "flex", flexDirection: "column", gap: "2" })
+const settingRowClass = css({ display: "flex", alignItems: "center", gap: "2", minHeight: "tap" })
+const settingLabelClass = css({ flex: 1 })
+const stepperControlsClass = css({ display: "flex", alignItems: "center", gap: "1" })
+const stepperButtonClass = cx(button({ variant: "toggle", size: "md" }), css({ flex: "none", width: "tap", paddingInline: "0" }))
+const stepperValueClass = css({ minWidth: "2.5em", textAlign: "center", fontWeight: 600 })
+
+/** A -/+ pair either side of the value, rather than a segmented row of every
+ *  possible value (mineCount alone has 41) or a bare `<input type="range">`,
+ *  which reads its value to nobody unless it is also labelled. Each button is
+ *  its own 44px tap target, matching every other control on this screen. */
+const Stepper = ({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: number
+  readonly min: number
+  readonly max: number
+  readonly disabled: boolean
+  readonly onChange: (value: number) => void
+}) => (
+  <div className={settingRowClass}>
+    <span className={settingLabelClass}>{label}</span>
+    <div role="group" aria-label={label} className={stepperControlsClass}>
+      <button
+        type="button"
+        className={stepperButtonClass}
+        disabled={disabled || value <= min}
+        aria-label={`Decrease ${label}`}
+        onClick={() => onChange(Math.max(min, value - 1))}
+      >
+        <Minus size={18} aria-hidden="true" />
+      </button>
+      <span className={stepperValueClass} aria-live="polite">{value}</span>
+      <button
+        type="button"
+        className={stepperButtonClass}
+        disabled={disabled || value >= max}
+        aria-label={`Increase ${label}`}
+        onClick={() => onChange(Math.min(max, value + 1))}
+      >
+        <Plus size={18} aria-hidden="true" />
+      </button>
+    </div>
+  </div>
+)
+
+/** Same row shape as `Stepper`, for the one boolean left in `MatchConfig`. */
+const ToggleSetting = ({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: boolean
+  readonly disabled: boolean
+  readonly onChange: (value: boolean) => void
+}) => (
+  <div className={settingRowClass}>
+    <span className={settingLabelClass}>{label}</span>
+    <button
+      type="button"
+      aria-pressed={value}
+      className={cx(button({ variant: "toggle", size: "md" }), css({ flex: "none" }), value ? onColour : undefined)}
+      disabled={disabled}
+      onClick={() => onChange(!value)}
+    >
+      {value ? "On" : "Off"}
+    </button>
+  </div>
+)
 
 export const LobbyScreen = () => {
   const session = useSession()
@@ -68,14 +148,36 @@ export const LobbyScreen = () => {
     if (phase !== "lobby") void navigate({ to: "/match" })
   }, [phase, navigate])
 
+  // Same one-shot shape as the Join effect above: applied once, and only
+  // once — a later Configure (a module toggle, a stepper tap) must not be
+  // clobbered by a stale lastSetup on some later re-render. `{ ...match.config,
+  // ...lastSetup }` spreads onto the *live* config, never a bare defaultConfig,
+  // so `seed` — the room code — always survives even though lastSetup omits it.
+  const appliedLastSetup = useRef(false)
+  useEffect(() => {
+    if (!client || !canHost || phase !== "lobby" || appliedLastSetup.current) return
+    appliedLastSetup.current = true
+    const lastSetup = loadLastSetup()
+    if (Object.keys(lastSetup).length === 0) return
+    client.send({ _tag: "Configure", config: { ...match.config, ...lastSetup } })
+  }, [client, canHost, phase, match.config])
+
   if (!client) return null
 
-  const toggleModule = (module: RuleModule) => {
+  // A UI gate only (Step 6 / ADR 0009): the engine's Configure case checks
+  // phase, not who sent it, so a peer that sent one would still be applied
+  // everywhere. This just keeps a peer's own screen from proposing changes
+  // nobody there expects to see take effect.
+  const setConfig = (patch: Partial<MatchConfig>) => {
     if (!canHost) return
+    client.send({ _tag: "Configure", config: { ...match.config, ...patch } })
+  }
+
+  const toggleModule = (module: RuleModule) => {
     const modules = match.config.modules.includes(module)
       ? match.config.modules.filter((m) => m !== module)
       : [...match.config.modules, module]
-    client.send({ _tag: "Configure", config: { ...match.config, modules } })
+    setConfig({ modules })
   }
 
   const leave = () => {
@@ -283,12 +385,53 @@ export const LobbyScreen = () => {
         </ul>
       </section>
 
+      <section>
+        <h3 className={headingClass}>Match settings</h3>
+        <div className={settingsListClass}>
+          <Stepper
+            label="Board size"
+            value={match.config.size}
+            min={5}
+            max={12}
+            disabled={!canHost}
+            onChange={(size) => setConfig({ size })}
+          />
+          {match.config.modules.includes("minesweeper") && (
+            <Stepper
+              label="Mines"
+              value={match.config.mineCount}
+              min={0}
+              max={40}
+              disabled={!canHost}
+              onChange={(mineCount) => setConfig({ mineCount })}
+            />
+          )}
+          {match.config.modules.includes("mutation") && (
+            <Stepper
+              label="Board breathes every"
+              value={match.config.mutationInterval}
+              min={1}
+              max={50}
+              disabled={!canHost}
+              onChange={(mutationInterval) => setConfig({ mutationInterval })}
+            />
+          )}
+          <ToggleSetting
+            label="Exact finish"
+            value={match.config.exactFinish}
+            disabled={!canHost}
+            onChange={(exactFinish) => setConfig({ exactFinish })}
+          />
+        </div>
+      </section>
+
       {canHost ? (
         <button
           type="button"
           className={cx(button({ variant: "primary", size: "md" }), css({ width: "100%" }))}
           disabled={match.players.length < 1}
           onClick={() => {
+            saveLastSetup(match.config)
             client.send({ _tag: "Start" })
             client.lock()
           }}

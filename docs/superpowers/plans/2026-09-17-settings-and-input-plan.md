@@ -687,7 +687,7 @@ the lobby edits **only** `modules` (`lobby.tsx:54`). The rest sit at whatever
 **Interfaces:**
 - Produces: `loadLastSetup(): Partial<MatchConfig>`, `saveLastSetup(config: MatchConfig): void` in `settings.ts`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/app-shell/src/store/__tests__/last-setup.test.ts
@@ -726,7 +726,7 @@ describe("the host's last match setup", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
@@ -734,13 +734,13 @@ nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
 
 Expected: FAIL — not exported.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 Add to `settings.ts` a `sl:last-setup` key holding `size`, `modules`,
 `mutationInterval`, `mineCount` and `exactFinish` — **and never `seed`**, with
 a comment saying why, because the next person to read it will be tempted.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
@@ -748,7 +748,7 @@ nubx vitest run packages/app-shell/src/store/__tests__/last-setup.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Expose the rest of MatchConfig in the lobby**
+- [x] **Step 5: Expose the rest of MatchConfig in the lobby**
 
 Beneath the module rows, add controls for board `size` (5–12), `mineCount`
 (0–40, only when minesweeper is on), `mutationInterval` (1–50, only when
@@ -759,7 +759,7 @@ mutation is on) and `exactFinish`. Each sends
 Apply `loadLastSetup()` when the host opens a room, and call `saveLastSetup` on
 `Start`.
 
-- [ ] **Step 6: Write this section as the host's screen, not an enforced permission**
+- [x] **Step 6: Write this section as the host's screen, not an enforced permission**
 
 `canHost` (`lobby.tsx:27`) is `role !== "peer"` and is a **UI gate only** —
 `Configure` has no authorship check in the engine, so a peer that sent one would
@@ -767,7 +767,7 @@ have it sequenced and applied everywhere. Under ADR 0009 that is consistent:
 trust is social. Do not add an engine check, and do not write copy claiming only
 the host can change these.
 
-- [ ] **Step 7: Build, drive, look**
+- [x] **Step 7: Build, drive, look**
 
 ```bash
 nub run build && nub run verify:ui
@@ -776,12 +776,62 @@ nub run build && nub run verify:ui
 Expected: PASS, and `screenshots/2-lobby.png` shows the new controls without
 pushing `Start` off the screen.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/app-shell/src/routes/lobby.tsx packages/app-shell/src/store/settings.ts packages/app-shell/src/store/__tests__/last-setup.test.ts
 git commit -m "feat: the rest of MatchConfig is editable, and the host's setup is remembered"
 ```
+
+**Execution note:**
+
+- **Generator safety, investigated per Step 5's instruction:** `placeMines`
+  (`packages/engine/src/board.ts`) already caps the mines it places at
+  `Math.min(count, pool.length)` — a `mineCount` too large for the chosen
+  `size` is silently truncated to however many unblocked tiles exist, never a
+  loop or a throw. `pickLinks` is bounded the same way (`claim()` returns
+  `null` and the loop breaks). So no combination of `size` × `mineCount` ×
+  `mutationInterval` breaks generation, and the lobby does not clamp
+  `mineCount` by `size` beyond the schema's own 0–40 — only the plan's stated
+  ranges (`size` 5–12, `mineCount` 0–40, `mutationInterval` 1–50) are enforced,
+  each via a `Stepper` control that clamps at its own min/max.
+- **Controller ruling R8 applied for `loadLastSetup`:** each field of
+  `sl:last-setup` is validated and clamped independently (`size` 5–12,
+  `mineCount` 0–40, `mutationInterval` 1–50, all integers; `exactFinish` a
+  boolean; `modules` filtered to known `RuleModule` values with duplicates
+  removed) — a bad or missing field is simply left out of the returned
+  `Partial<MatchConfig>` rather than repaired to a default, since the lobby
+  spreads it onto the match's *live* `config`, not onto `defaultConfig`. The
+  repair is written back to storage, mirroring `loadSettings`. `seed` is never
+  read from or written to `sl:last-setup` (see the comment beside
+  `saveLastSetup` in `settings.ts`); `saveLastSetup` builds its object field by
+  field rather than spreading `MatchConfig` and stripping `seed` after the
+  fact, so a future field added to `MatchConfig` is not remembered by accident.
+- **Controller ruling R8 applied for the lobby effect:** a `useRef`-guarded
+  effect (same one-shot shape as the existing Join effect) applies
+  `loadLastSetup()` exactly once, only when `canHost` and `phase === "lobby"`,
+  by sending `Configure` with `{ ...match.config, ...lastSetup }` — skipped
+  entirely when `loadLastSetup()` is empty. `saveLastSetup(match.config)` runs
+  on the `Start` button's click, before the `Start` action is sent.
+- **Controls, and the fold:** `Stepper` (size/mines/mutation interval) and
+  `ToggleSetting` (exact finish) are new, file-local components in
+  `lobby.tsx`, styled with the existing `button` recipe (`variant: "toggle"`)
+  and the `tap` (44px) size token — two labelled -/+ buttons rather than a
+  segmented row (`mineCount` alone has 41 possible values) or a bare
+  `<input type="range">`. Verified at both 390×844 and 320×844 with a
+  throwaway Playwright script (not committed): with every module on (the
+  default), `Start` sits 22–36px below the fold at both widths before any
+  scroll, but the lobby already scrolls the whole page in normal document flow
+  (`screenClass`'s own doc comment: "every route but the match screen scrolls
+  normally") — after `scrollIntoViewIfNeeded()`, `Start` lands fully inside the
+  viewport and is enabled, and `nub run verify:ui` (390×844) reports no
+  horizontal overflow. This matches the existing behaviour of the module rows,
+  which already push `Start` toward the fold when several are expanded.
+- **`toggleModule` refactor:** extracted a `setConfig(patch)` helper (also used
+  by the new `Stepper`/`ToggleSetting` handlers) that holds the `canHost` gate
+  in one place instead of repeating `if (!canHost) return` at each call site;
+  `toggleModule` now calls it instead of sending `Configure` directly. Behaviour
+  is unchanged.
 
 ---
 

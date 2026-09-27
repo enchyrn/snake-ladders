@@ -1,5 +1,7 @@
 import { Atom } from "@effect-atom/atom"
 import { seatColours } from "@mutation/render/palette"
+import { allModules, type RuleModule } from "@mutation/engine/primitives"
+import type { MatchConfig } from "@mutation/engine/types"
 
 /**
  * Device-local presentation and input. Nothing here reaches the reducer, is
@@ -91,3 +93,83 @@ export const loadSettings = (): Settings => {
 }
 
 export const settingsAtom = Atom.keepAlive(Atom.make(loadSettings()))
+
+/*
+ * The host's last match setup — everything `Configure`-able except the seed.
+ * Match settings, unlike device settings above, are per-match and normally
+ * forgotten; this is the one exception, so the lobby doesn't reset to
+ * `defaultConfig` every time someone hosts.
+ *
+ * `seed` is deliberately absent from this list, however tempting it looks to
+ * add: the room code IS the seed (CLAUDE.md, "the room code is the match
+ * seed"). Remembering it here would build a previous match's board under a
+ * new room's code, and two devices would silently disagree on the first
+ * roll — so it is never read from storage, and never written to it either.
+ */
+const LAST_SETUP_KEY = "sl:last-setup"
+
+const clampedInt = (v: unknown, min: number, max: number): number | undefined =>
+  typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : undefined
+
+const cleanModules = (v: unknown): ReadonlyArray<RuleModule> | undefined => {
+  if (!Array.isArray(v)) return undefined
+  const known = (allModules as ReadonlyArray<string>)
+  const deduped = new Set<RuleModule>()
+  for (const m of v) if (typeof m === "string" && known.includes(m)) deduped.add(m as RuleModule)
+  return [...deduped]
+}
+
+/** Each field validated and clamped independently, and a bad or missing one
+ *  is simply left out — there is no per-field default to repair it to, since
+ *  the lobby spreads this over the match's *current* config (`{ ...match.config,
+ *  ...lastSetup }`), so an absent field just keeps whatever the match already has. */
+const validateLastSetup = (raw: unknown): Partial<MatchConfig> => {
+  const o = (raw ?? {}) as Record<string, unknown>
+  // `MatchConfig`'s fields are readonly (an Effect Schema.Struct), so each
+  // valid field is folded in with a spread rather than assigned in place.
+  let out: Partial<MatchConfig> = {}
+  const size = clampedInt(o.size, 5, 12)
+  if (size !== undefined) out = { ...out, size }
+  const mineCount = clampedInt(o.mineCount, 0, 40)
+  if (mineCount !== undefined) out = { ...out, mineCount }
+  const mutationInterval = clampedInt(o.mutationInterval, 1, 50)
+  if (mutationInterval !== undefined) out = { ...out, mutationInterval }
+  if (typeof o.exactFinish === "boolean") out = { ...out, exactFinish: o.exactFinish }
+  const modules = cleanModules(o.modules)
+  if (modules !== undefined) out = { ...out, modules }
+  return out
+}
+
+const writeLastSetup = (setup: Partial<MatchConfig>): void => {
+  try {
+    localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(setup))
+  } catch {
+    // Private browsing or a full quota: the setup just will not survive a reload.
+  }
+}
+
+export const saveLastSetup = (config: MatchConfig): void => {
+  // Built field by field, not spread-then-stripped, so a future field added
+  // to `MatchConfig` is remembered only once someone decides it belongs here
+  // — and `seed` can never slip back in by a careless spread.
+  writeLastSetup({
+    size: config.size,
+    modules: config.modules,
+    mutationInterval: config.mutationInterval,
+    mineCount: config.mineCount,
+    exactFinish: config.exactFinish,
+  })
+}
+
+export const loadLastSetup = (): Partial<MatchConfig> => {
+  try {
+    const raw = localStorage.getItem(LAST_SETUP_KEY)
+    const repaired = validateLastSetup(raw === null ? {} : (JSON.parse(raw) as unknown))
+    // Write the repair back, or the same junk is re-validated on every load —
+    // the loadProfiles fix, again.
+    if (raw === null || JSON.stringify(repaired) !== raw) writeLastSetup(repaired)
+    return repaired
+  } catch {
+    return {}
+  }
+}
