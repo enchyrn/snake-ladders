@@ -78,18 +78,14 @@ describe("ControlBar", () => {
   // layout still has to confirm (the row containers exist; whether they
   // still render at a legible width is a flex computation
   // `renderToStaticMarkup` cannot perform — see task-8-report.md for the
-  // driven-app measurements).
+  // driven-app measurements). The roll row is `children` whole — which
+  // controls it holds is a device setting app-shell decides — so the tray is
+  // passed in here the way match.tsx's RollControls passes it.
   it("puts the cards and the roll controls in separate row containers", () => {
     const me = { ...state().players[0]!, venom: 0 }
     const html = renderToStaticMarkup(
-      <ControlBar
-        me={me}
-        state={state()}
-        onPlay={() => {}}
-        cardsDisabled={false}
-        onRoll={() => {}}
-        rollDisabled={false}
-      >
+      <ControlBar me={me} state={state()} onPlay={() => {}} cardsDisabled={false}>
+        <DiceTray onRoll={() => {}} disabled={false} />
         <button type="button">Roll</button>
       </ControlBar>,
     )
@@ -102,7 +98,7 @@ describe("ControlBar", () => {
 
     // Sanity: both rows are actually present with their expected buttons,
     // so the regex above isn't vacuously matching an unrelated div boundary.
-    expect(html.match(/<button/g)).toHaveLength(7) // 5 cards + dice tray + the injected Roll child
+    expect(html.match(/<button/g)).toHaveLength(7) // 5 cards + the dice tray and Roll children
     expect(html).toContain(">anchor<")
     expect(html).toContain('aria-label="Roll the dice"')
     expect(html).toContain(">Roll<")

@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react"
 import { BoardScene } from "@mutation/render/scene"
+import { motionLevel, SPEEDS } from "@mutation/render/timing"
 import type { MatchState } from "@mutation/engine/types"
 import type { TimelineEvent } from "@mutation/engine/events"
 import { showRound } from "./round-playback"
@@ -62,8 +63,30 @@ interface Props {
   /** Called once a resolved round has finished animating. */
   readonly onSettled?: () => void
   readonly quality?: "high" | "low"
+  readonly speed?: keyof typeof SPEEDS
+  readonly reducedMotion?: "system" | "on" | "off"
+  readonly tileNumbers?: boolean
   /** Fired with the tile a tap landed on, if any. */
   readonly onPickTile?: (tile: number) => void
+}
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)"
+
+/** Follows the OS preference live, so "Follow system" means now rather than
+ *  whatever it was when the match screen mounted. */
+const useSystemPrefersReduced = (): boolean => {
+  const [reduced, setReduced] = useState(
+    () => typeof matchMedia === "function" && matchMedia(REDUCED_MOTION_QUERY).matches,
+  )
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return
+    const query = matchMedia(REDUCED_MOTION_QUERY)
+    const onChange = () => setReduced(query.matches)
+    onChange()
+    query.addEventListener("change", onChange)
+    return () => query.removeEventListener("change", onChange)
+  }, [])
+  return reduced
 }
 
 /** A press that travels further than this, or lasts longer, is a drag. */
@@ -90,7 +113,15 @@ interface Press {
  * or wheel zooms it; only a press that neither moved nor lingered counts as a
  * tap on a tile, so orbiting never flags a mine by accident.
  */
-export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) => {
+export const BoardCanvas = ({
+  state,
+  onSettled,
+  quality,
+  speed = "calm",
+  reducedMotion = "system",
+  tileNumbers = true,
+  onPickTile,
+}: Props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<BoardScene | null>(null)
   const playedRef = useRef<ReadonlyArray<TimelineEvent> | null>(null)
@@ -101,14 +132,23 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
   // Tile 0 is the start pad and is always revealed (board.ts), so it is
   // excluded — this asks whether the *player* has revealed anything yet.
   const hasRevealedTile = state.board.tiles.slice(1).some((tile) => tile.revealed)
+  const motion = motionLevel(reducedMotion, useSystemPrefersReduced())
+  // Read by the structural effect, so a scene rebuilt for `quality` starts
+  // from the current presentation rather than the scene's own defaults — the
+  // effect below only re-runs when one of these changes, not on a rebuild.
+  const presentation = useRef({ speed, motion, tileNumbers })
+  presentation.current = { speed, motion, tileNumbers }
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const scene = new BoardScene(canvas, state.board.size, {
       quality: quality ?? "high",
+      tileNumbers: presentation.current.tileNumbers,
       onViewChange: (isDefault) => setViewMoved(!isDefault),
     })
+    scene.setSpeed(SPEEDS[presentation.current.speed])
+    scene.setMotion(presentation.current.motion)
     sceneRef.current = scene
     scene.sync(state)
     scene.start()
@@ -122,6 +162,16 @@ export const BoardCanvas = ({ state, onSettled, quality, onPickTile }: Props) =>
     }
     // Board size and quality are structural; everything else streams in below.
   }, [state.board.size, quality])
+
+  // Presentation, not structure: the overlay changes these over a live match,
+  // and rebuilding the scene would discard a round mid-replay.
+  useEffect(() => {
+    const scene = sceneRef.current
+    if (!scene) return
+    scene.setSpeed(SPEEDS[speed])
+    scene.setMotion(motion)
+    scene.setTileNumbers(tileNumbers)
+  }, [speed, motion, tileNumbers])
 
   useEffect(() => {
     const scene = sceneRef.current

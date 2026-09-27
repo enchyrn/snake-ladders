@@ -21,8 +21,15 @@ export class BoardTexture {
   private readonly ctx: CanvasRenderingContext2D
   private readonly cell: number
   private signature = ""
+  private board: Board | null = null
+  private tileNumbers: boolean
 
-  constructor(private readonly size: number, resolution = 1024) {
+  constructor(
+    private readonly size: number,
+    options: { readonly tileNumbers?: boolean } = {},
+    resolution = 1024,
+  ) {
+    this.tileNumbers = options.tileNumbers ?? true
     this.canvas = document.createElement("canvas")
     this.canvas.width = resolution
     this.canvas.height = resolution
@@ -41,8 +48,22 @@ export class BoardTexture {
     const signature = board.tiles
       .map((t) => `${t.revealed ? 1 : 0}${t.flagged ? 1 : 0}${t.defused ? 1 : 0}`)
       .join("")
+    this.board = board
     if (signature === this.signature) return
     this.signature = signature
+    this.redraw(board)
+  }
+
+  /** A setting is not a board change, so the signature above would never
+   *  notice it: this has to redraw on its own authority (ADR 0007 — one
+   *  canvas, redrawn only when told). */
+  setTileNumbers(on: boolean): void {
+    if (on === this.tileNumbers) return
+    this.tileNumbers = on
+    if (this.board) this.redraw(this.board)
+  }
+
+  private redraw(board: Board): void {
     this.draw(board)
     this.texture.needsUpdate = true
   }
@@ -159,6 +180,7 @@ export class BoardTexture {
   /** Tile number, small and dim: it orients you without competing with the
    *  minesweeper count. */
   private drawTileNumber(tile: number, x: number, y: number, revealed: boolean): void {
+    if (!this.tileNumbers) return
     const { ctx, cell } = this
     ctx.fillStyle = revealed ? "#a3c0cc" : "#7b9aa8"
     ctx.font = `600 ${Math.round(cell * 0.2)}px ui-monospace, monospace`

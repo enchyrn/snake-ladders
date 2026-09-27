@@ -253,13 +253,17 @@ export const CardRail = ({
 export const DiceTray = ({
   onRoll,
   disabled,
+  label,
 }: {
   readonly onRoll: () => void
   readonly disabled: boolean
+  /** Shown beside the dice and used as the name when set — "Confirm roll"
+   *  while a confirm is armed, which the glyph alone cannot say. */
+  readonly label?: string
 }) => (
   <button
     type="button"
-    aria-label="Roll the dice"
+    aria-label={label ?? "Roll the dice"}
     disabled={disabled}
     onClick={onRoll}
     // Grows to share the row with whatever sits beside it (`Roll`, which
@@ -271,15 +275,16 @@ export const DiceTray = ({
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
       <span className={css({ w: "24px", h: "24px", borderRadius: "5px", bg: "text" })} />
     </span>
+    {label && <span aria-hidden>{label}</span>}
   </button>
 )
 
 /**
- * The control bar's two rows: the card rail alone, full width, then the dice
- * tray sharing a second row with whatever else can trigger a roll (`Roll`,
- * until plan 2's `rollButton: hidden` removes it) — `children`, so this stays
- * in `@mutation/ui` without reaching up for `RollButton`'s atoms, which live
- * in app-shell (the layer boundary only allows the other direction).
+ * The control bar's two rows: the card rail alone, full width, then the roll
+ * row — `children`, the whole of it. Which roll controls appear and in what
+ * order is a device setting, and settings live in app-shell, which this layer
+ * may not reach up to; so the caller composes the row (`DiceTray` plus `Roll`
+ * on the side the player chose) and this only places it.
  *
  * One row was the original shape; sharing it with the dice tray and Roll
  * crushed every card under the 44px tap minimum (~26px at phone width) and
@@ -293,24 +298,17 @@ export const ControlBar = ({
   state,
   onPlay,
   cardsDisabled,
-  onRoll,
-  rollDisabled,
   children,
 }: {
   readonly me: Player | undefined
   readonly state: MatchState
   readonly onPlay: (card: CardKind) => void
   readonly cardsDisabled: boolean
-  readonly onRoll: () => void
-  readonly rollDisabled: boolean
-  readonly children?: ReactNode
+  readonly children: ReactNode
 }) => (
   <div className={css({ display: "flex", flexDirection: "column", gap: "6px", width: "100%" })}>
     <CardRail me={me} state={state} onPlay={onPlay} disabled={cardsDisabled} />
-    <div className={css({ display: "flex", gap: "8px" })}>
-      <DiceTray onRoll={onRoll} disabled={rollDisabled} />
-      {children}
-    </div>
+    <div className={css({ display: "flex", gap: "8px" })}>{children}</div>
   </div>
 )
 

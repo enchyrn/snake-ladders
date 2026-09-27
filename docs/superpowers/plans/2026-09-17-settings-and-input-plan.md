@@ -503,7 +503,7 @@ needs as an explicit parameter — which is what `BoardCanvas`'s dangling
 - Modify: `packages/app-shell/src/routes/match.tsx`
 - Create: `packages/ui/src/__tests__/event-log-hidden.test.tsx`
 
-- [ ] **Step 1: Write the failing test for the one that can silently break accessibility**
+- [x] **Step 1: Write the failing test for the one that can silently break accessibility**
 
 ```tsx
 // packages/ui/src/__tests__/event-log-hidden.test.tsx
@@ -527,7 +527,7 @@ describe("EventLog when the player has turned the log off", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
@@ -535,7 +535,7 @@ nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
 
 Expected: FAIL — `visible` is not a prop.
 
-- [ ] **Step 3: Wire each setting to its consumer**
+- [x] **Step 3: Wire each setting to its consumer**
 
 | Setting | How it arrives | What it does |
 |---|---|---|
@@ -549,7 +549,7 @@ Expected: FAIL — `visible` is not a prop.
 | `haptics` | `match.tsx` → `vibrate(navigator, 20)` on a committed roll | Via Task 4's probe. |
 | `keepAwake` | `match.tsx`, in an effect | `navigator.wakeLock.request("screen")`, released on unmount, guarded by `hasWakeLock`. |
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
@@ -557,7 +557,7 @@ nubx vitest run packages/ui/src/__tests__/event-log-hidden.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Prove `rollButton: "hidden"` does not strand a keyboard player**
+- [x] **Step 5: Prove `rollButton: "hidden"` does not strand a keyboard player**
 
 Spec A calls this the one that catches the accessibility regression, so it is a
 test rather than a promise.
@@ -597,7 +597,7 @@ control bar's roll area from `match.tsx` into an exported
 `RollControls({ rollButton, disabled, onRoll })` that renders `DiceTray`
 always and `RollButton` per the setting. Run it again and watch it pass.
 
-- [ ] **Step 6: Prove the tile-numbers toggle actually redraws**
+- [x] **Step 6: Prove the tile-numbers toggle actually redraws**
 
 ```bash
 nub run build && nub run verify:ui
@@ -608,7 +608,7 @@ stale-texture trap is invisible in the source and obvious in a screenshot:
 **if the numbers are still there after turning them off, the invalidation is
 missing.** A passing gate proves nothing here.
 
-- [ ] **Step 7: Lint, typecheck, test**
+- [x] **Step 7: Lint, typecheck, test**
 
 ```bash
 nub run lint && nub run typecheck && nub run test
@@ -618,12 +618,58 @@ Expected: all PASS. `lint` especially — if any of `packages/ui` or
 `packages/render` acquired an import from `app-shell`, the layer rule fails and
 the architecture has quietly been abandoned.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/ui packages/render packages/app-shell/src/routes/match.tsx packages/app-shell/src/app/__tests__/roll-controls.test.tsx
 git commit -m "feat: deliver each setting to its consumer as an explicit parameter"
 ```
+
+**Execution note:** Step 2's RED only showed under `tsc`: vitest does not
+typecheck, and the preview was already always live, so the brief's assertion
+passed at runtime before `visible` existed. A second case was added (keeping
+the first verbatim) asserting the list carries the `srOnly` class when off and
+not when on; that one failed at runtime first. Off renders the `log` hook class
+plus `srOnly` alone — not `cx`'d over the panel's classes (Panda trap 3) — and
+match.tsx stops treating the empty band as a tap target, leaving the header
+button as the way to the full log.
+
+Ruling R6: importing `routes/match` in the node test environment works, so
+`RollControls` is exported from match.tsx as the brief says. `ControlBar` no
+longer renders `DiceTray` or takes `onRoll`/`rollDisabled`; the roll row is its
+`children` whole, and card-rail.test.tsx passes `DiceTray` plus a Roll child so
+its separate-rows regex and seven-button count are unchanged. No Panda class
+name contains "disabled", so `not.toContain("disabled")` stayed verbatim.
+`RollButton`'s atom-reading isolation was dropped: `RollControls` takes
+`disabled`, and `MatchScreen` already reads `canRollAtom` to render the header,
+so the isolation saved nothing.
+
+Ruling R7: `confirmRoll` is a local arm, never sent and never `window.confirm`.
+The first tap arms; the tray's name and a visible label and Roll's text become
+"Confirm roll"; the second tap sends `Commit`. The arm clears on round, phase,
+acting seat or the setting changing, and after the commit. A fifth
+roll-controls case pins the armed labels on both controls. `DiceTray` gained an
+optional `label` for this.
+
+`tileNumbers` needed `BoardTexture` to remember the last board so
+`setTileNumbers` can redraw on its own authority; `BoardScene.setTileNumbers`
+forwards it, and `SceneOptions.tileNumbers` sets the first draw. Minesweeper
+counts and flags are unaffected. `BoardCanvas` applies speed, motion and tile
+numbers in a non-structural effect, and also applies them from a ref right
+after constructing the scene, because a `quality` rebuild would otherwise
+start at the scene's defaults: the presentation effect's deps do not change
+on a rebuild. "Follow system" tracks `prefers-reduced-motion` live through a
+`change` listener and is guarded where `matchMedia` is absent.
+
+Step 6 was driven, not assumed: after `nub run build && nub run verify:ui`
+passed, a throwaway Playwright script (not committed) started a pass-and-play
+match and screenshotted the board canvas with tile numbers on, off, and on
+again. The numbers were present, then gone, then back. With `rollButton`
+hidden, zero "Roll" buttons remained; Tab reached "Roll the dice" and Enter
+committed ("Boa rolled 3"). With confirm on, the first Enter relabelled the
+tray "Confirm roll" and left the log unchanged, and the second Enter rolled.
+With the round log off, `[aria-live="polite"]` was still in the DOM (1×1px,
+still holding its line). No horizontal overflow.
 
 ---
 

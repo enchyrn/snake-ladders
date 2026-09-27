@@ -44,6 +44,8 @@ export interface SceneOptions {
   readonly quality?: "high" | "low"
   /** Fired when the camera leaves or returns to the default framing. */
   readonly onViewChange?: (isDefault: boolean) => void
+  /** The first draw's value; `setTileNumbers` changes it afterwards. */
+  readonly tileNumbers?: boolean
 }
 
 /**
@@ -157,7 +159,7 @@ export class BoardScene {
 
     /* The board as an object ---------------------------------------- */
 
-    this.boardTexture = new BoardTexture(size)
+    this.boardTexture = new BoardTexture(size, { tileNumbers: options.tileNumbers })
     const face = new THREE.Mesh(
       new THREE.PlaneGeometry(size, size),
       new THREE.MeshStandardMaterial({
@@ -405,6 +407,12 @@ export class BoardScene {
    *  into the durations `play` records, so it can change mid-animation. */
   setSpeed(multiplier: number): void {
     this.speed = multiplier
+  }
+
+  /** Not structural either: the texture redraws in place, so flipping this
+   *  from the overlay mid-round leaves the scene and its clips untouched. */
+  setTileNumbers(on: boolean): void {
+    this.boardTexture.setTileNumbers(on)
   }
 
   /** Reduced motion changes what a clip draws, never whether it plays or how
