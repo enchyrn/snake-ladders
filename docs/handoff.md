@@ -972,6 +972,10 @@ unchecked.
   logic is inline in `MatchScreen` and untested; `useSystemPrefersReduced`
   has no `addListener` fallback for Safari < 14; the log band's cursor is an
   inline style rather than Panda.
+- T7: the match-settings disclosure's `<button>` wraps an `<h3>` (invalid
+  content model, renders fine); neither lobby disclosure sets
+  `aria-controls`; `lobby.tsx` has no component test, so the summary line's
+  per-module gating is covered only by driving the app.
 
 **Checkpoint written 2026-09-25, after plan 1 (chrome and layout) finished;
 amended 2026-09-26 after a code and security review of PR #4 and a fix pass
