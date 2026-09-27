@@ -21,6 +21,7 @@ import {
 } from "./geometry"
 import { palette, seatColour } from "./palette"
 import { snakeSkinTexture, woodTexture } from "./textures"
+import { effectiveDuration, SPEEDS } from "./timing"
 
 /** One step of choreography: a duration and a function of normalised time. */
 interface Clip {
@@ -86,6 +87,9 @@ export class BoardScene {
   private readonly pickHit = new THREE.Vector3()
 
   private size: number
+  // Not structural, unlike `quality`: the settings overlay sits above a live
+  // match, so speed must be changeable without rebuilding the scene.
+  private speed: number = SPEEDS.calm
   private fitDistance = 20
   private viewIsDefault = true
   private linkSignature = ""
@@ -394,6 +398,12 @@ export class BoardScene {
    * Choreography
    * ---------------------------------------------------------------- */
 
+  /** Multiplier from the speed setting; applied per-clip in `step`, not baked
+   *  into the durations `play` records, so it can change mid-animation. */
+  setSpeed(multiplier: number): void {
+    this.speed = multiplier
+  }
+
   /** Turn a resolved round into animation. Returns immediately; `onDone`
    *  fires once the whole timeline has played out. */
   play(timeline: ReadonlyArray<TimelineEvent>, onDone?: () => void): void {
@@ -545,7 +555,7 @@ export class BoardScene {
     const clip = this.clips[0]
     if (!clip) return
     this.clipElapsed += delta
-    const t = Math.min(1, this.clipElapsed / clip.duration)
+    const t = Math.min(1, this.clipElapsed / effectiveDuration(clip.duration, this.speed))
     clip.update(t)
     if (t < 1) return
 

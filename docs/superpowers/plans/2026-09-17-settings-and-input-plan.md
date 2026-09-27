@@ -83,7 +83,7 @@ rather than watched.
 **Interfaces:**
 - Produces: `SPEEDS: Record<"calm" | "brisk" | "quick", number>`, `FLOOR_MS = 150`, `effectiveDuration(duration: number, speed: number): number`; and `Scene.setSpeed(multiplier: number): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/render/src/__tests__/timing.test.ts
@@ -137,7 +137,7 @@ describe("effectiveDuration", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/timing.test.ts
@@ -145,7 +145,7 @@ nubx vitest run packages/render/src/__tests__/timing.test.ts
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 ```ts
 // packages/render/src/timing.ts
@@ -167,7 +167,7 @@ export const effectiveDuration = (duration: number, speed: number): number =>
   Math.max(FLOOR_MS, duration / speed)
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/timing.test.ts
@@ -175,7 +175,7 @@ nubx vitest run packages/render/src/__tests__/timing.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Thread the speed through the scene**
+- [x] **Step 5: Thread the speed through the scene**
 
 In `packages/render/src/scene.ts`:
 
@@ -188,7 +188,7 @@ In `packages/render/src/scene.ts`:
   the `duration` values pushed in `play` stay as authored, so the clip table
   above remains the source of truth and a future reader sees the real numbers.
 
-- [ ] **Step 6: Typecheck, test, and build**
+- [x] **Step 6: Typecheck, test, and build**
 
 ```bash
 nub run typecheck && nub run test && nub run build
@@ -196,7 +196,7 @@ nub run typecheck && nub run test && nub run build
 
 Expected: all PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/render/src/timing.ts packages/render/src/__tests__/timing.test.ts packages/render/src/scene.ts
