@@ -215,7 +215,7 @@ git commit -m "feat: animation speed with a per-clip floor derived from the fram
 **Interfaces:**
 - Produces: `motionLevel(setting: "system" | "on" | "off", systemPrefersReduced: boolean): "full" | "reduced"`, exported from `packages/render/src/timing.ts`; `Scene.setMotion(level: "full" | "reduced"): void`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/render/src/__tests__/motion.test.ts
@@ -237,7 +237,7 @@ describe("motionLevel", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/motion.test.ts
@@ -245,7 +245,7 @@ nubx vitest run packages/render/src/__tests__/motion.test.ts
 
 Expected: FAIL — `motionLevel` is not exported.
 
-- [ ] **Step 3: Implement it**
+- [x] **Step 3: Implement it**
 
 Append to `packages/render/src/timing.ts`:
 
@@ -266,7 +266,7 @@ export const motionLevel = (
   setting === "system" ? (systemPrefersReduced ? "reduced" : "full") : setting === "on" ? "reduced" : "full"
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/render/src/__tests__/motion.test.ts
@@ -274,7 +274,7 @@ nubx vitest run packages/render/src/__tests__/motion.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Gate the flourishes, not the clips**
+- [x] **Step 5: Gate the flourishes, not the clips**
 
 In `scene.ts`, add `private motion: MotionLevel = "full"` and
 `setMotion(level: MotionLevel): void`. Then, in `play`, when `this.motion` is
@@ -289,7 +289,19 @@ In `scene.ts`, add `private motion: MotionLevel = "full"` and
   removed from the queue. Reduced motion changes what a clip draws, never
   whether the player sees that it happened.
 
-- [ ] **Step 6: Typecheck and build**
+**Execution note:** Controller ruling R4 also applied here, since the brief's
+list of flourishes wasn't exhaustive: under reduced motion, also flatten (a)
+the non-absorbed `MineTripped` lift (`Math.sin(k * Math.PI) * 1.1` → the token
+hugs the board, the lerp stays) and (b) `walk`'s per-step hop
+(`Math.sin(local * Math.PI) * 0.28`, in the private helper `walk` just below
+`play` — the tile-to-tile travel stays, only the rise per hop drops). Both are
+the same flourish class the spec names ("momentum overshoot arc", "mine
+shudder"); durations are unchanged and no clip left the queue. Implemented as
+one `rise(amount)` helper (returns 0 when `this.motion === "reduced"`, else
+`amount`) applied at every flourish site instead of a ternary at each one, to
+keep each clip's `update` legible.
+
+- [x] **Step 6: Typecheck and build**
 
 ```bash
 nub run typecheck && nub run build
@@ -297,7 +309,7 @@ nub run typecheck && nub run build
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/render/src/timing.ts packages/render/src/__tests__/motion.test.ts packages/render/src/scene.ts

@@ -21,7 +21,7 @@ import {
 } from "./geometry"
 import { palette, seatColour } from "./palette"
 import { snakeSkinTexture, woodTexture } from "./textures"
-import { effectiveDuration, SPEEDS } from "./timing"
+import { effectiveDuration, SPEEDS, type MotionLevel } from "./timing"
 
 /** One step of choreography: a duration and a function of normalised time. */
 interface Clip {
@@ -90,6 +90,9 @@ export class BoardScene {
   // Not structural, unlike `quality`: the settings overlay sits above a live
   // match, so speed must be changeable without rebuilding the scene.
   private speed: number = SPEEDS.calm
+  // Same reasoning as `speed`: a live match can have its motion setting
+  // flipped from the overlay.
+  private motion: MotionLevel = "full"
   private fitDistance = 20
   private viewIsDefault = true
   private linkSignature = ""
@@ -404,6 +407,18 @@ export class BoardScene {
     this.speed = multiplier
   }
 
+  /** Reduced motion changes what a clip draws, never whether it plays or how
+   *  long it takes — every clip still runs its full duration. */
+  setMotion(level: MotionLevel): void {
+    this.motion = level
+  }
+
+  /** A flourish's rise, zeroed under reduced motion. The lerp/travel it rides
+   *  on top of is untouched — only the arc drawn over it disappears. */
+  private rise(amount: number): number {
+    return this.motion === "reduced" ? 0 : amount
+  }
+
   /** Turn a resolved round into animation. Returns immediately; `onDone`
    *  fires once the whole timeline has played out. */
   play(timeline: ReadonlyArray<TimelineEvent>, onDone?: () => void): void {
@@ -447,7 +462,7 @@ export class BoardScene {
               const k = easeInOutQuad(t)
               token.position.lerpVectors(from, to, k)
               // A climb rises over the rails; a bite hugs the board.
-              token.position.y = TOKEN_Y + (climbing ? Math.sin(k * Math.PI) * 0.45 : 0.05)
+              token.position.y = TOKEN_Y + (climbing ? this.rise(Math.sin(k * Math.PI) * 0.45) : 0.05)
             },
           })
           break
@@ -462,7 +477,7 @@ export class BoardScene {
             update: (t) => {
               const k = easeOutCubic(t)
               token.position.lerpVectors(from, to, k)
-              token.position.y = TOKEN_Y + Math.sin(k * Math.PI) * 0.8
+              token.position.y = TOKEN_Y + this.rise(Math.sin(k * Math.PI) * 0.8)
             },
           })
           break
@@ -476,14 +491,16 @@ export class BoardScene {
             duration: event.absorbed ? 320 : 640,
             update: (t) => {
               if (event.absorbed) {
-                // Absorbed: a shudder in place, no displacement.
+                // Absorbed: a shudder in place, no displacement. Reduced
+                // motion holds the position instead of oscillating it.
                 token.position.copy(from)
-                token.position.y = TOKEN_Y + Math.abs(Math.sin(t * Math.PI * 4)) * 0.12
+                token.position.y =
+                  TOKEN_Y + this.rise(Math.abs(Math.sin(t * Math.PI * 4)) * 0.12)
                 return
               }
               const k = easeOutCubic(t)
               token.position.lerpVectors(from, to, k)
-              token.position.y = TOKEN_Y + Math.sin(k * Math.PI) * 1.1
+              token.position.y = TOKEN_Y + this.rise(Math.sin(k * Math.PI) * 1.1)
             },
           })
           break
@@ -500,7 +517,7 @@ export class BoardScene {
               const k = easeInOutQuad(t)
               a.position.lerpVectors(aFrom, bFrom, k)
               b.position.lerpVectors(bFrom, aFrom, k)
-              const lift = Math.sin(k * Math.PI) * 0.6
+              const lift = this.rise(Math.sin(k * Math.PI) * 0.6)
               a.position.y = TOKEN_Y + lift
               b.position.y = TOKEN_Y - lift * 0.3
             },
@@ -526,7 +543,7 @@ export class BoardScene {
     const index = Math.floor(scaled)
     const local = scaled - index
     token.position.lerpVectors(path[index]!, path[index + 1]!, easeOutCubic(local))
-    token.position.y = TOKEN_Y + Math.sin(local * Math.PI) * 0.28
+    token.position.y = TOKEN_Y + this.rise(Math.sin(local * Math.PI) * 0.28)
   }
 
   get isAnimating(): boolean {

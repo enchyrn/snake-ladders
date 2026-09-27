@@ -14,3 +14,18 @@ export const SPEEDS = { calm: 1, brisk: 1.5, quick: 2.5 } as const
 
 export const effectiveDuration = (duration: number, speed: number): number =>
   Math.max(FLOOR_MS, duration / speed)
+
+export type MotionLevel = "full" | "reduced"
+
+/**
+ * `prefers-reduced-motion` sets the first-run default and never overrides an
+ * explicit choice. Reduced removes flourish — the momentum arc, the board's
+ * breathing, the mine shudder's oscillation — and never a causal beat: you
+ * rolled, you moved, the snake bit stays legible, because ADR 0020 rule 1
+ * outranks the preference.
+ */
+export const motionLevel = (
+  setting: "system" | "on" | "off",
+  systemPrefersReduced: boolean,
+): MotionLevel =>
+  setting === "system" ? (systemPrefersReduced ? "reduced" : "full") : setting === "on" ? "reduced" : "full"
