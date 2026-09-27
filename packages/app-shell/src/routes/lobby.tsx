@@ -5,6 +5,7 @@ import { ChevronDown, ChevronLeft, Minus, Plus, X } from "lucide-react"
 import { ColourPicker } from "../app/colour-picker"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
+import { reservePinnedBottom } from "../app/pinned-bottom"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
 import type { Action } from "@mutation/engine/actions"
@@ -118,7 +119,8 @@ const ToggleSetting = ({
  * page's height still includes it and the last content scrolls clear of it.
  * Its bottom margin cancels the screen's own bottom padding, so at the end of
  * the page it sits flush with the viewport and carries the safe area itself.
- * Below the PWA toast (z 50), which floats over it rather than under.
+ * `reservePinnedBottom` reserves its height, so focus stops above it and the
+ * PWA toast (z 50) floats above it rather than over it.
  */
 const startRowClass = css({
   position: "sticky",
@@ -137,27 +139,13 @@ const startRowClass = css({
   borderTopColor: "border",
 })
 
-/** Clearance for the pinned row: its border, 12px above and at least 12px
- *  below a 44px control, and a hair. Scrolling something into view (focus,
- *  the picker opening) stops this far above the viewport's bottom, or it
- *  lands behind the row. Spelled out in each rule rather than shared through
- *  a constant, so Panda's static extraction sees the literal. */
-const clearOfStartRowClass = css({
-  "& :is(button, input)": { scrollMarginBottom: "calc(72px + env(safe-area-inset-bottom))" },
-})
-const pickerRowClass = css({ scrollMarginBottom: "calc(72px + env(safe-area-inset-bottom))" })
-
 /** A freshly opened colour picker can open under the pinned row, when the
- *  pip that opened it is the last thing above the fold. Not `block:
- *  "nearest"`: Chromium skips that scroll whenever the border box is already
- *  inside the viewport, ignoring scroll-margin — which is exactly the case of
- *  a picker drawn behind the row. Module-level, so React calls it once as the
- *  row mounts rather than on every render. */
-const revealAboveStartRow = (el: HTMLElement | null) => {
-  if (!el) return
-  const clearance = Number.parseFloat(getComputedStyle(el).scrollMarginBottom) || 0
-  if (el.getBoundingClientRect().bottom + clearance > innerHeight) el.scrollIntoView({ block: "end" })
-}
+ *  pip that opened it is the last thing above it, and nothing moves focus
+ *  into it to scroll it clear. `nearest` is enough now that the document
+ *  reserves the row's height (`reservePinnedBottom`): the reserved band no
+ *  longer counts as visible. Module-level, so React calls it once as the
+ *  picker mounts rather than on every render. */
+const revealPicker = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest" })
 
 /** `""` means "By seat", which the wire says by leaving the field out: an older
  *  build then decodes the same Join it always did. */
@@ -329,7 +317,7 @@ export const LobbyScreen = () => {
     .join(" · ")
 
   return (
-    <main className={cx(screenClass, clearOfStartRowClass)}>
+    <main className={screenClass}>
       <header className={barClass}>
         <button type="button" className={button({ size: "md" })} onClick={leave}>
           <ChevronLeft size={16} aria-hidden="true" /> Leave
@@ -417,7 +405,7 @@ export const LobbyScreen = () => {
                     )}
                 </li>
                 {picking && (
-                  <li ref={revealAboveStartRow} className={pickerRowClass}>
+                  <li ref={revealPicker}>
                     {/* Pressed shows what was asked for; the pip above shows
                         what was granted, which differs only when someone
                         earlier in the lobby already holds that colour. */}
@@ -606,7 +594,7 @@ export const LobbyScreen = () => {
         )}
       </section>
 
-      <div className={startRowClass}>
+      <div ref={reservePinnedBottom} className={startRowClass}>
         {canHost ? (
           <button
             type="button"
