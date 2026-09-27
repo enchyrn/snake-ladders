@@ -120,6 +120,11 @@ export const LobbyScreen = () => {
   const room = useAtomValue(roomAtom)
   const [guestName, setGuestName] = useState("")
   const [expandedModules, setExpandedModules] = useState<ReadonlySet<RuleModule>>(() => new Set())
+  // Collapsed by default: with every module on (defaultConfig), four permanent
+  // rows here pushed Start below the fold at 390x844 — the same trap the
+  // module-row comment below already names. A one-line summary stays visible
+  // either way, so a peer reads the current values without expanding anything.
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
 
   // A peer only ever proposes modules and a start through the host's Configure
   // and Start; on this device's own screen a peer just watches them happen.
@@ -215,6 +220,17 @@ export const LobbyScreen = () => {
     css({ flex: "none", width: "tap", paddingInline: "0" }),
   )
   const addPlayerClass = css({ display: "flex", gap: "2", marginTop: "0.6rem" })
+
+  // Always visible, even collapsed — a peer (or the host, before expanding)
+  // can still read what the match is set to.
+  const settingsSummary = [
+    `${match.config.size}×${match.config.size} board`,
+    match.config.modules.includes("minesweeper") ? `${match.config.mineCount} mines` : null,
+    match.config.modules.includes("mutation") ? `breathes every ${match.config.mutationInterval}` : null,
+    match.config.exactFinish ? "exact finish" : "any finish",
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ")
 
   return (
     <main className={screenClass}>
@@ -386,43 +402,69 @@ export const LobbyScreen = () => {
       </section>
 
       <section>
-        <h3 className={headingClass}>Match settings</h3>
-        <div className={settingsListClass}>
-          <Stepper
-            label="Board size"
-            value={match.config.size}
-            min={5}
-            max={12}
-            disabled={!canHost}
-            onChange={(size) => setConfig({ size })}
+        {/* One disclosure for the whole section, not a per-row one like the
+            modules below: unlike a module's blurb, these rows are controls
+            themselves, not read-only prose — leaving them permanently open
+            is what pushed Start off screen at 390x844 in the first pass.
+            The summary paragraph carries the current values whether or not
+            this is expanded, so collapsing it costs nobody a reading. */}
+        <button
+          type="button"
+          className={cx(button({ variant: "ghost", size: "md" }), css({ width: "100%", justifyContent: "space-between", paddingInline: "0" }))}
+          aria-expanded={settingsExpanded}
+          onClick={() => setSettingsExpanded((v) => !v)}
+        >
+          {/* The `ghost` variant dims its own text (`color: textDim`) for an
+              icon-only button elsewhere; here the button wraps a heading, and
+              inheriting that dimming is what would make this the one section
+              title on the screen that doesn't read as one. */}
+          <h3 className={cx(headingClass, css({ margin: 0, color: "text" }))}>Match settings</h3>
+          <ChevronDown
+            size={18}
+            aria-hidden
+            className={css({ transition: "transform 0.15s", flex: "none" })}
+            style={{ transform: settingsExpanded ? "rotate(180deg)" : undefined }}
           />
-          {match.config.modules.includes("minesweeper") && (
+        </button>
+        <p className={cx(paragraphClass, hintClass)}>{settingsSummary}</p>
+        {settingsExpanded && (
+          <div className={settingsListClass}>
             <Stepper
-              label="Mines"
-              value={match.config.mineCount}
-              min={0}
-              max={40}
+              label="Board size"
+              value={match.config.size}
+              min={5}
+              max={12}
               disabled={!canHost}
-              onChange={(mineCount) => setConfig({ mineCount })}
+              onChange={(size) => setConfig({ size })}
             />
-          )}
-          {match.config.modules.includes("mutation") && (
-            <Stepper
-              label="Board breathes every"
-              value={match.config.mutationInterval}
-              min={1}
-              max={50}
+            {match.config.modules.includes("minesweeper") && (
+              <Stepper
+                label="Mines"
+                value={match.config.mineCount}
+                min={0}
+                max={40}
+                disabled={!canHost}
+                onChange={(mineCount) => setConfig({ mineCount })}
+              />
+            )}
+            {match.config.modules.includes("mutation") && (
+              <Stepper
+                label="Board breathes every"
+                value={match.config.mutationInterval}
+                min={1}
+                max={50}
+                disabled={!canHost}
+                onChange={(mutationInterval) => setConfig({ mutationInterval })}
+              />
+            )}
+            <ToggleSetting
+              label="Exact finish"
+              value={match.config.exactFinish}
               disabled={!canHost}
-              onChange={(mutationInterval) => setConfig({ mutationInterval })}
+              onChange={(exactFinish) => setConfig({ exactFinish })}
             />
-          )}
-          <ToggleSetting
-            label="Exact finish"
-            value={match.config.exactFinish}
-            disabled={!canHost}
-            onChange={(exactFinish) => setConfig({ exactFinish })}
-          />
-        </div>
+          </div>
+        )}
       </section>
 
       {canHost ? (

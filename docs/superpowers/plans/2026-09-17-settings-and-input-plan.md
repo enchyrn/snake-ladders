@@ -813,20 +813,36 @@ git commit -m "feat: the rest of MatchConfig is editable, and the host's setup i
   by sending `Configure` with `{ ...match.config, ...lastSetup }` — skipped
   entirely when `loadLastSetup()` is empty. `saveLastSetup(match.config)` runs
   on the `Start` button's click, before the `Start` action is sent.
-- **Controls, and the fold:** `Stepper` (size/mines/mutation interval) and
-  `ToggleSetting` (exact finish) are new, file-local components in
-  `lobby.tsx`, styled with the existing `button` recipe (`variant: "toggle"`)
-  and the `tap` (44px) size token — two labelled -/+ buttons rather than a
-  segmented row (`mineCount` alone has 41 possible values) or a bare
-  `<input type="range">`. Verified at both 390×844 and 320×844 with a
-  throwaway Playwright script (not committed): with every module on (the
-  default), `Start` sits 22–36px below the fold at both widths before any
-  scroll, but the lobby already scrolls the whole page in normal document flow
-  (`screenClass`'s own doc comment: "every route but the match screen scrolls
-  normally") — after `scrollIntoViewIfNeeded()`, `Start` lands fully inside the
-  viewport and is enabled, and `nub run verify:ui` (390×844) reports no
-  horizontal overflow. This matches the existing behaviour of the module rows,
-  which already push `Start` toward the fold when several are expanded.
+- **Controls, and the fold (revised after review — the first pass got this
+  wrong):** `Stepper` (size/mines/mutation interval) and `ToggleSetting` (exact
+  finish) are new, file-local components in `lobby.tsx`, styled with the
+  existing `button` recipe (`variant: "toggle"`) and the `tap` (44px) size
+  token — two labelled -/+ buttons rather than a segmented row (`mineCount`
+  alone has 41 possible values) or a bare `<input type="range">`. The first
+  pass left all four rows permanently open and reported the resulting
+  below-the-fold `Start` as "pre-existing, the lobby already scrolls" —
+  without a pre-task measurement to back that. A real one (a throwaway
+  Playwright script against a worktree of the parent commit, 8fc5e4a, not
+  committed) showed `Start` fully inside the viewport pre-task at both
+  390×844 (top 620, bottom 664) and 320×800 (top 613, bottom 657) — the
+  overflow was new, exactly as the module-row comment a few lines above this
+  section already warned ("a permanent second row per module … is what pushed
+  Start below the fold before"). Fixed by putting the whole section behind
+  one disclosure (collapsed by default, chevron + `aria-expanded`, matching
+  the module rows' own disclosure pattern) with a one-line summary
+  (`"10×10 board · 12 mines · breathes every 5 · exact finish"`) that stays
+  visible either way, so a peer or the host can read the current values
+  without expanding anything — only expanding reveals the interactive
+  `Stepper`/`ToggleSetting` rows. Re-measured after the fix: `Start` is fully
+  inside the viewport, before any scroll, at both 390×844 (top 731, bottom
+  775) and 320×800 (top 724, bottom 768) — matching the pre-task shape
+  (`document.documentElement.scrollHeight` equals the viewport height at both
+  sizes, both before and after). `nub run verify:ui` (390×844) confirms the
+  same in the committed pipeline, and I read `screenshots/2-lobby.png`
+  myself. One caught in review of my own fix: the collapsed heading initially
+  inherited the wrapping `ghost`-variant button's dimmed `color: textDim`,
+  making "Match settings" the one section title that didn't read like the
+  others — fixed with an explicit `color: "text"` on the heading.
 - **`toggleModule` refactor:** extracted a `setConfig(patch)` helper (also used
   by the new `Stepper`/`ToggleSetting` handlers) that holds the `canHost` gate
   in one place instead of repeating `if (!canHost) return` at each call site;
