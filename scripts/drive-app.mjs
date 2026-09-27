@@ -163,6 +163,29 @@ export const clippedControls = (controls, viewportWidth) =>
     .map((c) => `"${c.name}" spans ${Math.round(c.left)}–${Math.round(c.right)}px of a ${viewportWidth}px viewport`)
 
 /**
+ * Every problem class the gate fails on, recorded from one page. Each page the
+ * gate opens goes through this, so a second page cannot quietly listen for
+ * less than the first — the 320px pass once heard only `pageerror`. `label`
+ * says which page a problem came from once there is more than one.
+ */
+export const recordProblems = (page, problems, label = "") => {
+  const record = (problem) => problems.push(label ? `${label}: ${problem}` : problem)
+  page.on("pageerror", (e) => record(`pageerror: ${e.message}`))
+  // A console error for a failed request says nothing about which request, so
+  // report the response instead — an unactionable "404 (Not Found)" is worse
+  // than no report at all.
+  page.on("response", (r) => {
+    if (r.status() >= 400) record(`${r.status()} ${r.url()}`)
+  })
+  page.on("console", (m) => {
+    const text = m.text()
+    if (m.type() !== "error") return
+    if (/Failed to load resource/.test(text)) return // covered by the response handler
+    record(`console: ${text}`)
+  })
+}
+
+/**
  * Launch Chromium, falling back to any build already present under
  * PLAYWRIGHT_BROWSERS_PATH. Playwright insists on a browser matching its own
  * version, but a container that ships one a version or two off is still
@@ -239,19 +262,7 @@ const drive = async (served, browser) => {
     ignoreHTTPSErrors: HTTPS,
   })
 
-  page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`))
-  // A console error for a failed request says nothing about which request, so
-  // report the response instead — an unactionable "404 (Not Found)" is worse
-  // than no report at all.
-  page.on("response", (r) => {
-    if (r.status() >= 400) problems.push(`${r.status()} ${r.url()}`)
-  })
-  page.on("console", (m) => {
-    const text = m.text()
-    if (m.type() !== "error") return
-    if (/Failed to load resource/.test(text)) return // covered by the response handler
-    problems.push(`console: ${text}`)
-  })
+  recordProblems(page, problems)
 
   const shot = async (name, on = page) => {
     await on.screenshot({ path: join(OUT, `${name}.png`) })
@@ -386,31 +397,36 @@ const drive = async (served, browser) => {
   // The widest the roll row ever gets: "Confirm before rolling" armed, at the
   // narrowest phone the layout supports. Armed, Roll's label grows and Roll
   // does not shrink, so this is where the row runs out first — and where it
-  // did, unseen, until this looked.
-  const narrow = await browser.newPage({
-    viewport: { width: 320, height: 800 },
-    deviceScaleFactor: 2,
-    ignoreHTTPSErrors: HTTPS,
-  })
-  narrow.on("pageerror", (e) => problems.push(`pageerror (320px): ${e.message}`))
-  await narrow.addInitScript(() => {
-    // Written before the app reads it; a harness without storage just runs
-    // the default and still checks the row.
-    try {
-      localStorage.setItem("sl:settings", JSON.stringify({ confirmRoll: true }))
-    } catch {}
-  })
-  await narrow.goto(entry, { waitUntil: "networkidle" })
-  await narrow.getByRole("button", { name: /pass and play/i }).click()
-  await narrow.waitForTimeout(800)
-  await narrow.getByRole("button", { name: /^start/i }).click()
-  await narrow.waitForTimeout(1500)
-  await narrow.getByRole("button", { name: /^roll$/i }).click()
-  await narrow.waitForTimeout(300)
-  const armed = await narrow.getByRole("button", { name: /^confirm roll$/i }).count()
-  if (armed === 0) problems.push("320px: a first tap under Confirm before rolling armed nothing")
-  await shot("6-armed-320", narrow)
-  await narrow.close()
+  // did, unseen, until this looked. Every placement, since each lays the row
+  // out differently and only "right" was ever checked here.
+  for (const rollButton of ["left", "right", "hidden"]) {
+    const where = `320px ${rollButton}`
+    const narrow = await browser.newPage({
+      viewport: { width: 320, height: 800 },
+      deviceScaleFactor: 2,
+      ignoreHTTPSErrors: HTTPS,
+    })
+    recordProblems(narrow, problems, where)
+    await narrow.addInitScript((rollButton) => {
+      // Written before the app reads it; a harness without storage just runs
+      // the default and still checks the row.
+      try {
+        localStorage.setItem("sl:settings", JSON.stringify({ confirmRoll: true, rollButton }))
+      } catch {}
+    }, rollButton)
+    await narrow.goto(entry, { waitUntil: "networkidle" })
+    await narrow.getByRole("button", { name: /pass and play/i }).click()
+    await narrow.waitForTimeout(800)
+    await narrow.getByRole("button", { name: /^start/i }).click()
+    await narrow.waitForTimeout(1500)
+    // Hidden leaves the dice tray as the only roll control.
+    await narrow.getByRole("button", { name: rollButton === "hidden" ? /^roll the dice$/i : /^roll$/i }).click()
+    await narrow.waitForTimeout(300)
+    const armed = await narrow.getByRole("button", { name: /^confirm roll$/i }).count()
+    if (armed === 0) problems.push(`${where}: a first tap under Confirm before rolling armed nothing`)
+    await shot(`6-armed-320-${rollButton}`, narrow)
+    await narrow.close()
+  }
 }
 
 // Importing this module must not drive a browser: the serving rules above are

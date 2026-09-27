@@ -24,3 +24,12 @@ export declare const clippedControls: (
   controls: ReadonlyArray<{ name: string; left: number; right: number; width: number }>,
   viewportWidth: number,
 ) => ReadonlyArray<string>
+
+/** The page events the gate reads, as Playwright's `Page` emits them. */
+export interface ProblemSource {
+  on(event: "pageerror", listener: (error: Error) => void): unknown
+  on(event: "response", listener: (response: { status(): number; url(): string }) => void): unknown
+  on(event: "console", listener: (message: { type(): string; text(): string }) => void): unknown
+}
+
+export declare const recordProblems: (page: ProblemSource, problems: string[], label?: string) => void

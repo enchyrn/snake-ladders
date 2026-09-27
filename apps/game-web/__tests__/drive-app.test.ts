@@ -3,8 +3,9 @@ import { request as httpRequest } from "node:http"
 import { request as httpsRequest } from "node:https"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { EventEmitter } from "node:events"
 import { afterEach, describe, expect, it } from "vitest"
-import { clippedControls, serveDist } from "@mutation/tooling/drive-app"
+import { clippedControls, recordProblems, serveDist } from "@mutation/tooling/drive-app"
 
 const open: Array<{ close: (cb?: () => void) => void }> = []
 
@@ -109,5 +110,49 @@ describe("clippedControls", () => {
     expect(
       clippedControls([at("Roll", 171, 304), at("Tray", 16, 320.4), { name: "gone", left: 400, right: 400, width: 0 }], 320),
     ).toEqual([])
+  })
+})
+
+describe("recordProblems", () => {
+  // Just the three events the gate listens for, shaped like Playwright's.
+  const page = () => new EventEmitter()
+  const response = (status: number, url: string) => ({ status: () => status, url: () => url })
+  const message = (type: string, text: string) => ({ type: () => type, text: () => text })
+
+  it("records page errors, failed responses and console errors", () => {
+    const problems: string[] = []
+    const p = page()
+    recordProblems(p, problems)
+    p.emit("pageerror", new Error("boom"))
+    p.emit("response", response(404, "http://localhost/icon.png"))
+    p.emit("console", message("error", "Uncaught thing"))
+    expect(problems).toEqual(["pageerror: boom", "404 http://localhost/icon.png", "console: Uncaught thing"])
+  })
+
+  it("ignores successes, warnings, and the console echo of a failed request", () => {
+    const problems: string[] = []
+    const p = page()
+    recordProblems(p, problems)
+    p.emit("response", response(200, "http://localhost/"))
+    p.emit("response", response(304, "http://localhost/sw.js"))
+    p.emit("console", message("warning", "deprecated"))
+    // The response handler already named the URL; this line cannot.
+    p.emit("console", message("error", "Failed to load resource: the server responded with a status of 404"))
+    expect(problems).toEqual([])
+  })
+
+  // The 320px passes are separate pages; a problem must say which one it was.
+  it("names the page it came from when given a label", () => {
+    const problems: string[] = []
+    const p = page()
+    recordProblems(p, problems, "320px hidden")
+    p.emit("pageerror", new Error("boom"))
+    p.emit("response", response(500, "http://localhost/x"))
+    p.emit("console", message("error", "bad"))
+    expect(problems).toEqual([
+      "320px hidden: pageerror: boom",
+      "320px hidden: 500 http://localhost/x",
+      "320px hidden: console: bad",
+    ])
   })
 })
