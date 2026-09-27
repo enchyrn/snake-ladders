@@ -882,7 +882,7 @@ easiest to defer if the plan runs long.
 - Create: `packages/engine/src/__tests__/colour.test.ts`
 - Modify: `packages/app-shell/src/routes/lobby.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/engine/src/__tests__/colour.test.ts
@@ -905,7 +905,7 @@ describe("Join with a colour", () => {
 })
 ```
 
-- [ ] **Step 2: Run it and verify it fails**
+- [x] **Step 2: Run it and verify it fails**
 
 ```bash
 nubx vitest run packages/engine/src/__tests__/colour.test.ts
@@ -913,7 +913,7 @@ nubx vitest run packages/engine/src/__tests__/colour.test.ts
 
 Expected: FAIL — the second case is rejected as an unknown key.
 
-- [ ] **Step 3: Add the optional field**
+- [x] **Step 3: Add the optional field**
 
 In `actions.ts`, add `colour: Schema.optional(Schema.String)` to the `Join`
 struct. In `types.ts`, add `colour: Schema.optional(Schema.String)` to `Player`.
@@ -923,7 +923,7 @@ Add a comment at `Player.colour` saying plainly that it is presentation only and
 **nothing may ever price a rule on it** — that is exactly how `venom` became
 core state fed by one optional module.
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 ```bash
 nubx vitest run packages/engine/src/__tests__/colour.test.ts
@@ -931,7 +931,7 @@ nubx vitest run packages/engine/src/__tests__/colour.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the determinism suite — this is the one that matters**
+- [x] **Step 5: Run the determinism suite — this is the one that matters**
 
 ```bash
 nubx vitest run packages/engine/src/__tests__/determinism.test.ts
@@ -940,7 +940,7 @@ nubx vitest run packages/engine/src/__tests__/determinism.test.ts
 Expected: PASS. An inert field must not change a fold. If this goes red, the
 field is not inert and the change is wrong.
 
-- [ ] **Step 6: Add the picker**
+- [x] **Step 6: Add the picker**
 
 In the lobby, each player's swatch opens a palette. The palette is
 `seatColours`, which Task 3 of plan 1 already cleared of the reserved link-tint
@@ -950,7 +950,7 @@ tiebreaker and the dice draw order.
 
 Wire `settings.colour` into the `Join` the lobby sends.
 
-- [ ] **Step 7: Run every gate**
+- [x] **Step 7: Run every gate**
 
 ```bash
 nub run test && nub run typecheck && nub run lint && nub run build && nub run verify:ui
@@ -959,12 +959,49 @@ cargo test -p lan-sync
 
 Expected: all PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/engine/src packages/app-shell/src/routes/lobby.tsx
 git commit -m "feat: players pick a colour, carried optionally in Join"
 ```
+
+**Execution note:**
+
+- **R9 applied.** The plan's two decode cases went green before any change,
+  as predicted. The RED came from three added cases: a decode that must keep
+  `colour` (without the field declared, the Struct *drops* the excess key —
+  so the colour would have been lost on every frame that crossed the wire,
+  not merely unvalidated), a `Join` carrying it onto the `Player`, and a
+  re-`Join` changing it. An absent colour stays an absent key (`withColour`
+  in `match.ts`), never `colour: undefined`.
+- **Determinism suite extended**, not just run: every other fuzzed `Join`
+  now carries a colour (picked by index so the driver's RNG sequence is
+  unchanged), which puts the field through the wire round-trip case; and a
+  new case folds each random log with and without its colours and asserts
+  everything but the colours is identical — the executable form of "nothing
+  may price a rule on it".
+- **R10 applied.** `playerColours` has one refinement over the ruling's
+  wording: pass 2 is split, so every unpicked player whose seat colour is
+  still free takes it *before* any displaced player takes a fallback. The
+  single-pass reading let a displaced player earlier in the list take a
+  later player's seat colour and bump them too (one pick repainting three
+  tokens); each player's result is still exactly "seat colour if unclaimed,
+  else the first unclaimed". Picks compare case-insensitively.
+- Scene tokens build their material once, so `syncTokens` now recolours an
+  existing material when a player's resolved colour changes. The board is not
+  mounted in the lobby, so in practice that is a re-`Join` arriving
+  mid-match (a reconnect carrying a different stored colour).
+- The settings overlay's swatch row moved to `app/colour-picker.tsx` and is
+  shared with the lobby, rather than a second copy of `COLOUR_NAMES`.
+- **Lobby layout.** The owned pip is the picker's 44px toggle; an owned row
+  drops its vertical padding (the button already stands tap-tall), which
+  also shortens a guest row by the same amount. Measured on the built app,
+  default config, pass-and-play, one player: `Start` bottom 790.7 of 844 at
+  390×844 and 783.7 of 800 at 320×800, `scrollHeight` equal to the viewport
+  at both — on screen without scrolling (Task 7's baseline: 775.3 / 768.3).
+- A colour changed from the Settings overlay is saved but does not re-send
+  `Join`; it applies from the next lobby. Only the lobby re-sends.
 
 ---
 

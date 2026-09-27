@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { cardBlurbs, cardCost, type CardKind, type MatchState, type Player } from "@mutation/engine/types"
-import { countColour, seatColour } from "@mutation/render/palette"
+import { countColour, playerColours, seatColour } from "@mutation/render/palette"
 import { lastTile } from "@mutation/engine/board"
 import * as Simul from "@mutation/engine/rules/simultaneous"
 import { css, cx } from "styled-system/css"
@@ -39,6 +39,7 @@ export const ProgressRows = ({
   // `simultaneous` nobody's turn is anyone else's, and the chosen seat is the
   // honest answer.
   const markedSeat = Simul.enabled(state.config) ? actingSeat : state.players[state.activeSeat]?.id
+  const colours = playerColours(state.players)
   return (
     <ul
       className={css({
@@ -59,6 +60,7 @@ export const ProgressRows = ({
         const isActing = player.id === markedSeat
         const isDone = player.finishedAtRound !== null
         const isAway = !player.connected
+        const colour = colours.get(player.id) ?? seatColour(player.seat)
         return (
           <li
             key={player.id}
@@ -95,7 +97,7 @@ export const ProgressRows = ({
             </span>
             <span
               className={css({ width: "14px", height: "14px", borderRadius: "50%", flex: "none" })}
-              style={{ background: seatColour(player.seat) }}
+              style={{ background: colour }}
             />
             <span
               className={css({
@@ -126,7 +128,7 @@ export const ProgressRows = ({
             >
               <span
                 className={css({ display: "block", height: "100%", borderRadius: "5px" })}
-                style={{ width: `${(player.position / top) * 100}%`, background: seatColour(player.seat) }}
+                style={{ width: `${(player.position / top) * 100}%`, background: colour }}
               />
             </span>
             {/* Module state a player has to weigh against a decision (a card's

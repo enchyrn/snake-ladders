@@ -19,7 +19,7 @@ import {
   taperedTube,
   tilePosition,
 } from "./geometry"
-import { palette, seatColour } from "./palette"
+import { palette, playerColours } from "./palette"
 import { snakeSkinTexture, woodTexture } from "./textures"
 import { effectiveDuration, SPEEDS, type MotionLevel } from "./timing"
 
@@ -64,6 +64,7 @@ export class BoardScene {
   private readonly linkGroup = new THREE.Group()
   private readonly tokenGroup = new THREE.Group()
   private readonly tokens = new Map<string, THREE.Mesh>()
+  private readonly tokenColours = new Map<string, string>()
   private readonly clips: Clip[] = []
 
   // Shared geometry and materials: one of each, however many links or tokens.
@@ -340,24 +341,29 @@ export class BoardScene {
 
   private syncTokens(players: ReadonlyArray<Player>, snap: boolean): void {
     const seen = new Set<string>()
+    const colours = playerColours(players)
     for (const player of players) {
       seen.add(player.id)
+      const hex = colours.get(player.id)!
       let token = this.tokens.get(player.id)
       if (!token) {
-        const colour = new THREE.Color(seatColour(player.seat))
         token = new THREE.Mesh(
           this.pawn,
-          new THREE.MeshStandardMaterial({
-            color: colour,
-            roughness: 0.32,
-            metalness: 0.08,
-            emissive: colour.clone().multiplyScalar(0.12),
-          }),
+          new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.08 }),
         )
         token.castShadow = true
         this.tokens.set(player.id, token)
         this.tokenGroup.add(token)
         token.position.copy(this.tileOf(player.position))
+      }
+      // A token outlives its colour: a re-Join may carry a new pick after the
+      // token was built (a player reconnecting mid-match with a different
+      // stored colour), and a clash can settle differently when it does.
+      if (this.tokenColours.get(player.id) !== hex) {
+        const material = token.material as THREE.MeshStandardMaterial
+        material.color.set(hex)
+        material.emissive.set(hex).multiplyScalar(0.12)
+        this.tokenColours.set(player.id, hex)
       }
       // Only snap when nothing is animating and no round is waiting to play:
       // between the two the clips own the token, and `clips` alone cannot see
@@ -371,6 +377,7 @@ export class BoardScene {
       // Geometry is shared; only the seat-coloured material belongs to it.
       ;(token.material as THREE.Material).dispose()
       this.tokens.delete(id)
+      this.tokenColours.delete(id)
     }
     this.spreadOverlaps(players, snap)
   }

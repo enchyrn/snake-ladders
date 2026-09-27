@@ -1,16 +1,18 @@
-import { useAtomValue } from "@effect-atom/atom-react"
+import { useAtom, useAtomValue } from "@effect-atom/atom-react"
 import { useNavigate } from "@tanstack/react-router"
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronLeft, Minus, Plus, X } from "lucide-react"
+import { ColourPicker } from "../app/colour-picker"
 import { roomCode } from "../app/hooks"
 import { joinLink } from "../app/join-link"
 import { useSession } from "../app/session"
 import { allModules, moduleBlurbs, moduleLabels, type RuleModule } from "@mutation/engine/primitives"
+import type { Action } from "@mutation/engine/actions"
 import type { MatchConfig } from "@mutation/engine/types"
 import { QrCode } from "@mutation/ui/QrCode"
-import { seatColour } from "@mutation/render/palette"
+import { playerColours, seatColour } from "@mutation/render/palette"
 import { matchAtom, meAtom, phaseAtom, roleAtom, roomAtom } from "../store/atoms"
-import { loadLastSetup, saveLastSetup } from "../store/settings"
+import { loadLastSetup, saveLastSetup, saveSettings, settingsAtom } from "../store/settings"
 import { DesyncBanner, NoticeBanner } from "../app/banners"
 import { button } from "styled-system/recipes"
 import { css, cx } from "styled-system/css"
@@ -108,6 +110,11 @@ const ToggleSetting = ({
   </div>
 )
 
+/** `""` means "By seat", which the wire says by leaving the field out: an older
+ *  build then decodes the same Join it always did. */
+const join = (playerId: string, name: string, colour: string): Action =>
+  colour === "" ? { _tag: "Join", playerId, name } : { _tag: "Join", playerId, name, colour }
+
 export const LobbyScreen = () => {
   const session = useSession()
   const navigate = useNavigate()
@@ -118,6 +125,10 @@ export const LobbyScreen = () => {
   const role = useAtomValue(roleAtom)
   const me = useAtomValue(meAtom)
   const room = useAtomValue(roomAtom)
+  const [settings, setSettings] = useAtom(settingsAtom)
+  // One picker open at a time, keyed by player id — a second open palette
+  // would be the lobby's fourth disclosure competing for the fold.
+  const [pickingFor, setPickingFor] = useState<string | null>(null)
   const [guestName, setGuestName] = useState("")
   const [expandedModules, setExpandedModules] = useState<ReadonlySet<RuleModule>>(() => new Set())
   // Collapsed by default: with every module on (defaultConfig), four permanent
@@ -144,10 +155,13 @@ export const LobbyScreen = () => {
     const identities = role === "local"
       ? session.profiles
       : [{ id: session.identity.playerId, name: session.identity.name }]
+    // Only the owner's colour is remembered; a guest profile is whoever is
+    // holding the phone this time, so it starts on its seat colour.
     for (const identity of identities) {
-      client.send({ _tag: "Join", playerId: identity.id, name: identity.name })
+      const colour = identity.id === session.identity.playerId ? settings.colour : ""
+      client.send(join(identity.id, identity.name, colour))
     }
-  }, [client, navigate, role, session.identity.playerId, session.identity.name, session.profiles])
+  }, [client, navigate, role, session.identity.playerId, session.identity.name, session.profiles, settings.colour])
 
   useEffect(() => {
     if (phase !== "lobby") void navigate({ to: "/match" })
@@ -185,6 +199,26 @@ export const LobbyScreen = () => {
     setConfig({ modules })
   }
 
+  // The swatches this device may change: its own seat, or in pass-and-play
+  // every profile on it. A peer's colour is theirs to pick on their phone.
+  const owns = (playerId: string) =>
+    role === "local" ? session.profiles.some((p) => p.id === playerId) : playerId === session.identity.playerId
+
+  // A pick is a re-Join, which the reducer treats as a reconnect: same seat,
+  // same name, new colour. Sent, never applied locally — the pip changes when
+  // the log comes back, like every other action.
+  const pickColour = (playerId: string, name: string, colour: string) => {
+    client.send(join(playerId, name, colour))
+    if (playerId === session.identity.playerId) {
+      // Same shape as the settings panel's setField: next from this render's
+      // value, saved as a sibling statement rather than inside an updater.
+      const next = { ...settings, colour }
+      setSettings(next)
+      saveSettings(next)
+    }
+    setPickingFor(null)
+  }
+
   const leave = () => {
     session.close()
     void navigate({ to: "/" })
@@ -214,7 +248,20 @@ export const LobbyScreen = () => {
   const joinInviteClass = css({ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" })
   const playersClass = css({ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", alignItems: "stretch", gap: "0.15rem" })
   const playerRowClass = css({ display: "flex", alignItems: "center", gap: "0.5em", padding: "0.3rem 0" })
+  // An owned row already stands a tap target tall on its pip button, so it
+  // drops the padding a text-only row needs; padding on top of 44px is what
+  // pushed Start toward the fold in pass-and-play.
+  const ownedRowClass = css({ display: "flex", alignItems: "center", gap: "0.5em", paddingBlock: "0" })
   const pipClass = css({ width: "0.7em", height: "0.7em", borderRadius: "50%", flex: "none" })
+  // The pip itself is the control, rather than a separate "Colour" button the
+  // row has no width for; the dot grows only enough to read as pressable.
+  const pipButtonClass = cx(
+    button({ variant: "ghost", size: "sm" }),
+    // Pulls the dot back to where an unowned row's pip starts.
+    css({ flex: "none", width: "tap", paddingInline: "0", marginLeft: "-13px" }),
+  )
+  const ownedPipClass = css({ width: "1.1rem", height: "1.1rem", borderRadius: "50%", flex: "none" })
+  const colours = playerColours(match.players)
   const removePlayerClass = cx(
     button({ variant: "ghost", size: "sm" }),
     css({ flex: "none", width: "tap", paddingInline: "0" }),
@@ -280,31 +327,61 @@ export const LobbyScreen = () => {
       <section>
         <h3 className={headingClass}>Players</h3>
         <ul className={playersClass}>
-          {match.players.map((player) => (
-            <li key={player.id} className={playerRowClass}>
-              <span className={pipClass} style={{ background: seatColour(player.seat) }} />
-              <span className={css({ flex: 1 })}>
-                {player.name}
-                {player.id === me ? " (you)" : ""}
-              </span>
-              {!player.connected && <span className={hintClass}>away</span>}
-              {role === "local" &&
-                session.profiles.some((p) => p.id === player.id && p.kind === "guest") && (
-                  <button
-                    type="button"
-                    className={removePlayerClass}
-                    aria-label={`Remove ${player.name}`}
-                    onClick={() => {
-                      session.removeGuest(player.id)
-                      client.setSeats(client.state.seats.filter((seat) => seat !== player.id))
-                      client.send({ _tag: "Leave", playerId: player.id })
-                    }}
-                  >
-                    <X size={18} aria-hidden="true" />
-                  </button>
+          {match.players.map((player) => {
+            const colour = colours.get(player.id) ?? seatColour(player.seat)
+            const picking = pickingFor === player.id
+            return (
+              <Fragment key={player.id}>
+                <li className={owns(player.id) ? ownedRowClass : playerRowClass}>
+                  {owns(player.id) ? (
+                    <button
+                      type="button"
+                      className={pipButtonClass}
+                      aria-expanded={picking}
+                      aria-label={`Colour for ${player.name}`}
+                      onClick={() => setPickingFor(picking ? null : player.id)}
+                    >
+                      <span className={ownedPipClass} style={{ background: colour }} />
+                    </button>
+                  ) : (
+                    <span className={pipClass} style={{ background: colour }} />
+                  )}
+                  <span className={css({ flex: 1 })}>
+                    {player.name}
+                    {player.id === me ? " (you)" : ""}
+                  </span>
+                  {!player.connected && <span className={hintClass}>away</span>}
+                  {role === "local" &&
+                    session.profiles.some((p) => p.id === player.id && p.kind === "guest") && (
+                      <button
+                        type="button"
+                        className={removePlayerClass}
+                        aria-label={`Remove ${player.name}`}
+                        onClick={() => {
+                          session.removeGuest(player.id)
+                          client.setSeats(client.state.seats.filter((seat) => seat !== player.id))
+                          client.send({ _tag: "Leave", playerId: player.id })
+                        }}
+                      >
+                        <X size={18} aria-hidden="true" />
+                      </button>
+                    )}
+                </li>
+                {picking && (
+                  <li>
+                    {/* Pressed shows what was asked for; the pip above shows
+                        what was granted, which differs only when someone
+                        earlier in the lobby already holds that colour. */}
+                    <ColourPicker
+                      label={`Colour for ${player.name}`}
+                      value={player.colour ?? ""}
+                      onChange={(hex) => pickColour(player.id, player.name, hex)}
+                    />
+                  </li>
                 )}
-            </li>
-          ))}
+              </Fragment>
+            )
+          })}
           {match.players.length === 0 && <li className={hintClass}>Waiting for players to join…</li>}
         </ul>
         {role === "local" && (

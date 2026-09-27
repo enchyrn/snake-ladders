@@ -61,3 +61,47 @@ export const countColour = (n: number): string =>
   ["#000000", "#6fb3ff", "#5fd39a", "#ff8f6b", "#ffc861", "#ff7b9c", "#69e0d2", "#cfd8dc", "#9aa7ad"][
     Math.min(n, 8)
   ]!
+
+/** The part of a player the palette needs — structural, so this file stays
+ *  free of engine imports: scripts/palette-tokens.mjs loads it straight into
+ *  Node for Panda's codegen, where no `@mutation/*` alias resolves. */
+export interface ColouredPlayer {
+  readonly id: string
+  readonly seat: number
+  readonly colour?: string | undefined
+}
+
+/**
+ * Each player's display colour, by id. `Player.colour` is only a request: the
+ * wire carries any string, and two players may ask for the same one. So a pick
+ * is honoured only if it is a palette colour (the palette alone is checked
+ * against the link band) and nobody earlier in `players` — join order, the
+ * same on every device — already claimed it. Everyone else keeps their seat's
+ * colour when it is free, and only then do the displaced take what is left, so
+ * one clash repaints two tokens rather than cascading down the seats.
+ */
+export const playerColours = (players: ReadonlyArray<ColouredPlayer>): ReadonlyMap<string, string> => {
+  const colours = new Map<string, string>()
+  const claimed = new Set<string>()
+  const claim = (id: string, colour: string) => {
+    colours.set(id, colour)
+    claimed.add(colour)
+  }
+
+  for (const player of players) {
+    const wanted = seatColours.find((c) => c === player.colour?.toLowerCase())
+    if (wanted !== undefined && !claimed.has(wanted)) claim(player.id, wanted)
+  }
+  for (const player of players) {
+    if (colours.has(player.id)) continue
+    const own = seatColour(player.seat)
+    if (!claimed.has(own)) claim(player.id, own)
+  }
+  for (const player of players) {
+    if (colours.has(player.id)) continue
+    // More players than colours cannot happen (a match seats six), but a
+    // repeat beats a token drawn in nothing.
+    claim(player.id, seatColours.find((c) => !claimed.has(c)) ?? seatColour(player.seat))
+  }
+  return colours
+}

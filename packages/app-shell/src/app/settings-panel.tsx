@@ -3,15 +3,11 @@ import { useAtom } from "@effect-atom/atom-react"
 import { X } from "lucide-react"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
-import { seatColours } from "@mutation/render/palette"
 import { headingClass, textInputClass } from "@mutation/ui/layout/screen"
+import { ColourPicker } from "./colour-picker"
 import { useSession } from "./session"
 import { hasHaptics, hasWakeLock } from "./capabilities"
 import { saveSettings, settingsAtom, type Settings } from "../store/settings"
-
-// Matches the inline comments beside `seatColours` in palette.ts — a swatch's
-// accessible name has to say the colour, and the hex alone does not.
-const COLOUR_NAMES = ["Cyan", "Coral", "Amber", "Violet", "Teal", "Pink"] as const
 
 const panelClass = css({
   position: "fixed",
@@ -46,18 +42,6 @@ const stackClass = css({ display: "flex", flexDirection: "column", gap: "3" })
 const fieldLabelClass = css({ fontSize: "sm", fontWeight: 600 })
 
 const groupRowClass = css({ display: "flex", gap: "1" })
-
-const swatchBaseClass = css({
-  width: "tap",
-  height: "tap",
-  borderRadius: "8px",
-  border: "2px solid",
-  borderColor: "transparent",
-  padding: 0,
-  cursor: "pointer",
-})
-
-const swatchSelectedClass = css({ borderColor: "text" })
 
 /** A mutually-exclusive row of options, styled like the module toggle it
  *  reuses the look of (lobby.tsx) — one selected at a time via `aria-pressed`,
@@ -223,27 +207,7 @@ export const SettingsPanel = ({ open, onClose }: { readonly open: boolean; reado
 
           <div className={stackClass}>
             <span className={fieldLabelClass}>Colour</span>
-            <div role="group" aria-label="Colour" className={cx(groupRowClass, css({ flexWrap: "wrap" }))}>
-              <button
-                type="button"
-                aria-pressed={settings.colour === ""}
-                className={button({ variant: settings.colour === "" ? "primary" : "toggle", size: "sm" })}
-                onClick={() => setField("colour", "")}
-              >
-                By seat
-              </button>
-              {seatColours.map((hex, i) => (
-                <button
-                  key={hex}
-                  type="button"
-                  aria-label={COLOUR_NAMES[i]}
-                  aria-pressed={settings.colour === hex}
-                  className={cx(swatchBaseClass, settings.colour === hex ? swatchSelectedClass : undefined)}
-                  style={{ background: hex }}
-                  onClick={() => setField("colour", hex)}
-                />
-              ))}
-            </div>
+            <ColourPicker label="Colour" value={settings.colour} onChange={(hex) => setField("colour", hex)} />
           </div>
         </Section>
 

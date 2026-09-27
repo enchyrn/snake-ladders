@@ -11,6 +11,8 @@ export const Action = Schema.Union(
     _tag: Schema.Literal("Join"),
     playerId: Schema.String,
     name: Schema.String,
+    /** Optional so an older build's Join still decodes; see `Player.colour`. */
+    colour: Schema.optional(Schema.String),
   }),
   Schema.Struct({ _tag: Schema.Literal("Leave"), playerId: Schema.String }),
   Schema.Struct({

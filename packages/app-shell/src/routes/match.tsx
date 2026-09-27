@@ -12,7 +12,7 @@ import { EventLog } from "@mutation/ui/EventLog"
 import { ControlBar, DiceTray, ProgressRows } from "@mutation/ui/HUD"
 import { RoundLogSheet } from "@mutation/ui/RoundLogSheet"
 import { SettingsPanel } from "../app/settings-panel"
-import { seatColour } from "@mutation/render/palette"
+import { playerColours } from "@mutation/render/palette"
 import { css, cx } from "styled-system/css"
 import { button } from "styled-system/recipes"
 import { History, Settings } from "lucide-react"
@@ -155,6 +155,7 @@ export const MatchScreen = () => {
 
   const actingPlayer = match.players.find((p) => p.id === actingSeat)
   const nameOf = (id: string) => match.players.find((p) => p.id === id)?.name ?? id
+  const colours = playerColours(match.players)
   const hasMines = match.config.modules.includes("minesweeper")
   const winner = match.winners[0]
 
@@ -265,7 +266,7 @@ export const MatchScreen = () => {
           className={cx(gutterBandClass, css({ flex: "none", display: "flex", gap: "1", paddingBottom: "2" }))}
         >
           {ownedActable.map((seat) => {
-            const player = match.players.find((p) => p.id === seat)
+            const colour = colours.get(seat)
             return (
               <button
                 key={seat}
@@ -278,7 +279,7 @@ export const MatchScreen = () => {
                 // The seat's colour as an inset underline, tying the button to
                 // its progress row: a swatch beside the name cost the width
                 // six buttons do not have.
-                style={player ? { boxShadow: `inset 0 -3px 0 ${seatColour(player.seat)}` } : undefined}
+                style={colour ? { boxShadow: `inset 0 -3px 0 ${colour}` } : undefined}
                 onClick={() => client.setActingSeat(seat)}
               >
                 <span className={css({ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" })}>

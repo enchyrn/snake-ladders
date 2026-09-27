@@ -39,8 +39,15 @@ const playRandomMatch = (
     }
   }
 
+  // Every other player picks a colour, so the log carries both Join shapes.
+  // Chosen by index rather than the driver RNG so the rest of the fuzz
+  // sequence is unchanged by it.
   for (let i = 0; i < playerCount; i++) {
-    apply({ _tag: "Join", playerId: `p${i}`, name: `Player ${i}` })
+    apply(
+      i % 2 === 0
+        ? { _tag: "Join", playerId: `p${i}`, name: `Player ${i}` }
+        : { _tag: "Join", playerId: `p${i}`, name: `Player ${i}`, colour: "#9b7bff" },
+    )
   }
   apply({ _tag: "Start" })
 
@@ -140,6 +147,25 @@ describe("cross-device determinism", () => {
       return decoded.right
     })
     expect(fold(config, overTheWire)).toEqual(fold(config, log))
+  })
+
+  // `Player.colour` is presentation only. If any rule ever read it, stripping
+  // every pick from the log would change more than the colours themselves.
+  it("plays the same match whatever colours were picked", () => {
+    const withoutColours = (state: MatchState) =>
+      state.players.map(({ colour: _colour, ...rest }) => rest)
+    for (let seed = 0; seed < 20; seed++) {
+      const config = defaultConfig(seed * 13 + 3)
+      const { log } = playRandomMatch(config, seed, 2 + (seed % 4))
+      const uncoloured = log.map((action) =>
+        action._tag === "Join" ? { _tag: "Join" as const, playerId: action.playerId, name: action.name } : action,
+      )
+      const picked = fold(config, log)
+      const plain = fold(config, uncoloured)
+      expect(withoutColours(picked)).toEqual(withoutColours(plain))
+      expect({ ...picked, players: [] }).toEqual({ ...plain, players: [] })
+      expect(picked.players.some((p) => p.colour !== undefined)).toBe(true)
+    }
   })
 
   it("rejects malformed messages instead of corrupting the match", () => {

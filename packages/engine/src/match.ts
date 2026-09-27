@@ -45,6 +45,14 @@ export const newPlayer = (id: string, name: string, seat: number): Player => ({
   connected: true,
 })
 
+/** Absent stays absent. `colour: undefined` would be a key a JSON round trip
+ *  drops, so a state rebuilt from the wire and one folded locally would no
+ *  longer be strictly equal even though they encode the same. */
+const withColour = (player: Player, colour: string | undefined): Player => {
+  const { colour: _previous, ...rest } = player
+  return colour === undefined ? rest : { ...rest, colour }
+}
+
 const fail = (reason: string, action?: Action["_tag"]) =>
   Effect.fail(new RuleError({ reason, action }))
 
@@ -194,14 +202,19 @@ export const applyAction = (
         // `connected` is exactly what that filter reads.
         const { index, player } = existing
         const players = state.players.slice()
-        players[index] = { ...player, connected: true, name: action.name }
+        // The colour is replaced, not merged: a re-Join is how the lobby
+        // changes a pick, and one without a colour goes back to the seat's.
+        players[index] = withColour({ ...player, connected: true, name: action.name }, action.colour)
         return Effect.succeed({ ...state, players })
       }
       if (state.phase !== "lobby") return fail("match already started", "Join")
       if (state.players.length >= 6) return fail("match is full", "Join")
       return Effect.succeed({
         ...state,
-        players: [...state.players, newPlayer(action.playerId, action.name, state.players.length)],
+        players: [
+          ...state.players,
+          withColour(newPlayer(action.playerId, action.name, state.players.length), action.colour),
+        ],
       })
     }
 
